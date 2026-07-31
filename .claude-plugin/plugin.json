@@ -1,0 +1,15 @@
+{
+  "name": "lean",
+  "version": "0.1.0",
+  "description": "Efficiency discipline for Claude Code, in two halves. Response density and shape: full coverage at low depth, structured for skimming, with failures and assumptions never compressed away. Model routing: move a single evolving task across a cheap/mid/main tier ladder, gated by a deterministic ledger that blocks oscillation and unprofitable handoffs.",
+  "keywords": [
+    "efficiency",
+    "response-style",
+    "model-routing",
+    "subagents",
+    "cost"
+  ],
+  "author": {
+    "name": "jhonDoe15"
+  }
+}

@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+data/
+*.db
+probe_*.json
+dashboard.html
+.claude/.lean/

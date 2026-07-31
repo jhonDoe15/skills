@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/skills/lean/scripts/route.py", "card"],
+            "timeout": 10,
+            "statusMessage": "Lean check"
+          }
+        ]
+      }
+    ]
+  }
+}

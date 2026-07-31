@@ -1,0 +1,14 @@
+{
+  "name": "jhonDoe15",
+  "owner": {
+    "name": "jhonDoe15",
+    "url": "https://github.com/jhonDoe15"
+  },
+  "plugins": [
+    {
+      "name": "lean",
+      "source": ".",
+      "description": "Efficiency discipline for Claude Code: full-coverage low-depth responses shaped for skimming, plus deterministic model-tier routing for delegated work."
+    }
+  ]
+}
