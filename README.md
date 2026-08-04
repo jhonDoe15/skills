@@ -1,6 +1,6 @@
 # skills
 
-Agent skills. Currently one: **lean**, a Claude Code plugin.
+Agent skills. One Claude Code plugin, two skills: **lean** and **lean-routing**.
 
 ## Install
 
@@ -28,13 +28,10 @@ in, and nothing else touches the filesystem.
 
 ---
 
-## lean
+Both share one rule — **correctness outranks cost** — and each has an override
+that ignores its own economics when getting it right is at stake.
 
-Efficiency discipline, in two halves that share one rule: **correctness outranks
-cost**, and each half has an override that ignores its own economics when
-getting it right is at stake.
-
-### Response density and shape
+## lean — response density and shape
 
 Compress depth, never breadth — if the answer touches eight things it names
 eight things, and what shrinks is how much is said about each. Told merely to
@@ -58,7 +55,7 @@ rules apply without being invoked. Three levels:
 python "${CLAUDE_PLUGIN_ROOT}/skills/lean/scripts/route.py" density terse|default|full
 ```
 
-### Model routing
+## lean-routing
 
 Moves a single evolving task across a cheap/mid/main tier ladder, routing on the
 uncertainty that remains *now* rather than the task's original size. A large task

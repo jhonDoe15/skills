@@ -8,7 +8,7 @@
     {
       "name": "lean",
       "source": ".",
-      "description": "Efficiency discipline for Claude Code: full-coverage low-depth responses shaped for skimming, plus deterministic model-tier routing for delegated work."
+      "description": "Response density and shape for readable answers, plus deterministic model-tier routing for delegated work."
     }
   ]
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Engine for the `lean` skill: tier routing plus response density.
+"""Shared engine for the `lean` and `lean-routing` skills.
 
-The doctrine (SKILL.md) says *what* each tier is for and *how much* to say.
+The two SKILL.md files say *what* each tier is for and *how much* to say.
 This file decides the parts that are rules rather than judgement calls --
 whether a tier switch is allowed, and which density is in force -- because an
 agent that forgets a ban or re-estimates its own budget mid-task is exactly
@@ -220,17 +220,20 @@ def render_density(cfg: dict, state: dict) -> list[str]:
     # line, so the model can scan it the way it is being told to write.
     return [
         f"[lean] density={level} | goal: the reader's scanning time, not the token count",
-        "  COVER  every item the answer needs. Compress depth, never breadth -- naming three of",
-        "         eight and implying completeness is omission, and the reader cannot detect it.",
+        "  LEDE   open with the answer. A reader who stops at line one still has it, which is",
+        "         what makes every later line optional rather than mandatory.",
+        "  COVER  every item the answer needs. Compress depth, never breadth -- three of eight,",
+        "         implied complete, is omission the reader cannot detect.",
         f"  DEPTH  {depth}",
-        "  KEEP   failures, skipped steps, assumptions, unverified claims. And the work product",
-        "         itself -- code, docs, commits, files you were asked for -- at full length.",
-        "  CUT    preamble, recaps of your own message, unrequested justification, options not taken",
-        "  SHAPE  answer in the first line | one idea per paragraph | sets become lists, identifier",
-        "         first | group by what the reader must act on | headers carry information | prose,",
-        "         never JSON/YAML | no ceremony on a short answer",
-        "  ASK    a follow-up for more depth is the dial working; one needed to uncover something",
-        "         you omitted is the failure",
+        "  KEEP   failures, skipped steps, assumptions, unverified claims -- and the work product",
+        "         itself (code, docs, files you were asked for) at full length",
+        "  SPEND  words on what the reader acts on. Preamble, recaps of your own message,",
+        "         unrequested justification and untaken options earn none.",
+        "  SHAPE  one idea per paragraph | sets become lists, identifier first | group by what the",
+        "         reader must act on | headers carry information | prose for people, not JSON/YAML",
+        "         | ceremony scales with the answer -- two sentences take no header",
+        "  ASK    a follow-up for depth is the dial working; one to uncover what you omitted is the",
+        "         failure",
     ]
 
 
@@ -247,7 +250,7 @@ def render_card(cfg: dict, state: dict) -> str:
             f"  local   -> {tier_desc(cfg, 'mid')}  outcome known; needs repo investigation or a pattern choice",
             f"  design  -> keep {tier_desc(cfg, 'main')}  behaviour still open, or correctness-sensitive area",
             f"  Skip delegation under {cfg['gates']['min_remaining_upshift']} steps, or for work you must review line by line anyway.",
-            "  route.py open --objective \"...\" to start | Skill(lean) for the doctrine",
+            "  route.py open --objective \"...\" to start | Skill(lean-routing) for the doctrine",
         ]
         return "\n".join(lines)
 

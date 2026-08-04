@@ -205,7 +205,7 @@ class Density(unittest.TestCase):
         evals actually exercised, so a rewrite cannot quietly drop one."""
         must = ["compress depth, never breadth",  # coverage is invariant
                 "unverified claims",              # protected content
-                "first line",                     # answer-first shape
+                "lede",                          # answer-first, as a leading word
                 "ceremony",                       # the short-answer guard
                 "scanning time"]                  # the goal is reading, not tokens
         for level in ("terse", "default"):
