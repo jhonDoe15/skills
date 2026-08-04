@@ -220,8 +220,8 @@ def render_density(cfg: dict, state: dict) -> list[str]:
     # line, so the model can scan it the way it is being told to write.
     return [
         f"[lean] density={level} | goal: the reader's scanning time, not the token count",
-        "  LEDE   open with the answer. A reader who stops at line one still has it, which is",
-        "         what makes every later line optional rather than mandatory.",
+        "  LEDE   open with the answer. A reader who stops at line one still has it -- and when",
+        "         the answer is one line, that line is the whole response.",
         "  COVER  every item the answer needs. Compress depth, never breadth -- three of eight,",
         "         implied complete, is omission the reader cannot detect.",
         f"  DEPTH  {depth}",
@@ -229,11 +229,11 @@ def render_density(cfg: dict, state: dict) -> list[str]:
         "         itself (code, docs, files you were asked for) at full length",
         "  SPEND  words on what the reader acts on. Preamble, recaps of your own message,",
         "         unrequested justification and untaken options earn none.",
+        "  PLAIN  a short answer stays short: no header, no bullet, no supporting paragraph it",
+        "         did not need. Structure answers complexity already there.",
         "  SHAPE  one idea per paragraph | sets become lists, identifier first | group by what the",
         "         reader must act on | headers carry information | prose for people, not JSON/YAML",
-        "         | ceremony scales with the answer -- two sentences take no header",
-        "  ASK    a follow-up for depth is the dial working; one to uncover what you omitted is the",
-        "         failure",
+        "  ASK    a follow-up for depth is the dial working; one to uncover an omission is failure",
     ]
 
 

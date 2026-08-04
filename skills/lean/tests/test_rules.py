@@ -206,7 +206,7 @@ class Density(unittest.TestCase):
         must = ["compress depth, never breadth",  # coverage is invariant
                 "unverified claims",              # protected content
                 "lede",                          # answer-first, as a leading word
-                "ceremony",                       # the short-answer guard
+                "a short answer stays short",     # the short-answer guard
                 "scanning time"]                  # the goal is reading, not tokens
         for level in ("terse", "default"):
             out = "\n".join(route.render_density(CFG, {"density": level})).lower()
