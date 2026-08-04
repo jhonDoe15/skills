@@ -1,20 +1,20 @@
-# jhonDoe15
+# skills
 
-Assorted projects. Currently one: **lean**, a Claude Code plugin.
+Agent skills. Currently one: **lean**, a Claude Code plugin.
 
 ## Install
 
 As a Claude Code plugin:
 
 ```
-/plugin marketplace add jhonDoe15/jhonDoe15
+/plugin marketplace add jhonDoe15/skills
 /plugin install lean@jhonDoe15
 ```
 
 Or with the `skills` CLI, for any agent that reads `SKILL.md`:
 
 ```
-npx skills add jhonDoe15/jhonDoe15
+npx skills add jhonDoe15/skills
 ```
 
 
