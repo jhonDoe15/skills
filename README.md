@@ -109,4 +109,4 @@ Two honest limits:
 
 ## Licence
 
-Not yet chosen. Until one is added this is all-rights-reserved by default.
+MIT — see [LICENSE](LICENSE).
