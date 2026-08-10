@@ -44,6 +44,10 @@
     }
   },
 
+  "spawn": {
+    "_comment": "The dispatch instruction the card prints for each transport. This is the whole cross-CLI mechanism: the card selects one of these strings, the agent reads it and spawns. Override a value (string or list of lines) to dispatch to any other CLI — e.g. set codex-cli to a `claude -p` invocation to make Claude the subordinate instead. Nothing here is executed by a script."
+  },
+
   "response": {
     "_comment": "terse = answer alone. default = answer plus one line of why per non-obvious call. full = no compression.",
     "density": "default"

@@ -103,6 +103,28 @@ def resolve_transport(cfg: dict, host: str) -> str:
     return HOST_TRANSPORT.get(host, "claude-native") if t == "auto" else t
 
 
+# How to actually dispatch, per transport. The script only picks which of these
+# strings to print -- the model reads it and does the spawning. Override any of
+# them under "spawn" in lean.config.json to point at a different CLI.
+SPAWN_TEXT = {
+    "claude-native": [
+        "Task tool, subagent_type=general-purpose, model set to the tier's model above.",
+        "Pin it -- inherited means you pay top-tier prices for cheap-tier work.",
+    ],
+    "unified": [
+        "your harness's own subagent, model pinned to the tier above. Pin it explicitly --",
+        "an inherited model leaves the ladder doing nothing while looking like it worked.",
+    ],
+    "codex-cli": [
+        "write the brief to a file, then run:",
+        "  codex exec -m <tier model> -c model_reasoning_effort=<effort> \\",
+        "    --sandbox workspace-write - < brief.md",
+        "Its final message is the report. Without --sandbox it cannot write and returns",
+        "plausible work having changed nothing.",
+    ],
+}
+
+
 def density_block(level: str) -> list[str]:
     if level == "full":
         return ["[lean] density=full -- no compression this session."]
@@ -131,16 +153,18 @@ def route_block(cfg: dict, host: str) -> list[str]:
     order, tiers, routes = cfg["order"], cfg["tiers"], cfg["routes"]
     tr = resolve_transport(cfg, host)
     top = order[-1]
-    how = ("native subagents -- pin the model on every spawn" if tr == "unified"
-           else "Agent tool with a model override" if tr == "claude-native"
-           else "codex exec over the shared tree")
+    how = cfg.get("spawn", {}).get(tr) or SPAWN_TEXT.get(tr, SPAWN_TEXT["claude-native"])
+    if isinstance(how, str):
+        how = [how]
     lines = [f"[admino] {len(order)} tiers | {host} -> {tr} | route on the uncertainty left "
-             "now, not the task's original size",
-             f"  SPAWN   {how}"]
+             "now, not the task's original size"]
+    lines += [f"  SPAWN   {how[0]}"] + [f"          {ln}" for ln in how[1:]]
     for signal in ("settled", "local", "design"):
         tier = routes.get(signal, top)
         spec = tiers.get(tier, {})
-        model = spec.get("models", {}).get(tr, "?")
+        # A missing id would otherwise print "?" and the agent would have nothing
+        # to pin -- the ladder then quietly runs everything on the parent model.
+        model = spec.get("models", {}).get(tr) or f"UNSET: tiers.{tier}.models.{tr}"
         verb = "keep " if tier == top else "-> " + tier
         lines.append(f"  {signal:<8}{verb:<10}({model}, {spec.get('effort', 'medium')})  {WHEN[signal]}")
     lines += [
