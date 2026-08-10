@@ -72,6 +72,45 @@ def load_config() -> dict:
     return dict(DEFAULTS)
 
 
+TIER_ALIAS = {"main": "main", "sub": "cheap", "cheap": "cheap", "mid": "mid"}
+
+
+def apply_overrides(cfg: dict, raw: str) -> dict:
+    """Fold `--cfg k=v;k=v` over the file config.
+
+    The hook passes install-time answers this way. Values that are blank, or
+    still carrying an unsubstituted ${...} placeholder because the user skipped
+    a prompt, are ignored -- a skipped prompt must leave the file config alone
+    rather than blank the model id.
+    """
+    for pair in (raw or "").split(";"):
+        key, _, val = pair.partition("=")
+        key, val = key.strip(), val.strip()
+        if not key or not val or "${" in val:
+            continue
+        if key == "transport":
+            cfg["transport"] = val
+        elif key == "density":
+            cfg.setdefault("response", {})["density"] = val
+        elif key == "tiers" and val in ("2", "3"):
+            cfg["order"] = ["cheap", "main"] if val == "2" else ["cheap", "mid", "main"]
+            cfg["routes"] = {"settled": "cheap", "design": "main", "risk": "main",
+                             "local": "main" if val == "2" else "mid"}
+        elif key.endswith(("_model", "_effort")):
+            name, _, field = key.rpartition("_")
+            tier = TIER_ALIAS.get(name)
+            if not tier or tier not in cfg.get("tiers", {}):
+                continue
+            if field == "effort":
+                cfg["tiers"][tier]["effort"] = val
+            else:
+                # One name, every transport: the user picked a model, not a
+                # model-per-spawn-mechanism.
+                cfg["tiers"][tier]["models"] = {k: val for k in
+                                                cfg["tiers"][tier].get("models", {"unified": ""})}
+    return cfg
+
+
 def detect_host() -> str:
     """Which agent harness is running this. Read-only sniffing of the environment."""
     env = os.environ
@@ -188,6 +227,10 @@ def route_block(cfg: dict, host: str) -> list[str]:
     return lines
 
 
+def arg_after(flag: str) -> str:
+    return sys.argv[sys.argv.index(flag) + 1] if flag in sys.argv[:-1] else ""
+
+
 def main() -> int:
     try:
         payload = {}
@@ -197,10 +240,18 @@ def main() -> int:
                 payload = json.loads(raw)
         if payload.get("cwd"):
             os.chdir(payload["cwd"])
-        cfg = load_config()
+        cfg = apply_overrides(load_config(), arg_after("--cfg"))
         host = cfg.get("host") if cfg.get("host", "auto") != "auto" else detect_host()
         level = cfg.get("response", {}).get("density", "default")
-        print("\n".join(density_block(level) + [""] + route_block(cfg, host)))
+        card = "\n".join(density_block(level) + [""] + route_block(cfg, host))
+        dest = arg_after("--write")
+        if dest:
+            # For hosts whose hooks never fire: write the resolved card straight
+            # into a rules file the host does load.
+            Path(dest).write_text(card + "\n", encoding="utf-8")
+            print(f"card written to {dest} (host={host})")
+        else:
+            print(card)
     except Exception as exc:
         # Never break the session -- but never fail silently either. An empty card
         # is indistinguishable from the skill not being installed, which is how a

@@ -26,16 +26,20 @@ Claude Code hooks do not fire in Cursor, Zed, or any other host that does not
 read `.claude/settings.json`. The rules then never reach the model and the whole
 thing is inert — which looks identical to it being installed and ignored.
 
-Where that applies, paste the card into whatever file the host always loads
-(`AGENTS.md`, `.cursorrules`, a project rule):
+Where that applies, write the card into whatever file the host always loads —
+run this **from a terminal inside that host**, so it detects the right one:
 
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/lean/scripts/card.py" --show
+python "${CLAUDE_PLUGIN_ROOT}/skills/lean/scripts/card.py" --write AGENTS.md
 ```
 
-That is a snapshot, so re-run it after changing `lean.config.json`. Losing the
-post-compaction re-injection is the real cost — a long session will drift back to
-its defaults, and only a fresh paste or a new session restores the rules.
+Or set `transport` explicitly in `lean.config.json` and generate it anywhere;
+that is the safer route, since a card generated elsewhere bakes in whatever host
+*that* machine detected.
+
+It is a snapshot either way — re-run after changing the config. Losing the
+post-compaction re-injection is the real cost: a long session drifts back to its
+defaults, and only a fresh write or a new session restores the rules.
 
 ## Compress depth, never breadth
 

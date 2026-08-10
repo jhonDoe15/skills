@@ -6,7 +6,11 @@
           {
             "type": "command",
             "command": "python",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/skills/lean/scripts/card.py"],
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/skills/lean/scripts/card.py",
+              "--cfg",
+              "transport=${user_config.transport};density=${user_config.density};tiers=${user_config.tiers};main_model=${user_config.main_model};main_effort=${user_config.main_effort};sub_model=${user_config.sub_model};sub_effort=${user_config.sub_effort};mid_model=${user_config.mid_model};mid_effort=${user_config.mid_effort}"
+            ],
             "timeout": 10,
             "statusMessage": "lean"
           }
@@ -19,7 +23,11 @@
           {
             "type": "command",
             "command": "python",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/skills/lean/scripts/card.py"],
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/skills/lean/scripts/card.py",
+              "--cfg",
+              "transport=${user_config.transport};density=${user_config.density};tiers=${user_config.tiers};main_model=${user_config.main_model};main_effort=${user_config.main_effort};sub_model=${user_config.sub_model};sub_effort=${user_config.sub_effort};mid_model=${user_config.mid_model};mid_effort=${user_config.mid_effort}"
+            ],
             "timeout": 10,
             "statusMessage": "lean"
           }

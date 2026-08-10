@@ -19,11 +19,35 @@
       "sensitive": false
     },
     "transport": {
-      "description": "How subagents are spawned: codex-cli, unified, or claude-native",
+      "description": "How subagents are spawned: unified (native subagents), claude-native (Agent tool), codex-cli (shell out), or auto",
+      "sensitive": false
+    },
+    "main_model": {
+      "description": "Model id for the main agent \u2014 the tier that keeps design and risk work",
+      "sensitive": false
+    },
+    "main_effort": {
+      "description": "Reasoning effort for the main agent: low, medium or high",
+      "sensitive": false
+    },
+    "sub_model": {
+      "description": "Model id for the dispatching subagent \u2014 the cheap tier that takes settled, mechanical work",
+      "sensitive": false
+    },
+    "sub_effort": {
+      "description": "Reasoning effort for the subagent: low, medium or high",
+      "sensitive": false
+    },
+    "mid_model": {
+      "description": "Model id for the middle tier (3-tier ladder only) \u2014 repo investigation and pattern choice",
+      "sensitive": false
+    },
+    "mid_effort": {
+      "description": "Reasoning effort for the middle tier: low, medium or high",
       "sensitive": false
     },
     "density": {
-      "description": "Default response density: terse, default, or full",
+      "description": "Default response density: terse, default or full",
       "sensitive": false
     }
   }
