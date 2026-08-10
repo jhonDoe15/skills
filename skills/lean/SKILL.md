@@ -1,7 +1,9 @@
 ---
 name: lean
-description: Response density and shape — full coverage at low depth, written to be skimmed.
-disable-model-invocation: true
+description: >-
+  Compress a response to full coverage at low depth, shaped so it can be
+  skimmed. Use when a reply needs tightening, when an answer came out long or
+  hard to scan, or when another skill needs the density and shape rules.
 ---
 
 # Lean

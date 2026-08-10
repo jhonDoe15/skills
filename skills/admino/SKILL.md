@@ -103,6 +103,11 @@ mid-edit — a half-applied change is worse than a slightly over-priced one.
 Every switch carries one, and it is the only thing that survives. The card lists
 the fields; `references/handoff.md` defines each and shows both directions.
 
+**Reuse a handoff skill if the workspace has one.** `/handoff` or whatever this
+project calls it already knows what to carry across, what to redact, and what to
+reference rather than paste. Compose from scratch only when there is nothing to
+reuse — a project's own convention beats this file's field list.
+
 Two things decide whether it works, and neither is a field.
 
 State the **boundary** as clearly as the task. An agent that does not know where
