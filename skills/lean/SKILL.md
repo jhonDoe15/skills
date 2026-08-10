@@ -30,7 +30,7 @@ Where that applies, write the card into whatever file the host always loads —
 run this **from a terminal inside that host**, so it detects the right one:
 
 ```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/lean/scripts/card.py" --write AGENTS.md
+node "${CLAUDE_PLUGIN_ROOT}/skills/lean/scripts/card.mjs" --write AGENTS.md
 ```
 
 Or set `transport` explicitly in `lean.config.json` and generate it anywhere;
