@@ -21,6 +21,10 @@ The working rules are injected on every prompt by the `lean` plugin's hook, so
 they apply whether or not this file is loaded. This file is the reasoning behind
 them — read it when a rule needs interpreting, or when a case is genuinely hard.
 
+The tier table and that hook both come from the `lean` skill. If the card is not
+appearing on your prompts, `lean` is not installed alongside this one — install
+it, or the ladder below has no models to name and nothing is being injected.
+
 ## The one rule
 
 Route on the uncertainty that remains **right now**, not on how big the task
@@ -57,8 +61,7 @@ even when nothing is uncertain.
 
 ## Which models
 
-Set in `lean.config.json` — see the `lean` skill for where that file lives and
-how to change it. Two or three tiers both work; on a two-tier ladder `local` work
+Set in `lean.config.json` — the `lean` skill documents where it lives. Two or three tiers both work; on a two-tier ladder `local` work
 rides the top rung, because there is nothing in between to hand it to.
 
 The top tier also keeps routing itself, and any final review that risk actually
