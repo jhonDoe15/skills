@@ -108,8 +108,10 @@ def route_block(cfg: dict) -> list[str]:
         verb = "keep " if tier == top else "-> " + tier
         lines.append(f"  {signal:<8}{verb:<10}({model}, {spec.get('effort', 'medium')})  {WHEN[signal]}")
     lines += [
-        "  RISK    concurrency, security, persistence, compatibility or data integrity keeps the",
-        f"          work on {top} however settled it looks.",
+        "  RISK    an edit that can itself break authn/authz, crypto, a migration, persistence,",
+        f"          a public contract or concurrency stays on {top} however settled it looks. Not",
+        "          'the app has users' -- if that were the test everything would route here and",
+        "          the ladder would never fire.",
         "  HOLD    once a scope has moved up it does not move back down; that call is already",
         "          made. Genuinely new scope may re-decide. Escalating on design or risk is",
         "          never blocked, whatever else this says.",

@@ -18,6 +18,23 @@ when a rule needs interpreting, or when you are changing one.
 The rules steer by being in the prompt. Nothing here grants or denies
 permission — there is one script, and its only job is printing the card.
 
+## Hosts without hooks
+
+Claude Code hooks do not fire in Cursor, Zed, or any other host that does not
+read `.claude/settings.json`. The rules then never reach the model and the whole
+thing is inert — which looks identical to it being installed and ignored.
+
+Where that applies, paste the card into whatever file the host always loads
+(`AGENTS.md`, `.cursorrules`, a project rule):
+
+```bash
+python "${CLAUDE_PLUGIN_ROOT}/skills/lean/scripts/card.py" --show
+```
+
+That is a snapshot, so re-run it after changing `lean.config.json`. Losing the
+post-compaction re-injection is the real cost — a long session will drift back to
+its defaults, and only a fresh paste or a new session restores the rules.
+
 ## Compress depth, never breadth
 
 If the answer touches eight things, name eight things. What shrinks is how much
