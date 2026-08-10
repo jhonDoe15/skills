@@ -17,8 +17,13 @@ As a Claude Code plugin:
 Or with the `skills` CLI, for any agent that reads `SKILL.md`:
 
 ```
-npx skills add jhonDoe15/skills
+npx skills add -g jhonDoe15/skills    # ~/.claude/skills — every project
+npx skills add jhonDoe15/skills       # ./.claude/skills — this project only
 ```
+
+`-g` is the one you want for a personal setup; without it the skill is installed
+into the current repo and committed with it. Nothing here writes to your project
+either way — the one script reads a config file and prints text.
 
 
 The repo is laid out to serve both installers: `skills/lean/SKILL.md` is where

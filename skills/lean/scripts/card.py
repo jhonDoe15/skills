@@ -29,7 +29,8 @@ SKILL_ROOT = Path(__file__).resolve().parent.parent
 BUNDLED = SKILL_ROOT / "lean.config.json"
 
 DEFAULTS = {
-    "transport": "codex-cli",
+    "transport": "auto",
+    "host": "auto",
     "order": ["cheap", "mid", "main"],
     "tiers": {
         "cheap": {"effort": "medium", "models": {"codex-cli": "gpt-5.6-luna"}},
@@ -71,6 +72,37 @@ def load_config() -> dict:
     return dict(DEFAULTS)
 
 
+def detect_host() -> str:
+    """Which agent harness is running this. Read-only sniffing of the environment."""
+    env = os.environ
+    if any(k.startswith("CURSOR") for k in env) or env.get("TERM_PROGRAM") == "Cursor":
+        return "cursor"
+    if any(k.startswith("CODEX") for k in env) or env.get("OPENAI_CODEX"):
+        return "codex"
+    if env.get("CLAUDECODE") or any(k.startswith("CLAUDE_CODE") for k in env):
+        return "claude-code"
+    if env.get("OPENCODE") or env.get("OPENCODE_BIN"):
+        return "opencode"
+    return "unknown"
+
+
+# A multi-provider IDE already has every model behind one subagent mechanism, so
+# use it -- that is also the only shape that keeps the main context small. A
+# single-provider CLI has to choose: same-provider tiers, or shell out.
+HOST_TRANSPORT = {
+    "cursor": "unified",
+    "opencode": "unified",
+    "claude-code": "claude-native",
+    "codex": "claude-native",
+    "unknown": "claude-native",
+}
+
+
+def resolve_transport(cfg: dict, host: str) -> str:
+    t = cfg.get("transport", "auto")
+    return HOST_TRANSPORT.get(host, "claude-native") if t == "auto" else t
+
+
 def density_block(level: str) -> list[str]:
     if level == "full":
         return ["[lean] density=full -- no compression this session."]
@@ -95,12 +127,16 @@ def density_block(level: str) -> list[str]:
     ]
 
 
-def route_block(cfg: dict) -> list[str]:
+def route_block(cfg: dict, host: str) -> list[str]:
     order, tiers, routes = cfg["order"], cfg["tiers"], cfg["routes"]
-    tr = cfg["transport"]
+    tr = resolve_transport(cfg, host)
     top = order[-1]
-    lines = [f"[admino] {len(order)} tiers | {tr} | route on the uncertainty left now, not the "
-             "task's original size"]
+    how = ("native subagents -- pin the model on every spawn" if tr == "unified"
+           else "Agent tool with a model override" if tr == "claude-native"
+           else "codex exec over the shared tree")
+    lines = [f"[admino] {len(order)} tiers | {host} -> {tr} | route on the uncertainty left "
+             "now, not the task's original size",
+             f"  SPAWN   {how}"]
     for signal in ("settled", "local", "design"):
         tier = routes.get(signal, top)
         spec = tiers.get(tier, {})
@@ -138,10 +174,19 @@ def main() -> int:
         if payload.get("cwd"):
             os.chdir(payload["cwd"])
         cfg = load_config()
+        host = cfg.get("host") if cfg.get("host", "auto") != "auto" else detect_host()
         level = cfg.get("response", {}).get("density", "default")
-        print("\n".join(density_block(level) + [""] + route_block(cfg)))
-    except Exception:
-        pass  # a broken card must never break the session
+        print("\n".join(density_block(level) + [""] + route_block(cfg, host)))
+    except Exception as exc:
+        # Never break the session -- but never fail silently either. An empty card
+        # is indistinguishable from the skill not being installed, which is how a
+        # bug here survives unnoticed. Degrade to the rules that need no config.
+        try:
+            print("\n".join(density_block("default")))
+            print(f"\n[admino] card degraded: {type(exc).__name__}: {exc}")
+            print("  Routing table unavailable -- check lean.config.json.")
+        except Exception:
+            pass
     return 0
 
 

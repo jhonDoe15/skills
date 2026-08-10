@@ -1,7 +1,11 @@
 {
   "_comment": "The only knob. Copy this to ~/.claude/lean.config.json (or <project>/.claude/lean.config.json) and edit — the copy inside the plugin is a read-only default that is replaced on every plugin update. Nothing here steers the model; it only fills in the tier table the card prints.",
 
-  "transport": "codex-cli",
+  "transport": "auto",
+
+  "_transport_note": "auto picks from the host: a multi-provider IDE (cursor, opencode) gets 'unified' native subagents, which is also the only shape that keeps your main context small. A single-provider CLI (claude-code, codex) gets 'claude-native' same-provider tiers. Set it explicitly to 'codex-cli' to shell out to a second account instead, or to 'unified'/'claude-native' to pin the choice.",
+
+  "host": "auto",
 
   "order": ["cheap", "mid", "main"],
 
