@@ -1,22 +1,20 @@
 {
-  "_comment": "The manual knob. Everything this skill does is driven by this file. Change model ids, transport, and response density here; never edit the doctrine to change a setting.",
-
-  "response": {
-    "_comment": "Governs how much is said, never how much is covered. See references/density.md. Session overrides: `route.py density terse|default|full`.",
-    "density": "default",
-    "levels": {
-      "terse": "The answer and nothing else. Reasons only where omitting one would mislead.",
-      "default": "The answer, plus one line of why for each non-obvious call.",
-      "full": "No compression. For teaching, debugging, and design discussion."
-    }
-  },
+  "_comment": "The only knob. Copy this to ~/.claude/lean.config.json (or <project>/.claude/lean.config.json) and edit — the copy inside the plugin is a read-only default that is replaced on every plugin update. Nothing here steers the model; it only fills in the tier table the card prints.",
 
   "transport": "codex-cli",
 
+  "order": ["cheap", "mid", "main"],
+
+  "routes": {
+    "_comment": "Which tier each signal routes to. For a 2-tier ladder, set order to [\"cheap\",\"main\"] and point local at main — there is no middle rung to hand it to.",
+    "settled": "cheap",
+    "local": "mid",
+    "design": "main",
+    "risk": "main"
+  },
+
   "tiers": {
     "cheap": {
-      "label": "Luna",
-      "role": "Clear, bounded implementation where approach, area, and validation are already known.",
       "effort": "medium",
       "models": {
         "codex-cli": "gpt-5.6-luna",
@@ -25,8 +23,6 @@
       }
     },
     "mid": {
-      "label": "Terra",
-      "role": "Repo-specific investigation, impact analysis, choosing among existing patterns, bounded-subsystem implementation.",
       "effort": "medium",
       "models": {
         "codex-cli": "gpt-5.6-terra",
@@ -35,8 +31,6 @@
       }
     },
     "main": {
-      "label": "Opus",
-      "role": "Owns the request. Architecture, ambiguity, correctness-sensitive reasoning, routing, final review.",
       "effort": "medium",
       "models": {
         "codex-cli": "claude-opus-5",
@@ -46,40 +40,10 @@
     }
   },
 
-  "order": ["cheap", "mid", "main"],
-
-  "gates": {
-    "_comment": "Handoffs cost tokens and context. These thresholds decide when a switch pays for itself. 'remaining' is the agent's estimate of remaining discrete steps (edits, files, checks) in the CURRENT scope.",
-    "min_remaining_upshift": 2,
-    "min_remaining_downshift": 5,
-    "max_hops_per_scope": 3,
-    "max_hops_per_task": 6
+  "response": {
+    "_comment": "terse = answer alone. default = answer plus one line of why per non-obvious call. full = no compression.",
+    "density": "default"
   },
 
-  "policy": {
-    "_comment": "allow_nested_spawn lets mid spawn cheap directly instead of returning to main first. Off by default: flat routing keeps one writer and one auditable ledger. See references/transports.md before enabling.",
-    "allow_nested_spawn": false,
-    "escalation_to_main_always_allowed": true,
-    "main_effort_dispatch_only": "low",
-    "main_effort_substantive": "medium"
-  },
-
-  "transports": {
-    "codex-cli": {
-      "_comment": "Separate Claude and Codex accounts. Opus (Claude Code) shells out to the Codex CLI, which shares the same working tree. VERIFY THIS TEMPLATE ONCE with `route.py doctor` -- codex flag syntax varies by version, and this one line is the only thing that needs changing.",
-      "command_template": "codex exec -m {model} -c model_reasoning_effort=\"{effort}\" --cd \"{cwd}\" \"{prompt}\"",
-      "probe": "codex --version",
-      "prompt_file_template": "codex exec -m {model} -c model_reasoning_effort=\"{effort}\" --cd \"{cwd}\" - < \"{prompt_file}\""
-    },
-    "unified": {
-      "_comment": "Cursor or any harness where every model is spawnable natively. The router emits a spawn directive; the harness's own subagent mechanism executes it.",
-      "directive": "native"
-    },
-    "claude-native": {
-      "_comment": "Fallback preset with zero external dependencies: the Agent tool with a model override. Real tiering, Claude-only models.",
-      "directive": "agent-tool"
-    }
-  },
-
-  "state_dir": ".claude/.lean"
+  "min_steps_to_delegate": 2
 }

@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""Emits the lean/admino prompt card. That is the whole job.
+
+The skills steer by prompting: the rules live in the text this prints, not in
+code that grants or denies permission. This script exists only because a hook
+needs an executable to call, and because the tier table has to be filled in from
+whatever models the user configured.
+
+Runs on every user prompt and again after a compaction. It never raises and
+never exits non-zero -- a broken card must not break the session.
+
+    card.py            emit the card (reads the hook payload on stdin)
+    card.py --show     same, for reading by eye
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
+SKILL_ROOT = Path(__file__).resolve().parent.parent
+BUNDLED = SKILL_ROOT / "lean.config.json"
+
+DEFAULTS = {
+    "transport": "codex-cli",
+    "order": ["cheap", "mid", "main"],
+    "tiers": {
+        "cheap": {"effort": "medium", "models": {"codex-cli": "gpt-5.6-luna"}},
+        "mid": {"effort": "medium", "models": {"codex-cli": "gpt-5.6-terra"}},
+        "main": {"effort": "medium", "models": {"codex-cli": "claude-opus-5"}},
+    },
+    "routes": {"settled": "cheap", "local": "mid", "design": "main", "risk": "main"},
+    "response": {"density": "default"},
+    "min_steps_to_delegate": 2,
+}
+
+WHEN = {
+    "settled": "approach, area and validation known; the work is mechanical",
+    "local": "outcome known; needs repo investigation or a choice among existing patterns",
+    "design": "behaviour still open, or a correctness-sensitive area",
+}
+
+
+def load_config() -> dict:
+    """User config wins, then project, then the copy bundled with the skill.
+
+    The bundled file is a read-only default -- a plugin directory is a cache that
+    is replaced on update, so the user's model choices cannot live there.
+    """
+    candidates = []
+    if os.environ.get("CLAUDE_LEAN_CONFIG"):
+        candidates.append(Path(os.environ["CLAUDE_LEAN_CONFIG"]))
+    candidates += [Path.cwd() / ".claude" / "lean.config.json",
+                   Path.home() / ".claude" / "lean.config.json",
+                   BUNDLED]
+    for path in candidates:
+        try:
+            if path.is_file():
+                cfg = dict(DEFAULTS)
+                cfg.update(json.loads(path.read_text(encoding="utf-8")))
+                return cfg
+        except Exception:
+            continue
+    return dict(DEFAULTS)
+
+
+def density_block(level: str) -> list[str]:
+    if level == "full":
+        return ["[lean] density=full -- no compression this session."]
+    depth = ("answer only; a reason only where omitting one misleads" if level == "terse"
+             else "answer + one line of why per non-obvious call; detail on request")
+    return [
+        f"[lean] density={level} | goal: the reader's scanning time, not the token count",
+        "  LEDE   open with the answer. A reader who stops at line one still has it -- and when",
+        "         the answer is one line, that line is the whole response.",
+        "  COVER  every item the answer needs. Compress depth, never breadth -- three of eight,",
+        "         implied complete, is omission the reader cannot detect.",
+        f"  DEPTH  {depth}",
+        "  KEEP   failures, skipped steps, assumptions, unverified claims -- and the work product",
+        "         itself (code, docs, files you were asked for) at full length",
+        "  SPEND  words on what the reader acts on. Preamble, recaps of your own message,",
+        "         unrequested justification and untaken options earn none.",
+        "  PLAIN  a short answer stays short: no header, no bullet, no supporting paragraph it",
+        "         did not need. Structure answers complexity already there.",
+        "  SHAPE  one idea per paragraph | sets become lists, identifier first | group by what the",
+        "         reader must act on | headers carry information | prose for people, not JSON/YAML",
+        "  ASK    a follow-up for depth is the dial working; one to uncover an omission is failure",
+    ]
+
+
+def route_block(cfg: dict) -> list[str]:
+    order, tiers, routes = cfg["order"], cfg["tiers"], cfg["routes"]
+    tr = cfg["transport"]
+    top = order[-1]
+    lines = [f"[admino] {len(order)} tiers | {tr} | route on the uncertainty left now, not the "
+             "task's original size"]
+    for signal in ("settled", "local", "design"):
+        tier = routes.get(signal, top)
+        spec = tiers.get(tier, {})
+        model = spec.get("models", {}).get(tr, "?")
+        verb = "keep " if tier == top else "-> " + tier
+        lines.append(f"  {signal:<8}{verb:<10}({model}, {spec.get('effort', 'medium')})  {WHEN[signal]}")
+    lines += [
+        "  RISK    concurrency, security, persistence, compatibility or data integrity keeps the",
+        f"          work on {top} however settled it looks.",
+        "  HOLD    once a scope has moved up it does not move back down; that call is already",
+        "          made. Genuinely new scope may re-decide. Escalating on design or risk is",
+        "          never blocked, whatever else this says.",
+        f"  WORTH   skip a handoff with under {cfg['min_steps_to_delegate']} steps of work left, or "
+        "for anything you must",
+        "          review line by line anyway. Breadth is its own signal -- long lists lose items",
+        "          on cheaper tiers even when nothing is uncertain.",
+        "  SEAM    switch only at a checkpoint: exploration done, approach settled, a coherent",
+        "          patch landed, or validation changed the diagnosis. Never mid-edit.",
+        "  HANDOFF objective, constraints, done so far, decisions and assumptions, files touched,",
+        "          validation with exact results, remaining work, open risks, next tier.",
+        "  Skill(admino) for the full doctrine.",
+    ]
+    return lines
+
+
+def main() -> int:
+    try:
+        payload = {}
+        if "--show" not in sys.argv and not sys.stdin.isatty():
+            raw = sys.stdin.read()
+            if raw.strip():
+                payload = json.loads(raw)
+        if payload.get("cwd"):
+            os.chdir(payload["cwd"])
+        cfg = load_config()
+        level = cfg.get("response", {}).get("density", "default")
+        print("\n".join(density_block(level) + [""] + route_block(cfg)))
+    except Exception:
+        pass  # a broken card must never break the session
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

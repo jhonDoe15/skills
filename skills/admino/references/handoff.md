@@ -8,9 +8,9 @@ Two directions, same seven fields:
 - **Down/across** (main writes it, subagent receives it): the brief.
 - **Up/back** (subagent writes it, main receives it): the report.
 
-Write it to a file and pass that file to `route.py spawn --prompt-file`.
-Convention: `.claude/.lean/handoff.md`, overwritten each hop — the ledger
-keeps the audit trail, this file only needs to hold the current one.
+Write it into the prompt you hand the next agent. For a shell-spawned agent,
+put it in a file and pipe that in — quoting a multi-paragraph brief inline is how
+handoffs get mangled.
 
 ## The seven fields
 
@@ -70,9 +70,9 @@ tier that is out of its depth guesses instead of returning.
 
 ## Rules for the report (subagent → main)
 
-**Recommended next tier is a recommendation, not a decision.** Main runs
-`route.py decide` and the ledger may deny it — a report recommending `cheap`
-right after a `cheap → mid` hop will be refused, correctly.
+**Recommended next tier is a recommendation, not a decision.** The owner
+re-reads the situation and may disagree — a report recommending a step back down
+right after moving up should be refused, because that call was already made.
 
 Be exact about validation. A report that overstates what was verified is worse
 than one that admits nothing was run: main routes the next phase on it, and an
@@ -90,6 +90,5 @@ Check, in order:
 3. Do its assumptions contradict anything you know but did not tell it?
 4. Is the remaining-work estimate credible against the diff?
 
-Only then classify the next scope and call `route.py decide`. Routing on an
-unread report is how a bad assumption gets three tiers deep before anyone
-notices.
+Only then decide the next tier. Routing on an unread report is how a bad
+assumption gets three tiers deep before anyone notices.

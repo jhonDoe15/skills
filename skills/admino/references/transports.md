@@ -2,7 +2,7 @@
 
 The routing rules are transport-independent. Only *how a tier gets spawned*
 changes. Set `"transport"` in `lean.config.json` to one of the three below
-and run `route.py doctor`.
+and set it in `lean.config.json`.
 
 ---
 
@@ -22,9 +22,8 @@ codex login
 
 Then verify:
 
-```bash
-python .claude/skills/lean/scripts/route.py doctor
-```
+Then run one throwaway `codex exec` per tier to confirm the model ids are real
+on your account before trusting the routing.
 
 ### The one line you may need to change
 
@@ -39,8 +38,8 @@ codex exec -m {model} -c model_reasoning_effort="{effort}" --cd "{cwd}" "{prompt
 Placeholders: `{model}`, `{effort}`, `{cwd}`, `{prompt}`, `{prompt_file}`.
 Check yours with `codex exec --help` before the first real hop.
 
-**`doctor` cannot verify model ids.** It confirms the CLI exists and runs; it
-cannot confirm that `gpt-5.6-luna` and `gpt-5.6-terra` are available on your
+**Nothing verifies model ids for you.** `codex --version` confirms the CLI is
+there; it cannot confirm that `gpt-5.6-luna` and `gpt-5.6-terra` are available on your
 account under those exact names. Run one throwaway `codex exec` per tier first.
 If a name is wrong, fix it in `lean.config.json` under
 `tiers.<tier>.models.codex-cli` — nowhere else.
@@ -51,7 +50,7 @@ Prefer `--prompt-file`; handoffs contain quotes, newlines, and paths that do
 not survive inline shell quoting on Windows.
 
 ```bash
-python .claude/skills/lean/scripts/route.py spawn --tier mid --prompt-file .claude/.lean/handoff.md
+codex exec -m gpt-5.6-terra -c model_reasoning_effort="medium" - < handoff.md
 ```
 
 It prints the exact command. Run it with the **Bash** tool — the emitted form
@@ -76,13 +75,12 @@ reach you have.
 ## `unified` — one harness, every model
 
 Cursor, or anything else where all three models are spawnable natively. There
-is no shell-out: `route.py spawn` prints a directive and you use the harness's
+is no shell-out: you use the harness's
 own subagent mechanism.
 
 The only thing that matters here: **pin the model explicitly on every spawn.**
 A subagent that inherits the parent model silently defeats the entire ladder —
-every hop still gets recorded in the ledger, the audit trail looks healthy, and
-you pay main-tier prices for cheap-tier work. If your harness cannot pin a
+the work looks routed and you pay top-tier prices for cheap-tier work. If your harness cannot pin a
 model per subagent, this transport does not work; use `codex-cli`.
 
 Set `tiers.<tier>.models.unified` to whatever id your harness uses. Reasoning
@@ -111,9 +109,9 @@ routing keeps one writer in the tree and one complete audit trail.
 With it enabled, `mid` may spawn `cheap` directly without returning to main
 first. That saves a round trip on the common "Terra scoped it, Luna types it"
 pattern. The cost is that the nested spawn only stays auditable if `mid`'s
-brief explicitly instructs it to run `route.py commit` before spawning, and
+brief explicitly tells it to record the hop in its own report, and
 `mid` is not the tier you would trust to be rigorous about bookkeeping under
-pressure. Enable it once the flat loop is working and you have seen the ledger
+pressure. Try it once the flat loop is working -- not before, since a nested spawn
 stay honest — not before.
 
 Never nest two levels. `cheap` spawns nothing.

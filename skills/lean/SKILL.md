@@ -11,9 +11,12 @@ side effect worth having; make it the objective and you get dense unreadable
 blocks that are technically short. A slightly longer answer that can be skimmed
 beats a shorter one that must be read in full.
 
-A `UserPromptSubmit` hook injects the working rules on every prompt, so this
-file is the reasoning behind them rather than a thing to invoke. Read it when a
-rule needs interpreting, or when you are changing one.
+A hook injects the working rules on every prompt, and again after a compaction,
+so this file is the reasoning behind them rather than a thing to invoke. Read it
+when a rule needs interpreting, or when you are changing one.
+
+The rules steer by being in the prompt. Nothing here grants or denies
+permission — there is one script, and its only job is printing the card.
 
 ## Compress depth, never breadth
 
@@ -78,18 +81,23 @@ turns; coverage is not.
 `terse` (answer alone), `default` (answer plus one line of why per non-obvious
 call), `full` (no compression — for teaching and design discussion).
 
-```bash
-route.py density terse
-```
+Set the default in `lean.config.json` under `response.density`. To change it for
+one exchange, just say so — "keep it terse", "give me the full version" — the
+rules are prompt text, not a setting a script enforces.
 
-`route.py` is `${CLAUDE_PLUGIN_ROOT}/skills/lean/scripts/route.py` installed as a
-plugin, or `.claude/skills/lean/scripts/route.py` vendored. Run it from the
-project root. The setting persists for the session; the default lives in
-`lean.config.json`.
+**Where the config lives**, most specific first: `$CLAUDE_LEAN_CONFIG`, then
+`<project>/.claude/lean.config.json`, then `~/.claude/lean.config.json`, then the
+copy bundled with the skill. Edit one of the first three — the bundled copy is a
+read-only default and is replaced on every plugin update. Copy it as a starting
+point:
+
+```bash
+cp "${CLAUDE_PLUGIN_ROOT}/skills/lean/lean.config.json" ~/.claude/lean.config.json
+```
 
 ## Going deeper
 
 - `references/density.md` — how much to say, with worked before/after examples
 - `references/structure.md` — what shape it arrives in, with a worked example
-- The `lean-routing` skill — the other half: which model should do the next phase
-  of a task. Shares this skill's engine and config.
+- The `admino` skill — the other half: which model should do the next phase of a
+  task. Shares this skill's config and hook.

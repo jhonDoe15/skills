@@ -1,6 +1,9 @@
 # skills
 
-Agent skills. One Claude Code plugin, two skills: **lean** and **lean-routing**.
+Agent skills. One Claude Code plugin, two skills: **lean** and **admino**.
+
+Both steer by prompt. A hook injects their rules on every prompt and again after
+each compaction; there is one script and its only job is printing that text.
 
 ## Install
 
@@ -22,9 +25,8 @@ The repo is laid out to serve both installers: `skills/lean/SKILL.md` is where
 the `skills` CLI looks, and the root `.claude-plugin/` manifests make the same
 tree a single-plugin Claude Code marketplace.
 
-Nothing here reads or transmits your data. The skill ships a hook that writes a
-routing ledger to `.claude/.lean/ledger.json` inside whatever project you run it
-in, and nothing else touches the filesystem.
+Nothing here reads or transmits your data, and nothing writes to your project.
+The one script reads a config file and prints text.
 
 ---
 
@@ -48,35 +50,33 @@ rather than the token count — answer in the first line, sets as lists with the
 identifier leading, grouped by what the reader must act on, no ceremony on a
 short answer.
 
-A `UserPromptSubmit` hook injects a ~390-token card on every prompt, so the
-rules apply without being invoked. Three levels:
+Three density levels — `terse`, `default`, `full`. Set the default in `lean.config.json`; say "keep it terse" to change one
+exchange. Config resolution, most specific first: `$CLAUDE_LEAN_CONFIG`,
+`<project>/.claude/lean.config.json`, `~/.claude/lean.config.json`, then the copy
+bundled with the plugin. Edit one of the first three — the bundled copy is
+replaced on every plugin update.
 
-```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/lean/scripts/route.py" density terse|default|full
-```
-
-## lean-routing
+## admino
 
 Moves a single evolving task across a cheap/mid/main tier ladder, routing on the
 uncertainty that remains *now* rather than the task's original size. A large task
 whose approach is settled belongs on the cheap tier; a one-line change whose
 correct behaviour is still open does not.
 
-Tier changes are gated by a deterministic ledger rather than by model memory. It
-blocks oscillation (a scope that moved `cheap → mid` does not move back), refuses
-handoffs with too little work left to repay them, enforces a capability floor,
-and caps hops per scope and per task. Escalating to the top tier on a design
-question or a risk flag is never blocked by any of it.
+The rules are stated, not enforced: a scope that has moved up does not move back
+down, a handoff with almost no work left is not worth paying for, and breadth is
+its own signal — cheaper models lose items on long lists however settled the
+approach is. Escalating to the top tier on a design question or a risk flag is
+never blocked by any of it.
 
 Transports: the Codex CLI over a shared working tree (separate Claude and OpenAI
 accounts), a unified harness where every model is natively spawnable, or a
 Claude-only fallback with no external dependencies. Model ids live in
 `lean.config.json` and nowhere else.
 
-```bash
-python "${CLAUDE_PLUGIN_ROOT}/skills/lean/scripts/route.py" doctor
-python "${CLAUDE_PLUGIN_ROOT}/skills/lean/tests/test_rules.py"   # 42 tests, no deps
-```
+Two or three tiers both work. On a two-tier ladder, `local` work rides the top
+rung — there is nothing in between to hand it to. Set `order` and `routes` in
+`lean.config.json`.
 
 ---
 

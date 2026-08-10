@@ -1,7 +1,7 @@
 {
   "name": "lean",
   "version": "0.1.0",
-  "description": "Two skills. lean: response density and shape -- full coverage at low depth, written to be skimmed, injected by a hook on every prompt. lean-routing: move a task's next phase to the cheapest model that can carry the uncertainty left in it, gated by a deterministic ledger.",
+  "description": "Two skills, both steering by prompt. lean: response density and shape -- full coverage at low depth, written to be skimmed. admino: route a task's next phase to the cheapest model that can carry the uncertainty left in it. A hook injects the rules on every prompt and after each compaction.",
   "keywords": [
     "efficiency",
     "response-style",
@@ -12,5 +12,19 @@
   "author": {
     "name": "jhonDoe15"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "userConfig": {
+    "tiers": {
+      "description": "How many model tiers: 2 or 3",
+      "sensitive": false
+    },
+    "transport": {
+      "description": "How subagents are spawned: codex-cli, unified, or claude-native",
+      "sensitive": false
+    },
+    "density": {
+      "description": "Default response density: terse, default, or full",
+      "sensitive": false
+    }
+  }
 }

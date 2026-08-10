@@ -3,7 +3,7 @@
 The router is only as good as the three signals you feed it. All three describe
 the scope **as it stands now**, after everything already learned.
 
-## `--uncertainty`
+## Uncertainty
 
 Pick the *highest* one that still applies.
 
@@ -33,7 +33,7 @@ code. This is main's work and delegating it produces confident, wrong output.
 The test: **is the question "how do I finish this" or "what is correct here"?**
 The second is always `design`.
 
-## `--remaining`
+## Remaining work
 
 Estimated discrete steps left **in this scope**: distinct edits, files to
 touch, checks to run. Not minutes, not tokens, not the whole task.
@@ -64,7 +64,7 @@ pass, either raise the tier or split the scope so each pass carries fewer. A
 split is usually better: it keeps the work cheap and makes the coverage
 checkable per chunk.
 
-## `--risk`
+## Risk
 
 Set it when the scope touches concurrency, security or authorisation,
 persistence and migrations, backwards compatibility or a public interface, or
@@ -74,7 +74,7 @@ and it opens the escalation safety valve.
 It is a property of the *area*, not of your confidence. A mechanical-looking
 edit to a migration is still `--risk`.
 
-## `--scope`
+## Scope
 
 A short stable slug for the phase being routed. Keep it identical across
 `decide`/`commit` calls for the same body of work — that is what makes the bans
@@ -82,9 +82,9 @@ and hop budget mean anything.
 
 A new slug is correct when the work genuinely changed: main resolved the design
 question that defined the old scope, validation reframed the problem, or the
-objective moved. A new slug is *not* a way to clear a ban. The card warns once
-a task has more than four scopes, and `route.py status` shows every one of
-them with timestamps.
+objective moved. Renaming the same work to escape the hold rule is the failure the rule exists to
+catch. If you have redefined the scope three times on one task, the scope is not
+what changed.
 
 ## Worked examples
 

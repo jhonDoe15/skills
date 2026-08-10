@@ -67,7 +67,8 @@ It also does not apply to reasoning. Think as long as the problem needs.
 
 ## Levels
 
-Set in `lean.config.json`; override for a session with `route.py density <level>`.
+Set in `lean.config.json` under `response.density`. To change it for one
+exchange, just say so -- these are prompt rules, not a setting a script enforces.
 
 | Level | Shape |
 |---|---|
