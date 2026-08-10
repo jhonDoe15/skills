@@ -17,6 +17,7 @@
 //     card.mjs --show          same, for reading by eye
 //     card.mjs --write <path>  write it into a rules file a host always loads
 //     card.mjs --cfg "k=v;..." fold install-time answers over the config
+//     card.mjs --install-hook   register it in settings.json (npx skills add path)
 
 import { readFileSync, writeFileSync, existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
@@ -240,6 +241,52 @@ function routeBlock(cfg, host) {
   return lines;
 }
 
+/** Register this script as a hook in settings.json.
+ *
+ *  The plugin installer wires hooks itself. `npx skills add` does not -- it
+ *  installs skill directories and has no way to register a hook -- so without
+ *  this the card never fires on that path and the skill is inert.
+ *
+ *  Merges rather than replaces, and is idempotent: an entry already pointing at
+ *  card.mjs is left alone. Backs up first, because this is the user's file. */
+function installHook(scope) {
+  const settings = scope === "project"
+    ? join(process.cwd(), ".claude", "settings.json")
+    : join(homedir(), ".claude", "settings.json");
+  const self = fileURLToPath(import.meta.url);
+
+  let cfg = {};
+  if (existsSync(settings)) {
+    const before = readFileSync(settings, "utf8");
+    try {
+      cfg = JSON.parse(before);
+    } catch (e) {
+      process.stdout.write(`refusing to touch ${settings}: it is not valid JSON (${e.message})\n`);
+      return 1;
+    }
+    writeFileSync(settings + ".bak", before, "utf8");
+  }
+
+  cfg.hooks ??= {};
+  let added = 0;
+  for (const event of ["UserPromptSubmit", "PostCompact"]) {
+    cfg.hooks[event] ??= [];
+    const already = JSON.stringify(cfg.hooks[event]).includes("card.mjs");
+    if (already) continue;
+    cfg.hooks[event].push({
+      hooks: [{ type: "command", command: "node", args: [self], timeout: 10, statusMessage: "lean" }],
+    });
+    added++;
+  }
+
+  writeFileSync(settings, JSON.stringify(cfg, null, 2) + "\n", "utf8");
+  process.stdout.write(added
+    ? `hook registered in ${settings} (${added} event${added > 1 ? "s" : ""}); backup at ${settings}.bak\n`
+      + "Restart the session, or the card will not appear until the next one.\n"
+    : `already registered in ${settings}; nothing changed\n`);
+  return 0;
+}
+
 function argAfter(flag) {
   const i = process.argv.indexOf(flag);
   return i >= 0 && i < process.argv.length - 1 ? process.argv[i + 1] : "";
@@ -255,6 +302,9 @@ function readStdin() {
 
 function main() {
   try {
+    if (process.argv.includes("--install-hook")) {
+      return installHook(process.argv.includes("--project") ? "project" : "user");
+    }
     let payload = {};
     if (!process.argv.includes("--show") && !process.stdin.isTTY) {
       const raw = readStdin();

@@ -22,8 +22,18 @@ npx skills add jhonDoe15/skills       # ./.claude/skills — this project only
 ```
 
 `-g` is the one you want for a personal setup; without it the skill is installed
-into the current repo and committed with it. Nothing here writes to your project
-either way — the one script reads a config file and prints text.
+into the current repo and committed with it.
+
+**The skills CLI does not register hooks**, so after installing that way, wire
+the card up once:
+
+```
+node ~/.claude/skills/lean/scripts/card.mjs --install-hook
+```
+
+That merges into your `settings.json` (backing it up first), is idempotent, and
+refuses to touch the file if it is not valid JSON. Add `--project` to scope it to
+one repo. The plugin install does this for you.
 
 
 The repo is laid out to serve both installers: `skills/lean/SKILL.md` is where

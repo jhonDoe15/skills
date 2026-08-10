@@ -20,6 +20,18 @@ when a rule needs interpreting, or when you are changing one.
 The rules steer by being in the prompt. Nothing here grants or denies
 permission — there is one script, and its only job is printing the card.
 
+## If the card never appears
+
+Installed with `npx skills add`, no hook is registered — that installer handles
+skill directories, not hooks. Register it once:
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/skills/lean/scripts/card.mjs" --install-hook
+```
+
+Merges into `settings.json`, backs it up, and is safe to re-run. `--project`
+scopes it to one repo instead of your user settings.
+
 ## Hosts without hooks
 
 Claude Code hooks do not fire in Cursor, Zed, or any other host that does not

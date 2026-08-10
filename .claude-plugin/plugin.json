@@ -50,5 +50,6 @@
       "description": "Default response density: terse, default or full",
       "sensitive": false
     }
-  }
+  },
+  "hooks": "./skills/lean/hooks/hooks.json"
 }
