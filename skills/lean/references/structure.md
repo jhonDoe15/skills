@@ -1,9 +1,7 @@
 # Response structure
 
 Density decides *how much* to say. Structure decides *what shape* it arrives in.
-They serve the same goal, and it is not token count — it is the reader's
-scanning time. A slightly longer answer that can be skimmed beats a shorter one
-that has to be read in full.
+Both serve the goal set out in `SKILL.md`.
 
 ## The question every reader is asking
 

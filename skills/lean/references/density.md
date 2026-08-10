@@ -1,14 +1,11 @@
 # Response density
 
-## What this is for
+## The test
 
-The reader's scanning time. Fewer tokens is a side effect worth having, but it is
-not the objective — optimise for it directly and you get dense, technically short
-blocks that take longer to read than the verbose version would have.
+Does this get the reader to what they need faster? Not: does this cut words?
 
-So the test for every rule here is: does this get the reader to what they need
-faster? Not: does this cut words? Companion doc: `structure.md`, which handles
-the shape the remaining content arrives in.
+Why that is the goal rather than token count is in `SKILL.md`. The shape the
+remaining content arrives in is in `structure.md`.
 
 ## The principle
 

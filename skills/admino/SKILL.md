@@ -1,11 +1,11 @@
 ---
 name: admino
 description: >-
-  Route a task's next phase to the cheapest model that can carry the uncertainty
-  left in it. Use when delegating implementation to a subagent, when deciding
-  which model should take the next phase, when a subagent reports it is out of
-  its depth or that the remaining work has gone mechanical, or when another
-  skill needs the tier-ladder vocabulary.
+  Ladder a task's next phase down to the cheapest model that can carry the
+  uncertainty left in it. Use when deciding which model takes the next phase of
+  a task, when a subagent reports it is out of its depth or that the remaining
+  work has gone mechanical, or when another skill needs the tier-ladder
+  vocabulary.
 ---
 
 # Admino
@@ -97,33 +97,17 @@ mid-edit — a half-applied change is worse than a slightly over-priced one.
 
 ## The handoff
 
-Every switch carries one, and it is the only thing that survives. Same seven
-fields in both directions:
+Every switch carries one, and it is the only thing that survives. The card lists
+the fields; `references/handoff.md` defines each and shows both directions.
 
-- **Objective** — the original request, verbatim enough that the next agent
-  cannot drift. Not the phase; the whole point. An agent given only its phase
-  will optimise the phase and break the task.
-- **Constraints** — house style, invariants, what must not change, validation
-  that must keep passing.
-- **Completed so far** — reference files and the diff. The workspace is shared;
-  do not paste code blocks or command logs.
-- **Decisions and assumptions** — with reasons. This is what stops the next tier
-  re-litigating settled ground.
-- **Files inspected or changed** — paths, one clause each.
-- **Validation performed** — exact commands, exact results. "tests pass" is not a
-  result; `pytest tests/test_export.py -q -> 14 passed` is.
-- **Remaining work and open risks** — concrete steps, and anything unresolved. If
-  a question belongs to the top tier, say so rather than answering it yourself.
-
-Then a recommended next tier — a recommendation, not a decision. The owner
-re-reads the situation and may disagree.
+Two things decide whether it works, and neither is a field.
 
 State the **boundary** as clearly as the task. An agent that does not know where
 its authority ends will either stop too early or redesign something it was not
 asked to touch. Say which files are in scope and what to do on hitting something
 outside them: stop, report, return.
 
-Put the return contract in the brief explicitly:
+And put the return contract in the brief verbatim:
 
 > When you finish, stop and reply with the handoff. Do not start work beyond
 > Remaining work. If you hit an unresolved design choice, an unexpected component
