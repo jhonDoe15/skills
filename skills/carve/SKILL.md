@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Carve
 
-Carve is a thin layer over **`/to-tickets`**: it inherits the ticket-splitting and sizes each piece to **one main-tier sub-agent's reach** — the primary model this machine runs, currently luna-max — splitting what's too big, combining what's fragmented, flagging what needs a human decision, and recording the **collision coordination** `/dispatch-work` needs to run pieces in parallel safely. It reuses; it doesn't reinvent.
+Carve is a thin layer over **`/to-tickets`**: it inherits the ticket-splitting and sizes each piece to **one main-tier sub-agent's reach** — the primary model this machine runs — splitting what's too big, combining what's fragmented, flagging what needs a human decision, and recording the **collision coordination** `/dispatch-work` needs to run pieces in parallel safely. It reuses; it doesn't reinvent.
 
 Like `/to-tickets`, it runs only when you invoke it.
 
@@ -23,7 +23,7 @@ assessment; it does not redefine those signals.
 
 ## The one tier
 
-There is a single tier: the **main sub-agent** this machine defines (`lean.config.json`, or the repo's `subagent-model-tiers` rule) — currently luna-max, cheap enough to spend freely. Carve doesn't rank a piece up or down a ladder; it asks one thing of every piece: **can one main-tier sub-agent finish this alone?** When the answer is no, there are exactly two exits — never a higher tier:
+There is a single tier: the **main sub-agent** this machine defines (`lean.config.json`, or the repo's `subagent-model-tiers` rule), cheap enough to spend freely. Carve doesn't rank a piece up or down a ladder; it asks one thing of every piece: **can one main-tier sub-agent finish this alone?** When the answer is no, there are exactly two exits — never a higher tier:
 
 - **split** — the piece is too big or mixes concerns; carve breaks it into pieces that each fit (reuse `/to-tickets`).
 - **flag** — the piece turns on a decision the main tier shouldn't guess (open design, or a risk boundary); mark it for a **human** to settle before or instead of dispatch.
