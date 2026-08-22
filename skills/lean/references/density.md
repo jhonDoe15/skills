@@ -64,8 +64,8 @@ It also does not apply to reasoning. Think as long as the problem needs.
 
 ## Levels
 
-Set in `lean.config.json` under `response.density`. To change it for one
-exchange, just say so -- these are prompt rules, not a setting a script enforces.
+Choose the level from the request and the detail the reader needs. To change it
+for one exchange, just say so -- these are prompt rules, not a runtime setting.
 
 | Level | Shape |
 |---|---|
@@ -75,7 +75,7 @@ exchange, just say so -- these are prompt rules, not a setting a script enforces
 
 ## When to ignore the level and expand
 
-Same shape as the routing safety valve: correctness outranks cost.
+Correctness outranks compression.
 
 - The user is working from a wrong premise. Correct it properly.
 - Compression would misrepresent — a caveat that changes the conclusion cannot

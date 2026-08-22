@@ -1,55 +1,18 @@
 {
   "name": "lean",
   "version": "0.1.0",
-  "description": "Two skills, both steering by prompt. lean: response density and shape -- full coverage at low depth, written to be skimmed. admino: route a task's next phase to the cheapest model that can carry the uncertainty left in it. A hook injects the rules on every prompt and after each compaction.",
+  "description": "Three agent skills: Lean is a model-invoked writing guide; carve sizes ticket sets for one main subagent; dispatch-work runs sized ticket sets in parallel. Carve and dispatch-work are invoked explicitly.",
   "keywords": [
     "efficiency",
     "response-style",
-    "model-routing",
+    "task-decomposition",
+    "orchestration",
     "subagents",
-    "cost"
+    "parallel-work",
+    "model-invocation"
   ],
   "author": {
     "name": "jhonDoe15"
   },
-  "license": "MIT",
-  "userConfig": {
-    "tiers": {
-      "description": "How many model tiers: 2 or 3",
-      "sensitive": false
-    },
-    "transport": {
-      "description": "How subagents are spawned: unified (native subagents), claude-native (Agent tool), codex-cli (shell out), or auto",
-      "sensitive": false
-    },
-    "main_model": {
-      "description": "Model id for the main agent \u2014 the tier that keeps design and risk work",
-      "sensitive": false
-    },
-    "main_effort": {
-      "description": "Reasoning effort for the main agent: low, medium or high",
-      "sensitive": false
-    },
-    "sub_model": {
-      "description": "Model id for the dispatching subagent \u2014 the cheap tier that takes settled, mechanical work",
-      "sensitive": false
-    },
-    "sub_effort": {
-      "description": "Reasoning effort for the subagent: low, medium or high",
-      "sensitive": false
-    },
-    "mid_model": {
-      "description": "Model id for the middle tier (3-tier ladder only) \u2014 repo investigation and pattern choice",
-      "sensitive": false
-    },
-    "mid_effort": {
-      "description": "Reasoning effort for the middle tier: low, medium or high",
-      "sensitive": false
-    },
-    "density": {
-      "description": "Default response density: terse, default or full",
-      "sensitive": false
-    }
-  },
-  "hooks": "./skills/lean/hooks/hooks.json"
+  "license": "MIT"
 }
