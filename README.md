@@ -34,6 +34,17 @@ The repository layout supports both installers: each skill lives under
 `skills/<name>/SKILL.md`, while `.claude-plugin/` exposes the tree as one
 Claude Code marketplace plugin.
 
+The workflow skills reference companion skills when their branches are used:
+`/to-tickets`, `/to-spec`, `/wayfinder`, `/implement`, `/code-review`,
+`/handoff`, and `/autopilot`. Install those separately in the host that runs
+the workflows.
+
+### Upgrading from hook/card releases
+
+If an older installation registered Lean's `UserPromptSubmit` or `PostCompact`
+hook, remove those entries from the relevant settings file when upgrading.
+Current Lean uses normal model skill discovery and registers no hook or card.
+
 ## Lean — response density and shape
 
 Lean optimises the reader's scanning time, not raw token count. It compresses

@@ -2,7 +2,8 @@
 name: lean
 description: >-
   Use when composing or revising any response or user-facing text, especially
-  when it is verbose, repetitive, padded, or hard to scan. Must always apply.
+  when it is verbose, repetitive, padded, or hard to scan. When selected, must
+  always apply.
 disable-model-invocation: false
 ---
 
@@ -14,8 +15,9 @@ blocks that are technically short. A slightly longer answer that can be skimmed
 beats a shorter one that must be read in full.
 
 Lean is model-invoked. The model selects it from this description when it
-composes or revises a response. It can also be invoked by name when the user
-wants the writing rules explicitly.
+composes or revises a response. Model invocation controls discovery; once
+selected, the rules in this file always apply. It can also be invoked by name
+when the user wants the writing rules explicitly.
 
 ## Compress depth, never breadth
 

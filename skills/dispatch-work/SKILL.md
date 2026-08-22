@@ -1,6 +1,6 @@
 ---
 name: dispatch-work
-description: Run an already-sized tracker — a few tickets in parallel (default 3), each on a main-tier sub-agent (currently luna-max) that builds with /implement, gets an independent /code-review, then babysits its PR to approval; resumable, so re-invoking picks each ticket up at its current checkpoint. The main session never implements. Invoke explicitly.
+description: Run an already-sized tracker — a few tickets in parallel (default 3), each on the configured main-tier sub-agent that builds with /implement, gets an independent /code-review, then babysits its PR to approval; resumable, so re-invoking picks each ticket up at its current checkpoint. The main session never implements. Invoke explicitly.
 disable-model-invocation: true
 ---
 
@@ -16,7 +16,7 @@ Keep up to **3 pieces in flight** by default; the invoking prompt overrides the 
 
 ## Pin the model
 
-Every spawn names its model explicitly — the **main tier** this machine defines (`lean.config.json` / the repo's `subagent-model-tiers` rule), currently luna-max. A sub-agent that inherits the parent model looks routed and can cost far more. **Never run a Claude model at `max`.** The main tier is cheap by design, so spend it freely — a separate sub-agent per implementation, per review, per PR keeps each one's context small and its scope tight.
+Every spawn names its model explicitly — the **main tier** this machine defines (`lean.config.json` / the repo's `subagent-model-tiers` rule). A sub-agent that inherits the parent model looks routed and can cost far more. **Never run a Claude model at `max`.** The main tier is cheap by design, so spend it freely — a separate sub-agent per implementation, per review, per PR keeps each one's context small and its scope tight.
 
 ## Staying in the smart zone
 
@@ -52,7 +52,7 @@ Hand each **not-started** piece the ticket plus the brief; a set carve marked as
 *Done when:* every piece in the batch is dispatched, resumed, or resolved.
 
 ### 3. Verify what returned
-First vet the report in the main session, lightly: does the validation demonstrate what it claims; did it stay inside the stated boundary; do its assumptions contradict anything you know but didn't tell it; is the remaining-work estimate credible against the diff. Then, for real correctness, spawn a **second** main-tier sub-agent to `/code-review` the diff with **fresh context** — the implementer reviews what it meant, not what it wrote (skip only when `/implement`'s own closing review is enough and risk is low). Across the batch, watch for a **systematic error** — the same tier repeating one mistake on every piece it touched. Fixes go back to a main-tier sub-agent; a finding it can't settle returns for a **split** or a **flag**.
+First vet the report in the main session, lightly: does the validation demonstrate what it claims; did it stay inside the stated boundary; do its assumptions contradict anything you know but didn't tell it; is the remaining-work estimate credible against the diff. Then, for real correctness, always spawn a **second** main-tier sub-agent to `/code-review` the diff with **fresh context** — the implementer reviews what it meant, not what it wrote. Across the batch, watch for a **systematic error** — the same tier repeating one mistake on every piece it touched. Fixes go back to a main-tier sub-agent; a finding it can't settle returns for a **split** or a **flag**.
 *Done when:* the report is vetted, the diff independently reviewed, and every finding fixed or bounced back.
 
 ### 4. Babysit the PR to approval
