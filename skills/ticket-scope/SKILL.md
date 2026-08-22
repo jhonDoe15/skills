@@ -31,7 +31,8 @@ migration order requires it:
   expand → migrate → contract.
 - The intermediate state remains compatible or its integration constraint is
   explicit.
-- The tracker records the blocker; layered units are not parallel candidates.
+- The owning tracker or report records the blocker; layered units are not
+  parallel candidates.
 
 When a proposal contains multiple layers that must land independently, assess
 the proposal as `split` and return one `layered` candidate per real landing
@@ -74,6 +75,10 @@ Return one assessment for every proposed unit or candidate:
   breadth; name the candidate units.
 - `combine` — is fragmented below its natural seam; name the pieces to merge.
 - `flag` — requires a human decision or risk review before it can fit.
+
+Every unit assessment must include `Shape: vertical` or `Shape: layered`.
+Relation-only collision metadata is not a unit assessment and may use
+`Shape: n/a` when included solely to describe that collision.
 
 Every assessment must include:
 

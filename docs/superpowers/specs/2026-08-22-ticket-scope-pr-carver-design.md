@@ -57,7 +57,7 @@ The skill may recommend a structure automatically, but branch creation, commits,
 - A `split` assessment means the proposal mixes multiple outcomes, exceeds reasonable breadth, or crosses a natural seam. The assessment names the resulting candidate units.
 - A `combine` assessment means proposed fragments are below their natural seam and a single implementation/review context would reconcile them anyway.
 - A `flag` assessment means a human decision or risk review is required before the unit can be treated as settled.
-- Every assessment also reports `shape`: `vertical` for the preferred end-to-end path, or `layered` for a constrained horizontal slice.
+- Every unit assessment reports `shape`: `vertical` for the preferred end-to-end path, or `layered` for a constrained horizontal slice. Relation-only collision metadata is not a unit assessment and may use `n/a` when included solely to describe that collision.
 - A layered shape is valid only when a real contract or migration order requires it, each layer is independently verifiable, and its blocker relationship is explicit. The expand, migrate, and contract pattern is an accepted example.
 - A horizontal split made only for convenience is not a valid layered unit. It is combined, converted to vertical units, or flagged when the seam is not safe.
 - The shared evaluator uses `settled`, `local`, and `design` as uncertainty states. A `local` gap is resolved with a proportional repository lookup; `design` remains a separate decision or human flag.
