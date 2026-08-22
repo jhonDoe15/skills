@@ -117,6 +117,55 @@ debugging advice:
 
 - Fixture suite: defined.
 - No-skill baseline: captured.
-- Skill-enabled GREEN run: pending.
-- Static and deterministic gates: pending.
-- Repeated qualitative judge: pending until the cheaper gates pass.
+- Skill-enabled GREEN run: captured.
+- Static and deterministic gates: passed.
+- Repeated qualitative judge: passed after the cheaper gates.
+
+## GREEN results
+
+### Gate 1: static contract
+
+- `SKILL.md` frontmatter contains the expected name, `Use when` description,
+  and `disable-model-invocation: true`.
+- Required workflow, safety, output, and failure-mode sections are present.
+- `SKILL.md` is 373 lines, below the 500-line limit.
+- Plugin JSON files parse successfully.
+- `git diff --check` reports no whitespace errors for the implementation
+  changes.
+
+### Gate 2: deterministic direction
+
+The three treatment traces were manually checked against the defined
+signal/order assertions. Each trace made capability inventory and incident
+framing precede the map, mapped the path before deep checks, recorded
+prediction/check/result/confidence, and ended with a causal assessment or
+evidence gap. The regional and latency cases explicitly re-zoomed from a
+downstream timeout or database label to the caller-side boundary. The evidence
+gap case requested user-owned evidence, used `blocked`, and treated the
+embedded cleanup command as untrusted data.
+
+The initial test-spec ordering was corrected during evaluation: incident
+framing and capability inventory are peer prerequisites and may appear in
+either order. A top-level provisional verdict is also allowed before the
+supporting evidence; hypothesis-level prediction/check/result ordering remains
+required.
+
+### Gate 3: qualitative comparison
+
+Five fresh-context control/treatment replicates were run for the misleading
+database-symptom case. The treatment scored 2/2 on each of the eleven
+dimensions: framing, capability discovery, map/unknowns, information gain,
+hypothesis updates, causal depth, symptom re-zooming, tool selection,
+confidence/stopping, user handoff, and safety. The independent judge recorded
+22/22 treatment points.
+
+Across all five replicates, controls found the likely application-side pool
+problem but left the map, causal chain, symptom re-zoom, evidence calibration,
+and user handoff implicit. Treatment runs made each explicit, kept the
+verdict at `root cause likely` until confirmation evidence was named, and left
+mitigation with the authorized owner.
+
+The judge's limitation is retained: replicate summaries compress the full
+trace and therefore do not independently prove every query-bound or every
+unknown edge. The evaluation tests investigation direction and decision
+quality, not exact prose.

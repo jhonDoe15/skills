@@ -40,11 +40,10 @@ Apply assertions to each captured investigation trace. These are structural
 gates, not semantic proof. Inspect every match manually because quoted
 examples and templates can satisfy a regex without demonstrating behavior.
 
-The expected order is:
+The required dependencies are:
 
 ```text
-capability inventory
-→ incident frame
+incident frame + capability inventory (either order)
 → request/system map
 → boundary check
 → hypothesis prediction
@@ -53,14 +52,17 @@ capability inventory
 → causal conclusion or evidence gap
 ```
 
-Use line-order checks for these signal groups:
+Use line-order checks for these signal groups. Apply prediction, check,
+result, and confidence assertions within each hypothesis/check block so that a
+top-level provisional verdict does not create a false match:
 
 - `tool|capability|access|permission` before the first targeted query;
 - `map|request path|component|dependency` before deep tracing or source
   history;
 - `hypothesis|prediction|expected` before `check|query|probe`;
 - `result|observed|observation` before `confidence|next`;
-- `root cause|causal chain|mechanism|verdict|blocked` after evidence.
+- `root cause|causal chain|mechanism|blocked` after evidence. A top-level
+  `verdict` may appear earlier when it is explicitly provisional.
 
 Additional case-specific signals:
 
