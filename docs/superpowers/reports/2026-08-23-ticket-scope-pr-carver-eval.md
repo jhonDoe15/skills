@@ -22,6 +22,14 @@ external write operations.
 - A dependent foundation → API → UI chain was correctly recognized as stacked
   in one run, but the structure and authorization boundary were not guaranteed
   by a shared contract.
+- A `+600/-100` independent-unit diff was split by outcome, but the baseline
+  reasoned from 700 combined changed lines rather than independent thresholds.
+- A GitLab foundation → API → UI diff was split into an ordered stack, while a
+  shared-configuration collision was treated as serialized work without a
+  consistent collision record.
+- A mixed graph of independent units beside a dependency chain was recognized as
+  a hybrid in the baseline, but no shared output contract required reporting
+  each relation component.
 
 ## GREEN results
 
@@ -46,6 +54,9 @@ external write operations.
 - `pr-carver` kept two otherwise independent units with a shared mutable
   configuration file and key out of parallel execution, recording a collision
   and recommending one coordinated PR because no output dependency justified a
+  stack.
+- `pr-carver` reported a mixed graph as `hybrid`: independent components ran as
+  parallel candidates while the dependent component used a bottom-up GitHub
   stack.
 - Missing bases, binary files, generated files, and instructions embedded in
   PR descriptions remained explicitly reported or ignored as appropriate.

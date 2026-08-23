@@ -71,35 +71,45 @@ candidate; independent `fit` candidates are parallel candidates. Preserve every
 
 ## 4. Choose the structure
 
+Partition the candidate relation graph into connected components using blockers
+and collisions. Choose a structure for each component, because a diff can
+contain independent work beside a dependent chain.
+
 Choose the first applicable option in this order and state why:
 
-1. **Parallel PRs** — use when every candidate is independently verifiable,
+1. **Parallel PRs** — use when every candidate in the component is independently verifiable,
    has no output dependency, and shares no mutable file or state with another
    candidate. Start each from the appropriate common base.
-2. **GitHub native stacked PRs** — use for real dependency chains or layered
+2. **GitHub native stacked PRs** — use for a component with a real dependency chain or layered
    candidates when the PRs are in one GitHub repository and native stacking is
    available. Put foundations below consumers and merge from the bottom up.
-3. **Ordinary stacked Git PRs** — use for real dependency chains when the
+3. **Ordinary stacked Git PRs** — use for a component with a real dependency chain when the
    provider is not GitHub or native stacking is unavailable. Each branch targets
    the branch below it.
-4. **One PR** — use when the diff is one cohesive base unit, no safe landing
-   seam exists, intermediate states cannot be validated safely, or splitting
+4. **One PR** — use for a component that is one cohesive base unit, has no safe landing
+   seam, intermediate states cannot be validated safely, or splitting
    would add more coordination than review value.
+
+If independent components coexist with stacked components, report
+`hybrid`: independent components run as parallel PRs while each dependent
+component uses its applicable stack. Do not collapse a mixed graph into one
+global parallel or stack decision.
 
 Do not choose parallel PRs for colliding candidates. Do not choose a stack for
 pieces that are independent merely because they touch related features. Do not
 ask the user to pick between these structures; make the recommendation from the
 assessed units and report the rationale.
 
-For Band 3, obtain or verify explicit confirmation before selecting option 4.
+For Band 3, obtain or verify explicit confirmation before selecting option 4 for
+any component.
 A generic “merge now” instruction is not confirmation of the assessed
 large-one-PR trade-off. An explicit confirmation already present for this
 specific PR and recommendation may be recorded instead of asked again.
 
 ## 5. Separate recommendation from execution
 
-The model may assess the PR and recommend parallel, GitHub-stacked,
-Git-stacked, or one-PR structure without waiting for a strategy choice.
+The model may assess the PR and recommend parallel, GitHub-stacked, Git-stacked,
+hybrid, or one-PR structure without waiting for a strategy choice.
 
 Before execution, require explicit authorization for each external or
 repository mutation, including:
@@ -127,7 +137,9 @@ PR size: +<additions> / -<deletions> (source and effective base)
 Band: 1 size-watch | 2 elevated-watch | 3 large-review-surface
 Candidate units:
 - <unit>: <assessment>, <shape>, <blockers/collisions>
-Structure: parallel | github-stack | git-stack | one-pr
+Components:
+- <component>: <parallel | github-stack | git-stack | one-pr>
+Structure: parallel | github-stack | git-stack | hybrid | one-pr
 Reason:
 Confirmation: not needed | obtained | required
 Authorization: recommendation only | explicitly authorized

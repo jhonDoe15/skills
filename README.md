@@ -88,8 +88,9 @@ set.
 PR Carver independently measures additions and deletions and raises size-watch
 bands at 500 and 1000 changed lines. It uses ticket-scope to recommend
 independent PRs first, then GitHub native stacked PRs, ordinary stacked Git
-PRs, or one PR when splitting adds no value. Keeping a Band 3 PR as one unit
-requires confirmation; branch and PR mutations always require authorization.
+PRs, hybrid combinations, or one PR when splitting adds no value. Keeping a
+Band 3 PR as one unit requires confirmation; branch and PR mutations always
+require authorization.
 
 ## `/dispatch-work` — run the tracker
 

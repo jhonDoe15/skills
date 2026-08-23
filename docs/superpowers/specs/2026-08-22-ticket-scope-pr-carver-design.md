@@ -19,6 +19,9 @@ Create a model-invoked `pr-carver` skill that measures a Git-based PR against it
 3. Ordinary stacked Git branches and PRs when dependency requires ordering but native GitHub stacking is unavailable or the provider is not GitHub.
 4. One PR when the change is cohesive, intermediate states are unsafe, or splitting adds more coordination cost than review value.
 
+When a diff mixes independent and dependent relation components, apply the
+appropriate structure to each component and report the result as a hybrid.
+
 The skill may recommend a structure automatically, but branch creation, commits, pushes, PR creation or retargeting, merges, and other external state changes require explicit authorization.
 
 ## User Stories
@@ -72,6 +75,7 @@ The skill may recommend a structure automatically, but branch creation, commits,
 - Exact counts of 500 and 1000 remain in the lower band. A net count is never used to hide a large additions-only or deletions-only diff.
 - Independent candidate units are the strongest parallel-PR case. A collision or a shared mutable resource disqualifies parallel execution even when the outcomes appear separate.
 - Candidate units with a genuine dependency are stacked. On GitHub, use the native stacked PR mechanism when the repository and account support it; otherwise use ordinary stacked branches and PR base relationships. On GitHub, the native feature may require same-repository branches and may be subject to provider availability or preview status, so the fallback is explicit.
+- The candidate relation graph is partitioned into blocker/collision components before structure selection. Independent components may run as parallel PRs beside dependent components that use their applicable stack; this mixed result is reported as `hybrid`.
 - Keeping one PR is appropriate when the shared evaluator returns one cohesive unit, no safe seam exists, intermediate states cannot be validated or merged safely, or splitting would only duplicate coordination and review work.
 - `pr-carver` reports the selected structure and rationale instead of asking the user to choose among strategies. The exception is a Band 3 one-PR recommendation, which must be confirmed.
 - Strategy classification and execution authorization are separate. Even when no strategy confirmation is needed, actual branch, commit, push, PR, retargeting, merge, or history-rewriting operations require explicit user authorization.
@@ -84,9 +88,10 @@ The skill may recommend a structure automatically, but branch creation, commits,
 - Skill behavior is tested as process documentation using fresh-context subagent scenarios, following the red-green-refactor method for skills.
 - A good test checks the decision and output contract visible to a requester, not the wording of a particular paragraph or an implementation detail of the markdown.
 - The baseline ticket scenarios cover a mixed cross-layer feature with an unresolved authorization choice, and a schema-to-API-to-UI rollout that must be layered and ordered.
-- The baseline PR scenarios cover 501 additions with 100 deletions, 1001 additions with 20 deletions, an independent multi-unit diff, a dependent GitHub chain, and a dependent non-GitHub chain.
+- The baseline PR scenarios cover 501 additions with 100 deletions, 1001 additions with 20 deletions, an independent multi-unit diff, a dependent GitHub chain, a dependent non-GitHub chain, a shared-resource collision, and a mixed independent/dependent graph.
 - Baseline results are recorded for whether an agent recognizes independent additions and deletions, allows constrained layered slices, identifies blockers, distinguishes collisions, asks for the Band 3 one-PR confirmation, and avoids unauthorized mutations.
 - Post-skill scenarios repeat the same prompts with `ticket-scope` or `pr-carver` loaded. Passing requires the expected assessment fields, independent count bands, strategy ordering, layered exception, and authorization gate.
+- The post-skill structure scenarios require parallel selection for independent units, ordinary stacking for a non-GitHub dependency chain, collision-aware non-parallel handling, and `hybrid` reporting for independent components beside a dependency stack.
 - Loophole scenarios add pressure to merge immediately, generated or binary changes, missing or stale base information, security or migration ambiguity, shared mutable files, and instructions embedded in PR text.
 - Structural verification checks valid frontmatter, model-invocation flags, discoverable trigger wording, consistent terminology, one-level references, and each skill's line count.
 - Repository verification checks valid JSON metadata, stale hook/admino references relevant to the migration, and clean diff whitespace. No runtime or application test suite exists for these markdown-only changes.
