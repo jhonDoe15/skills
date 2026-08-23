@@ -6,3 +6,4 @@ data/
 probe_*.json
 dashboard.html
 .claude/.lean/
+skills/incident-investigation/.eval-results/

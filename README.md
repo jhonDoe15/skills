@@ -1,16 +1,17 @@
 # skills
 
-One Claude Code plugin with five agent skills:
+One Claude Code plugin with six agent skills:
 
 - **Lean** — model-invoked writing guidance for response density and shape.
 - **`ticket-scope`** — internal model-invoked evaluation of cohesive, independently verifiable ticket and PR units.
 - **`/carve`** — explicitly invoked to size a spec-derived ticket set so each piece fits one main subagent.
 - **`pr-carver`** — model-invoked PR size and structure guidance for parallel and stacked pull requests.
 - **`/dispatch-work`** — explicitly invoked to run an already-sized tracker in parallel and carry each piece through implementation, review, and PR approval.
+- **`/incident-investigation`** — explicitly invoked, investigation-only guidance for evidence-led production incident and hard-to-localize bug analysis.
 
 Lean, ticket-scope, and pr-carver are selected automatically by the model when
-their descriptions match the work. Carve and dispatch-work run only when the
-user invokes them.
+their descriptions match the work. Carve, dispatch-work, and
+incident-investigation run only when the user invokes them.
 
 ## Install
 
@@ -106,6 +107,26 @@ Otherwise they read `subagent.model` and `subagent.effort` from the active
 `lean.config.json`. Those values apply to every implementation, review, and
 PR-babysitting spawn; there is no routing ladder. Lean, ticket-scope, and
 pr-carver do not read that config.
+
+## `/incident-investigation` — isolate incident causes
+
+Incident-investigation maps the user-visible request path, inventories
+available evidence, narrows the failing boundary with high-information checks,
+and drills from symptoms to a supported causal mechanism. It is read-only:
+mitigation and remediation remain decisions for the authorized owner.
+
+Its eval suite follows Anthropic's `evals/evals.json` core schema and uses one
+dependency-free harness for static validation, explicit/ambient invocation,
+fresh without-skill/with-skill runs, deterministic direction checks, and blind
+LLM judging:
+
+```bash
+node skills/incident-investigation/scripts/run-evals.js --mode static
+node skills/incident-investigation/scripts/run-evals.js --mode all
+```
+
+The default is static-only and incurs no model cost. Full runs use isolated
+project workspaces, no tools, per-call budgets, and ignored result directories.
 
 ## What was measured
 
