@@ -1,9 +1,14 @@
 # skills
 
-Agent skills. One Claude Code plugin, two skills: **lean** and **admino**.
+One Claude Code plugin with three agent skills:
 
-Both steer by prompt. A hook injects their rules on every prompt and again after
-each compaction; there is one script and its only job is printing that text.
+- **Lean** — model-invoked writing guidance for response density and shape.
+- **`/carve`** — explicitly invoked to size a spec-derived ticket set so each piece fits one main subagent.
+- **`/dispatch-work`** — explicitly invoked to run an already-sized tracker in parallel and carry each piece through implementation, review, and PR approval.
+
+Lean is selected automatically by the model when its description matches the
+response being written. Carve and dispatch-work run only when the user invokes
+them.
 
 ## Install
 
@@ -21,103 +26,87 @@ npx skills add -g jhonDoe15/skills    # ~/.claude/skills — every project
 npx skills add jhonDoe15/skills       # ./.claude/skills — this project only
 ```
 
-`-g` is the one you want for a personal setup; without it the skill is installed
-into the current repo and committed with it.
+`-g` installs the skills for your user. Without it, they are installed into the
+current repository. Lean uses normal model skill selection and needs no hook or
+generated card setup.
 
-**The skills CLI does not register hooks**, so after installing that way, wire
-the card up once:
+The repository layout supports both installers: each skill lives under
+`skills/<name>/SKILL.md`, while `.claude-plugin/` exposes the tree as one
+Claude Code marketplace plugin.
 
-```
-node ~/.claude/skills/lean/scripts/card.mjs --install-hook
-```
+The workflow skills reference companion skills when their branches are used:
+`/to-tickets`, `/to-spec`, `/grill-with-docs`, `/wayfinder`, `/implement`,
+`/code-review`, `/tdd`, `/handoff`, and `/autopilot`. Install those separately
+in the host that runs the workflows.
 
-That merges into your `settings.json` (backing it up first), is idempotent, and
-refuses to touch the file if it is not valid JSON. Add `--project` to scope it to
-one repo. The plugin install does this for you.
+### Upgrading from hook/card releases
 
+If an older installation registered Lean's `UserPromptSubmit` or `PostCompact`
+hook, or wrote Lean's generated card into `AGENTS.md` or another always-loaded
+rule file, remove those stale entries when upgrading. Current Lean uses normal
+model skill discovery and registers no hook or card.
 
-The repo is laid out to serve both installers: `skills/lean/SKILL.md` is where
-the `skills` CLI looks, and the root `.claude-plugin/` manifests make the same
-tree a single-plugin Claude Code marketplace.
+## Lean — response density and shape
 
-Nothing here reads or transmits your data, and nothing writes to your project.
-The one script reads a config file and prints text.
+Lean optimises the reader's scanning time, not raw token count. It compresses
+depth, never breadth: if an answer touches eight things, it names all eight and
+reduces only the elaboration around each.
 
----
+Failures, skipped steps, assumptions, and unverified claims are never
+compressed away. Neither is the work product: density governs the conversation,
+not requested code, docs, reports, or files.
 
-Both share one rule — **correctness outranks cost** — and each has an override
-that ignores its own economics when getting it right is at stake.
-
-## lean — response density and shape
-
-Compress depth, never breadth — if the answer touches eight things it names
-eight things, and what shrinks is how much is said about each. Told merely to
-"be brief", a model covers the three most interesting items and silently drops
-five; that is omission, not compression, and the reader cannot tell which
-happened.
-
-Failures, skipped steps, assumptions and unverified claims are never compressed
-away. Neither is the work product: a terse setting governs the conversation,
-never the code, docs or files you asked for.
-
-Output is shaped for skimming, because the goal is the reader's scanning time
-rather than the token count — answer in the first line, sets as lists with the
-identifier leading, grouped by what the reader must act on, no ceremony on a
+Lean shapes output for skimming: answer first, sets as lists with identifiers
+leading, content grouped by what the reader must act on, and no ceremony on a
 short answer.
 
-Three density levels — `terse`, `default`, `full`. Set the default in `lean.config.json`; say "keep it terse" to change one
-exchange. Config resolution, most specific first: `$CLAUDE_LEAN_CONFIG`,
-`<project>/.claude/lean.config.json`, `~/.claude/lean.config.json`, then the copy
-bundled with the plugin. Edit one of the first three — the bundled copy is
-replaced on every plugin update.
+The density levels are `terse`, `default`, and `full`. The model chooses the
+level from the request and the detail the reader needs.
 
-## admino
+## `/carve` — size the work
 
-Moves a single evolving task across a cheap/mid/main tier ladder, routing on the
-uncertainty that remains *now* rather than the task's original size. A large task
-whose approach is settled belongs on the cheap tier; a one-line change whose
-correct behaviour is still open does not.
+Carve layers sizing and collision coordination onto a spec-derived ticket set.
+Each resulting piece must fit one main subagent. Work that does not fit is split;
+an open design choice or risk boundary is flagged for a human. Related pieces
+record dependencies and shared-resource collisions so dispatch-work can
+parallelise safely.
 
-The rules are stated, not enforced: a scope that has moved up does not move back
-down, a handoff with almost no work left is not worth paying for, and breadth is
-its own signal — cheaper models lose items on long lists however settled the
-approach is. Escalating to the top tier on a design question or a risk flag is
-never blocked by any of it.
+Invoke `/carve` explicitly after the work has been reduced to a spec and ticket
+set.
 
-Transports: the Codex CLI over a shared working tree (separate Claude and OpenAI
-accounts), a unified harness where every model is natively spawnable, or a
-Claude-only fallback with no external dependencies. Model ids live in
-`lean.config.json` and nowhere else.
+## `/dispatch-work` — run the tracker
 
-Two or three tiers both work. On a two-tier ladder, `local` work rides the top
-rung — there is nothing in between to hand it to. Set `order` and `routes` in
-`lean.config.json`.
+Dispatch-work takes an already-carved tracker and keeps a small batch of
+independent pieces in flight. Each piece is implemented, independently
+reviewed, and babysat through PR approval in separate subagent contexts.
+Invoking it again resumes from live tracker, branch, and PR state.
 
----
+Invoke `/dispatch-work` explicitly.
+
+Carve and dispatch-work use the repository model policy when one exists.
+Otherwise they read `subagent.model` and `subagent.effort` from the active
+`lean.config.json`. Those values apply to every implementation, review, and
+PR-babysitting spawn; there is no routing ladder. Lean does not read that
+config.
 
 ## What was measured
 
-Eighteen paired subagent runs on Claude Opus 5, with and without the skill,
-across nine evals. Chat responses came out **45–52% shorter at identical
-coverage** — 24 of 24 scan findings named either way, all six release-note claims
-verified either way.
+Eighteen paired subagent runs on Claude Opus 5, with and without Lean, across
+nine evals produced chat responses **45–52% shorter at identical coverage**:
+24 of 24 scan findings were named either way, and all six release-note claims
+were verified either way.
 
-On the one eval that applied real breadth pressure, the unaided baseline dropped
-a finding, emitted a YAML block mid-answer, and scored 2/5 against the skill's
-5/5.
+On the eval with real breadth pressure, the unaided baseline dropped a finding,
+emitted a YAML block mid-answer, and scored 2/5 against Lean's 5/5.
 
-Two honest limits:
+Two limits:
 
-- **Coverage guarantees do not transfer down-tier.** Given the same 24-item task,
-  Claude Haiku 4.5 held 17 findings with the card and 14 without — better, but
-  nowhere near complete. No amount of prompt fixes a model ceiling, which is why
-  `references/routing.md` now treats item breadth as a tier signal in its own
-  right.
-- **Single run per cell.** The length effect is large and consistent across all
-  nine evals; the pass-rate delta on the easier evals is not distinguishable from
-  noise.
-
----
+- A smaller-model breadth eval retained 17 of 24 findings with density guidance
+  and 14 without it. Density guidance helps but cannot overcome a model's
+  capability ceiling.
+- Each eval cell had one run. The length effect was large and consistent across
+  all nine evals; pass-rate differences on easier evals were not
+  distinguishable from noise.
 
 ## Licence
 

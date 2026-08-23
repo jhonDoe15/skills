@@ -1,57 +1,8 @@
 {
-  "_comment": "The only knob. Copy this to ~/.claude/lean.config.json (or <project>/.claude/lean.config.json) and edit — the copy inside the plugin is a read-only default that is replaced on every plugin update. Nothing here steers the model; it only fills in the tier table the card prints.",
-
-  "transport": "auto",
-
-  "_transport_note": "auto picks from the host: a multi-provider IDE (cursor, opencode) gets 'unified' native subagents, which is also the only shape that keeps your main context small. A single-provider CLI (claude-code, codex) gets 'claude-native' same-provider tiers. Set it explicitly to 'codex-cli' to shell out to a second account instead, or to 'unified'/'claude-native' to pin the choice.",
-
-  "host": "auto",
-
-  "order": ["cheap", "mid", "main"],
-
-  "routes": {
-    "_comment": "Which tier each signal routes to. For a 2-tier ladder, set order to [\"cheap\",\"main\"] and point local at main — there is no middle rung to hand it to.",
-    "settled": "cheap",
-    "local": "mid",
-    "design": "main",
-    "risk": "main"
-  },
-
-  "tiers": {
-    "cheap": {
-      "effort": "medium",
-      "models": {
-        "codex-cli": "gpt-5.6-luna",
-        "unified": "gpt-5.6-luna",
-        "claude-native": "haiku"
-      }
-    },
-    "mid": {
-      "effort": "medium",
-      "models": {
-        "codex-cli": "gpt-5.6-terra",
-        "unified": "gpt-5.6-terra",
-        "claude-native": "sonnet"
-      }
-    },
-    "main": {
-      "effort": "medium",
-      "models": {
-        "codex-cli": "claude-opus-5",
-        "unified": "claude-opus-5",
-        "claude-native": "opus"
-      }
-    }
-  },
-
-  "spawn": {
-    "_comment": "The dispatch instruction the card prints for each transport. This is the whole cross-CLI mechanism: the card selects one of these strings, the agent reads it and spawns. Override a value (string or list of lines) to dispatch to any other CLI — e.g. set codex-cli to a `claude -p` invocation to make Claude the subordinate instead. Nothing here is executed by a script."
-  },
-
-  "response": {
-    "_comment": "terse = answer alone. default = answer plus one line of why per non-obvious call. full = no compression.",
-    "density": "default"
-  },
-
-  "min_steps_to_delegate": 2
+  "_comment": "Shared fallback config for carve and dispatch-work. Lean is model-invoked and does not read this file. Copy it to ~/.config/lean/lean.config.json or <project>/.config/lean/lean.config.json and edit it. The bundled copy is a read-only default replaced on plugin updates.",
+  "subagent": {
+    "_comment": "The single model used by carve and dispatch-work. A repository model policy may override it. If model is Anthropic/Claude, effort must be high or lower.",
+    "model": "gpt-5-6-luna-max",
+    "effort": "max"
+  }
 }
