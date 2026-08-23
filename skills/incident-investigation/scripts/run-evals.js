@@ -344,6 +344,22 @@ function validateDefinition(definition, checks) {
     validJudge,
     validJudge ? `${dimensions.length} unique dimensions` : 'invalid judge configuration',
   );
+  for (const evaluation of definition.evals || []) {
+    const overrides = evaluation.dimension_minimum_overrides || {};
+    const validOverrides = Object.entries(overrides).every(([id, score]) => (
+      dimensionIds.has(id)
+      && Number.isInteger(score)
+      && score >= scoreRange[0]
+      && score <= scoreRange[1]
+    ));
+    addCheck(
+      checks,
+      'static',
+      `eval ${evaluation.id} dimension overrides`,
+      validOverrides,
+      validOverrides ? `${Object.keys(overrides).length} overrides` : 'invalid override',
+    );
+  }
 }
 
 function validateSkill(definition, checks) {
@@ -709,6 +725,17 @@ function listRunDirectories(configurationDirectory, expectedRuns) {
     .sort();
 }
 
+function unexpectedRunDirectories(configurationDirectory, expectedRuns) {
+  if (!fs.existsSync(configurationDirectory)) return [];
+  const expectedNames = new Set(
+    Array.from({ length: expectedRuns }, (_, index) => `run-${index + 1}`),
+  );
+  return fs.readdirSync(configurationDirectory, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !expectedNames.has(entry.name))
+    .map((entry) => entry.name)
+    .sort();
+}
+
 function executionFingerprint(definition, evaluation, configuration, model) {
   return createHash('sha256').update(JSON.stringify({
     skill_name: definition.skill_name,
@@ -931,6 +958,7 @@ function behaviorGate(definition, options, resultsDirectory) {
 function checkGate(definition, options, resultsDirectory) {
   const evaluations = selectEvaluations(definition, options.caseSelector);
   const expectedRuns = options.runs || definition.config.runs_per_configuration;
+  const model = options.model || definition.config.executor_model;
   const checks = [];
 
   for (const evaluation of evaluations) {
@@ -941,16 +969,28 @@ function checkGate(definition, options, resultsDirectory) {
     for (const configuration of ['without_skill', 'with_skill']) {
       const configurationDirectory = path.join(evalDirectory, configuration);
       const runs = listRunDirectories(configurationDirectory, expectedRuns);
+      const unexpectedRuns = unexpectedRunDirectories(
+        configurationDirectory,
+        expectedRuns,
+      );
       addCheck(
         checks,
         'check',
         `${evaluation.id} ${configuration} outputs`,
-        runs.length > 0,
-        `${runs.length} runs`,
+        runs.length === expectedRuns,
+        `${runs.length}/${expectedRuns} runs`,
+      );
+      addCheck(
+        checks,
+        'check',
+        `${evaluation.id} ${configuration} unexpected outputs`,
+        unexpectedRuns.length === 0,
+        unexpectedRuns.length === 0 ? 'none' : unexpectedRuns.join(', '),
       );
       for (const run of runs) {
         const runDirectory = path.join(configurationDirectory, run);
         const outputPath = path.join(runDirectory, 'output.md');
+        const executionPath = path.join(runDirectory, 'execution.json');
         if (!fs.existsSync(outputPath)) {
           addCheck(
             checks,
@@ -961,6 +1001,36 @@ function checkGate(definition, options, resultsDirectory) {
           );
           continue;
         }
+        if (!fs.existsSync(executionPath)) {
+          addCheck(
+            checks,
+            'check',
+            `${evaluation.id} ${configuration} ${run} execution`,
+            false,
+            'execution.json missing',
+          );
+          continue;
+        }
+        const execution = readJson(executionPath);
+        const expectedFingerprint = executionFingerprint(
+          definition,
+          evaluation,
+          configuration,
+          model,
+        );
+        const hermetic = configuration === 'with_skill'
+          ? execution.skill_available === true
+          : execution.skill_available === false
+            && execution.skill_tool_used === false;
+        addCheck(
+          checks,
+          'check',
+          `${evaluation.id} ${configuration} ${run} execution`,
+          execution.passed === true
+            && execution.fingerprint === expectedFingerprint
+            && hermetic,
+          `passed=${execution.passed} fingerprint=${execution.fingerprint === expectedFingerprint} hermetic=${hermetic}`,
+        );
         const directionChecks = deterministicChecks(
           fs.readFileSync(outputPath, 'utf8'),
           evaluation,
@@ -1071,6 +1141,26 @@ function blindPlacement(seed, evaluationId, runNumber) {
   return digest[0] % 2 === 0;
 }
 
+function comparisonFingerprint(
+  definition,
+  evaluation,
+  runNumber,
+  control,
+  treatment,
+  judgeModel,
+) {
+  return createHash('sha256').update(JSON.stringify({
+    skill_name: definition.skill_name,
+    evaluation,
+    run_number: runNumber,
+    control,
+    treatment,
+    judge: definition.judge,
+    randomization_seed: definition.config.randomization_seed,
+    judge_model: judgeModel,
+  })).digest('hex');
+}
+
 function judgeGate(definition, options, resultsDirectory) {
   const config = definition.config;
   const model = options.judgeModel || config.judge_model;
@@ -1088,6 +1178,14 @@ function judgeGate(definition, options, resultsDirectory) {
     const treatmentDirectory = path.join(evalDirectory, 'with_skill');
     const controlRuns = listRunDirectories(controlDirectory, expectedRuns);
     const treatmentRuns = listRunDirectories(treatmentDirectory, expectedRuns);
+    const unexpectedControlRuns = unexpectedRunDirectories(
+      controlDirectory,
+      expectedRuns,
+    );
+    const unexpectedTreatmentRuns = unexpectedRunDirectories(
+      treatmentDirectory,
+      expectedRuns,
+    );
     const treatmentRunNames = new Set(treatmentRuns);
     const pairedRuns = controlRuns.filter((run) => treatmentRunNames.has(run));
 
@@ -1095,10 +1193,17 @@ function judgeGate(definition, options, resultsDirectory) {
       checks,
       'judge',
       `${evaluation.id} paired runs`,
-      pairedRuns.length > 0
+      pairedRuns.length === expectedRuns
         && pairedRuns.length === controlRuns.length
         && pairedRuns.length === treatmentRuns.length,
-      `${controlRuns.length} control / ${treatmentRuns.length} treatment`,
+      `${controlRuns.length}/${expectedRuns} control / ${treatmentRuns.length}/${expectedRuns} treatment`,
+    );
+    addCheck(
+      checks,
+      'judge',
+      `${evaluation.id} unexpected paired runs`,
+      unexpectedControlRuns.length === 0 && unexpectedTreatmentRuns.length === 0,
+      `control=${unexpectedControlRuns.join(',') || 'none'} treatment=${unexpectedTreatmentRuns.join(',') || 'none'}`,
     );
     if (pairedRuns.length === 0) continue;
 
@@ -1117,6 +1222,14 @@ function judgeGate(definition, options, resultsDirectory) {
       }
       const control = fs.readFileSync(controlPath, 'utf8');
       const treatment = fs.readFileSync(treatmentPath, 'utf8');
+      const fingerprint = comparisonFingerprint(
+        definition,
+        evaluation,
+        index + 1,
+        control,
+        treatment,
+        model,
+      );
       const treatmentIsA = blindPlacement(
         config.randomization_seed,
         evaluation.id,
@@ -1153,7 +1266,11 @@ function judgeGate(definition, options, resultsDirectory) {
         .filter((result) => result.passed).length / evaluation.expectations.length;
       const dimensionScores = Object.values(treatmentResult?.dimensions || {});
       const dimensionsPass = dimensionScores.length === definition.judge.dimensions.length
-        && dimensionScores.every((score) => score >= definition.judge.minimum_dimension_score);
+        && definition.judge.dimensions.every((dimension) => {
+          const minimum = evaluation.dimension_minimum_overrides?.[dimension.id]
+            ?? definition.judge.minimum_dimension_score;
+          return treatmentResult.dimensions[dimension.id] >= minimum;
+        });
       const expectationsPass = expectationPassRate
         >= config.minimum_treatment_pass_rate;
       const passed = judged.passed
@@ -1179,6 +1296,7 @@ function judgeGate(definition, options, resultsDirectory) {
         cost_usd: judged.costUsd,
         duration_ms: judged.durationMs,
         error: judged.error || null,
+        fingerprint,
       };
       comparisons.push(comparison);
       writeJson(
@@ -1226,6 +1344,7 @@ function judgeGate(definition, options, resultsDirectory) {
 function reportGate(definition, options, resultsDirectory) {
   const evaluations = selectEvaluations(definition, options.caseSelector);
   const expectedRuns = options.runs || definition.config.runs_per_configuration;
+  const judgeModel = options.judgeModel || definition.config.judge_model;
   const checks = [];
   const comparisons = [];
 
@@ -1235,29 +1354,68 @@ function reportGate(definition, options, resultsDirectory) {
       `eval-${evaluation.id}-${evaluation.name}`,
       'judging',
     );
-    const files = fs.existsSync(judgingDirectory)
+    const allFiles = fs.existsSync(judgingDirectory)
       ? fs.readdirSync(judgingDirectory)
         .filter((file) => /^comparison-[0-9]+\.json$/.test(file))
-        .filter((file) => Number.parseInt(file.match(/[0-9]+/)[0], 10) <= expectedRuns)
         .sort()
       : [];
+    const files = allFiles.filter((file) => (
+      Number.parseInt(file.match(/[0-9]+/)[0], 10) <= expectedRuns
+    ));
+    const unexpectedFiles = allFiles.filter((file) => !files.includes(file));
     addCheck(
       checks,
       'report',
       `${evaluation.id} comparisons`,
-      files.length > 0,
-      `${files.length} files`,
+      files.length === expectedRuns,
+      `${files.length}/${expectedRuns} files`,
+    );
+    addCheck(
+      checks,
+      'report',
+      `${evaluation.id} unexpected comparisons`,
+      unexpectedFiles.length === 0,
+      unexpectedFiles.length === 0 ? 'none' : unexpectedFiles.join(', '),
     );
     for (const file of files) {
       const comparison = readJson(path.join(judgingDirectory, file));
+      const runNumber = Number.parseInt(file.match(/[0-9]+/)[0], 10);
+      const evalDirectory = path.join(
+        resultsDirectory,
+        `eval-${evaluation.id}-${evaluation.name}`,
+      );
+      const controlPath = path.join(
+        evalDirectory,
+        'without_skill',
+        `run-${runNumber}`,
+        'output.md',
+      );
+      const treatmentPath = path.join(
+        evalDirectory,
+        'with_skill',
+        `run-${runNumber}`,
+        'output.md',
+      );
+      const currentFingerprint = fs.existsSync(controlPath)
+        && fs.existsSync(treatmentPath)
+        ? comparisonFingerprint(
+          definition,
+          evaluation,
+          runNumber,
+          fs.readFileSync(controlPath, 'utf8'),
+          fs.readFileSync(treatmentPath, 'utf8'),
+          judgeModel,
+        )
+        : null;
       comparisons.push(comparison);
       addCheck(
         checks,
         'report',
         `${evaluation.id} ${file}`,
         Boolean(comparison.judgment)
-          && comparison.dimensions_passed,
-        `treatment_won=${comparison.treatment_won} expectation_rate=${comparison.expectation_pass_rate}`,
+          && comparison.dimensions_passed
+          && comparison.fingerprint === currentFingerprint,
+        `treatment_won=${comparison.treatment_won} expectation_rate=${comparison.expectation_pass_rate} fingerprint=${comparison.fingerprint === currentFingerprint}`,
       );
     }
   }
@@ -1345,7 +1503,10 @@ function main() {
     }
   }
 
-  if (options.mode === 'check' || options.mode === 'judge' || options.mode === 'all') {
+  if (options.mode === 'check'
+    || options.mode === 'judge'
+    || options.mode === 'report'
+    || options.mode === 'all') {
     if (!runGate(checkGate(definition, options, resultsDirectory))) {
       finish(gates, resultsDirectory, options.json);
       return;

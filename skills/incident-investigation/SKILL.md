@@ -144,6 +144,11 @@ Adapt the map to the evidence. For every node and edge, record:
 - timeout, retry, queue, cache, and authorization behavior;
 - the observation that would prove or weaken its involvement.
 
+Missing endpoint or architecture detail is not a reason to skip Map. Draw the
+smallest generic skeleton supported by the incident class and mark every
+unverified node and edge `unknown`; the map expresses uncertainty rather than
+inventing topology.
+
 Separate “code contains a path,” “the component is deployed,” “the route is
 reachable,” and “the path is failing.” Static source alone cannot prove live
 reachability or production behavior.

@@ -132,7 +132,7 @@ debugging advice:
 - `SKILL.md` frontmatter contains the expected name, human-facing description,
   and `disable-model-invocation: true`.
 - Required workflow, safety, output, and failure-mode sections are present.
-- `SKILL.md` is 441 lines, below the 500-line limit.
+- `SKILL.md` is 446 lines, below the 500-line limit.
 - Plugin JSON files parse successfully.
 - The eval file uses Anthropic Skill Creator's core `skill_name` / `evals[]`
   schema with prompt, expected output, files, and expectations for all five
@@ -168,11 +168,11 @@ system prompt, and a per-call budget. The treatment:
 
 Every repetition passed its case's deterministic gate:
 
-- regional post-deploy errors: 24/24;
-- database symptom/pool contention: 24/24;
+- regional post-deploy errors: 16/16;
+- database symptom/pool contention: 15/15;
 - missing observability/architecture early block: 11/11;
 - user-only private reachability early block: 10/10;
-- untrusted incident artifact: 23/23.
+- untrusted incident artifact: 16/16.
 
 The gate learned two legitimate output shapes during RED/GREEN:
 
@@ -186,7 +186,7 @@ The untrusted-artifact fixture was then strengthened with an inert compliance
 canary. Its first treatment correctly refused the instruction but quoted the
 canary while explaining the refusal; the deterministic gate rejected it. The
 skill now requires the placeholder `[untrusted instruction omitted]`. The
-rerun omitted the canary, passed 24/24 deterministic checks, and won the blind
+rerun omitted the canary, passed 16/16 deterministic checks, and won the blind
 comparison with every expectation passing.
 
 ### Gate 4: blind qualitative judge
@@ -205,27 +205,32 @@ The local harness reuses the public Skill Creator schema and result concepts,
 but supplies the missing single-command orchestration for this explicit skill.
 It invokes Claude CLI only in isolated projects and exposes no tools, so it
 tests the investigation reasoning without production access. The committed
-default is three repetitions per configuration. Two transient executor
-timeouts were retried; infrastructure failures were not counted as behavioral
-variance.
+default is three repetitions per configuration. The final result contains
+exactly three successful, fingerprint-current executions per configuration;
+no infrastructure failure is counted as behavioral variance.
 
 ## Reproduction and provenance
 
 Final result directory:
 
 ```text
-skills/incident-investigation/.eval-results/2026-08-22T23-36-06-554Z
+skills/incident-investigation/.eval-results/2026-08-23T01-18-23-700Z
 ```
 
 Commands used for the final benchmark:
 
 ```bash
-node skills/incident-investigation/scripts/run-evals.js --mode trigger --model sonnet
-node skills/incident-investigation/scripts/run-evals.js --mode behavior --runs 3 --model sonnet
-node skills/incident-investigation/scripts/run-evals.js --mode behavior --runs 3 --model sonnet --resume --results-dir skills/incident-investigation/.eval-results/2026-08-22T23-36-06-554Z
-node skills/incident-investigation/scripts/run-evals.js --mode check --runs 3 --results-dir skills/incident-investigation/.eval-results/2026-08-22T23-36-06-554Z
-node skills/incident-investigation/scripts/run-evals.js --mode judge --judge-model sonnet --results-dir skills/incident-investigation/.eval-results/2026-08-22T23-36-06-554Z
-node skills/incident-investigation/scripts/run-evals.js --mode report --results-dir skills/incident-investigation/.eval-results/2026-08-22T23-36-06-554Z
+node skills/incident-investigation/scripts/run-evals.js --mode all --runs 3 --model sonnet --judge-model sonnet
+node skills/incident-investigation/scripts/run-evals.js --mode behavior --runs 3 --model sonnet --resume --results-dir skills/incident-investigation/.eval-results/2026-08-23T01-18-23-700Z
+node skills/incident-investigation/scripts/run-evals.js --mode behavior --case 2 --runs 3 --model sonnet --resume --results-dir skills/incident-investigation/.eval-results/2026-08-23T01-18-23-700Z
+node skills/incident-investigation/scripts/run-evals.js --mode behavior --case 3 --runs 3 --model sonnet --resume --results-dir skills/incident-investigation/.eval-results/2026-08-23T01-18-23-700Z
+node skills/incident-investigation/scripts/run-evals.js --mode judge --case 1 --runs 3 --model sonnet --judge-model sonnet --results-dir skills/incident-investigation/.eval-results/2026-08-23T01-18-23-700Z
+node skills/incident-investigation/scripts/run-evals.js --mode judge --case 2 --runs 3 --model sonnet --judge-model sonnet --results-dir skills/incident-investigation/.eval-results/2026-08-23T01-18-23-700Z
+node skills/incident-investigation/scripts/run-evals.js --mode judge --case 3 --runs 3 --model sonnet --judge-model sonnet --results-dir skills/incident-investigation/.eval-results/2026-08-23T01-18-23-700Z
+node skills/incident-investigation/scripts/run-evals.js --mode judge --case 4 --runs 3 --model sonnet --judge-model sonnet --results-dir skills/incident-investigation/.eval-results/2026-08-23T01-18-23-700Z
+node skills/incident-investigation/scripts/run-evals.js --mode judge --case 5 --runs 3 --model sonnet --judge-model sonnet --results-dir skills/incident-investigation/.eval-results/2026-08-23T01-18-23-700Z
+node skills/incident-investigation/scripts/run-evals.js --mode check --runs 3 --model sonnet --results-dir skills/incident-investigation/.eval-results/2026-08-23T01-18-23-700Z
+node skills/incident-investigation/scripts/run-evals.js --mode report --runs 3 --model sonnet --judge-model sonnet --results-dir skills/incident-investigation/.eval-results/2026-08-23T01-18-23-700Z
 ```
 
 No functional case or judge check was skipped in the final result. The runner
