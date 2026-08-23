@@ -2,6 +2,7 @@
 name: ticket-scope
 description: Use when evaluating whether a proposed ticket, work item, or PR diff is one cohesive, independently verifiable unit, including vertical slices and dependency-driven layered changes.
 disable-model-invocation: false
+user-invocable: false
 ---
 
 # Ticket Scope

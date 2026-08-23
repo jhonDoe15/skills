@@ -51,7 +51,7 @@ The skill may recommend a structure automatically, but branch creation, commits,
 
 ## Implementation Decisions
 
-- `ticket-scope` is an internal model-invoked reference skill. It is reachable by `carve` and `pr-carver`, but it is not presented as a standalone user workflow.
+- `ticket-scope` is an internal model-invoked reference skill. It is reachable by `carve` and `pr-carver`, but it is not user-invocable or presented as a standalone workflow.
 - The shared evaluator assesses a proposed unit after exploration. It does not create a complete ticket set from raw context and does not choose a model tier.
 - A `fit` assessment means one cohesive unit with a bounded outcome, explicit acceptance and validation, and no unresolved design or risk decision.
 - A `split` assessment means the proposal mixes multiple outcomes, exceeds reasonable breadth, or crosses a natural seam. The assessment names the resulting candidate units.

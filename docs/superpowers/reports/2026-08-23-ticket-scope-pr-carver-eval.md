@@ -37,6 +37,12 @@ external write operations.
 - `pr-carver` selected GitHub stacked PRs for a real dependency chain, kept
   parallel PRs out of the recommendation, and required authorization before
   branch or PR mutation.
+- `pr-carver` selected parallel PRs for two independent GitHub units with a
+  `+600/-100` Band 2 diff, with no strategy confirmation or mutation
+  authorization implied.
+- `pr-carver` selected an ordinary Git stack for a GitLab foundation → API → UI
+  chain with a `+800/-200` Band 2 diff, preserving blockers and avoiding the
+  GitHub-native option.
 - Missing bases, binary files, generated files, and instructions embedded in
   PR descriptions remained explicitly reported or ignored as appropriate.
 

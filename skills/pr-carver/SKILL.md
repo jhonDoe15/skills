@@ -64,15 +64,10 @@ Carry forward each candidate's:
 - Residual uncertainty and risk.
 - True blockers and non-directional collisions.
 
-Treat a combined diff containing separately landing layers as `split`, then
-represent each real landing seam as a `layered` candidate. A user-visible
-feature can still require a schema → API → UI stack. A layered candidate needs
-its own validation and a real contract or migration order; arbitrary
-horizontal convenience is not enough.
-
-An unresolved design, security or authorization question, concurrency issue,
-persistence or migration risk, compatibility or public-contract risk, or data
-integrity risk remains a human flag. Splitting does not clear it.
+Use `ticket-scope` as the canonical source for unit shape, layered seams, and
+risk. For PRs, a `split` that yields ordered layered candidates is a stack
+candidate; independent `fit` candidates are parallel candidates. Preserve every
+`flag`; splitting never clears it.
 
 ## 4. Choose the structure
 
