@@ -38,8 +38,8 @@ Claude Code marketplace plugin.
 
 The workflow skills reference companion skills when their branches are used:
 `/to-tickets`, `/to-spec`, `/grill-with-docs`, `/wayfinder`, `/implement`,
-`/code-review`, `/handoff`, `/autopilot`, and `/split-to-prs`. Install those
-separately in the host that runs the workflows.
+`/code-review`, `/tdd`, `/handoff`, `/autopilot`, and `/split-to-prs`. Install
+those separately in the host that runs the workflows.
 
 ### Upgrading from hook/card releases
 
