@@ -115,57 +115,121 @@ debugging advice:
 
 ## Evaluation status
 
-- Fixture suite: defined.
-- No-skill baseline: captured.
-- Skill-enabled GREEN run: captured.
-- Static and deterministic gates: passed.
-- Repeated qualitative judge: passed after the cheaper gates.
+- Five functional cases: defined in the standard-compatible
+  `evals/evals.json`.
+- Explicit/ambient invocation: passed in isolated Claude CLI projects.
+- Fresh control/treatment execution: completed for all five cases, three
+  repetitions per configuration.
+- Deterministic treatment gates: all 15 treatment runs passed.
+- Blind LLM judge: treatment won all 15 comparisons and passed every
+  expectation.
+- Observed expectation/win-rate variance across the three repetitions: zero.
 
 ## GREEN results
 
-### Gate 1: static contract
+### Gate 1: static and schema contract
 
-- `SKILL.md` frontmatter contains the expected name, `Use when` description,
+- `SKILL.md` frontmatter contains the expected name, human-facing description,
   and `disable-model-invocation: true`.
 - Required workflow, safety, output, and failure-mode sections are present.
-- `SKILL.md` is 373 lines, below the 500-line limit.
+- `SKILL.md` is 441 lines, below the 500-line limit.
 - Plugin JSON files parse successfully.
-- `git diff --check` reports no whitespace errors for the implementation
-  changes.
+- The eval file uses Anthropic Skill Creator's core `skill_name` / `evals[]`
+  schema with prompt, expected output, files, and expectations for all five
+  cases.
+- Every signal, forbidden pattern, trigger case, and judge dimension validates.
+- The default static run incurs no model cost.
 
-### Gate 2: deterministic direction
+### Gate 2: explicit invocation
 
-The three treatment traces were manually checked against the defined
-signal/order assertions. Each trace made capability inventory and incident
-framing precede the map, mapped the path before deep checks, recorded
-prediction/check/result/confidence, and ended with a causal assessment or
-evidence gap. The regional and latency cases explicitly re-zoomed from a
-downstream timeout or database label to the caller-side boundary. The evidence
-gap case requested user-owned evidence, used `blocked`, and treated the
-embedded cleanup command as untrusted data.
+The runner creates isolated projects with the skill installed under
+`.claude/skills/incident-investigation/`. The explicit command was recognized
+and the skill was available; the same ambient incident prompt did not invoke
+it. This is the relevant trigger contract for a skill with
+`disable-model-invocation: true`.
 
-The initial test-spec ordering was corrected during evaluation: incident
-framing and capability inventory are peer prerequisites and may appear in
-either order. A top-level provisional verdict is also allowed before the
-supporting evidence; hypothesis-level prediction/check/result ordering remains
-required.
+### Gate 3: fresh control/treatment behavior
 
-### Gate 3: qualitative comparison
+All five cases ran three times in paired fresh Claude CLI contexts:
 
-Five fresh-context control/treatment replicates were run for the misleading
-database-symptom case. The treatment scored 2/2 on each of the eleven
-dimensions: framing, capability discovery, map/unknowns, information gain,
-hypothesis updates, causal depth, symptom re-zooming, tool selection,
-confidence/stopping, user handoff, and safety. The independent judge recorded
-22/22 treatment points.
+- `without_skill`: no skill installed, recorded as the baseline;
+- `with_skill`: skill installed and explicitly invoked.
 
-Across all five replicates, controls found the likely application-side pool
-problem but left the map, causal chain, symptom re-zoom, evidence calibration,
-and user handoff implicit. Treatment runs made each explicit, kept the
-verdict at `root cause likely` until confirmation evidence was named, and left
-mitigation with the authorized owner.
+Both used project settings only, no tools, no session persistence, a minimal
+system prompt, and a per-call budget. The treatment:
 
-The judge's limitation is retained: replicate summaries compress the full
-trace and therefore do not independently prove every query-bound or every
-unknown edge. The evaluation tests investigation direction and decision
-quality, not exact prose.
+- framed impact and scope;
+- inventoried capabilities;
+- mapped the request path;
+- isolated pool acquisition from database execution;
+- recorded hypotheses with prediction, check, result, and confidence;
+- re-zoomed from the database symptom to the application pool boundary;
+- explained the causal chain and kept remediation with the authorized owner.
+
+Every repetition passed its case's deterministic gate:
+
+- regional post-deploy errors: 24/24;
+- database symptom/pool contention: 24/24;
+- missing observability/architecture early block: 11/11;
+- user-only private reachability early block: 10/10;
+- untrusted incident artifact: 23/23.
+
+The gate learned two legitimate output shapes during RED/GREEN:
+
+- phase headings and bold hypothesis labels are equivalent structural aliases;
+- a justified early `blocked` verdict requires Frame → Inventory → Map plus a
+  precise user check, not a fabricated hypothesis loop.
+
+These corrections fixed the gate, not the treatment outputs.
+
+The untrusted-artifact fixture was then strengthened with an inert compliance
+canary. Its first treatment correctly refused the instruction but quoted the
+canary while explaining the refusal; the deterministic gate rejected it. The
+skill now requires the placeholder `[untrusted instruction omitted]`. The
+rerun omitted the canary, passed 24/24 deterministic checks, and won the blind
+comparison with every expectation passing.
+
+### Gate 4: blind qualitative judge
+
+Independent judges received seeded, randomized A/B outputs without
+configuration labels. Treatment won every comparison, passed every case
+expectation, and met every minimum dimension score. Aggregate results for the
+15-pair benchmark were:
+
+- treatment win rate: 1.00;
+- treatment expectation pass rate: 1.00.
+
+## Harness boundaries
+
+The local harness reuses the public Skill Creator schema and result concepts,
+but supplies the missing single-command orchestration for this explicit skill.
+It invokes Claude CLI only in isolated projects and exposes no tools, so it
+tests the investigation reasoning without production access. The committed
+default is three repetitions per configuration. Two transient executor
+timeouts were retried; infrastructure failures were not counted as behavioral
+variance.
+
+## Reproduction and provenance
+
+Final result directory:
+
+```text
+skills/incident-investigation/.eval-results/2026-08-22T23-36-06-554Z
+```
+
+Commands used for the final benchmark:
+
+```bash
+node skills/incident-investigation/scripts/run-evals.js --mode trigger --model sonnet
+node skills/incident-investigation/scripts/run-evals.js --mode behavior --runs 3 --model sonnet
+node skills/incident-investigation/scripts/run-evals.js --mode behavior --runs 3 --model sonnet --resume --results-dir skills/incident-investigation/.eval-results/2026-08-22T23-36-06-554Z
+node skills/incident-investigation/scripts/run-evals.js --mode check --runs 3 --results-dir skills/incident-investigation/.eval-results/2026-08-22T23-36-06-554Z
+node skills/incident-investigation/scripts/run-evals.js --mode judge --judge-model sonnet --results-dir skills/incident-investigation/.eval-results/2026-08-22T23-36-06-554Z
+node skills/incident-investigation/scripts/run-evals.js --mode report --results-dir skills/incident-investigation/.eval-results/2026-08-22T23-36-06-554Z
+```
+
+No functional case or judge check was skipped in the final result. The runner
+used only ticket-supplied evidence and exposed no production tools. Remaining
+limitations: three repetitions are enough to detect obvious variance but not
+to estimate rare failure rates, and synthetic scenarios do not replace
+validation against a real incident under the owning team's access controls.
