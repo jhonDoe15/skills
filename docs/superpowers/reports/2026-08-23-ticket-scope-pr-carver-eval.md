@@ -43,6 +43,10 @@ external write operations.
 - `pr-carver` selected an ordinary Git stack for a GitLab foundation → API → UI
   chain with a `+800/-200` Band 2 diff, preserving blockers and avoiding the
   GitHub-native option.
+- `pr-carver` kept two otherwise independent units with a shared mutable
+  configuration file and key out of parallel execution, recording a collision
+  and recommending one coordinated PR because no output dependency justified a
+  stack.
 - Missing bases, binary files, generated files, and instructions embedded in
   PR descriptions remained explicitly reported or ignored as appropriate.
 
