@@ -1,14 +1,16 @@
 # skills
 
-One Claude Code plugin with three agent skills:
+One Claude Code plugin with five agent skills:
 
 - **Lean** — model-invoked writing guidance for response density and shape.
+- **`ticket-scope`** — internal model-invoked evaluation of cohesive, independently verifiable ticket and PR units.
 - **`/carve`** — explicitly invoked to size a spec-derived ticket set so each piece fits one main subagent.
+- **`pr-carver`** — model-invoked PR size and structure guidance for parallel and stacked pull requests.
 - **`/dispatch-work`** — explicitly invoked to run an already-sized tracker in parallel and carry each piece through implementation, review, and PR approval.
 
-Lean is selected automatically by the model when its description matches the
-response being written. Carve and dispatch-work run only when the user invokes
-them.
+Lean, ticket-scope, and pr-carver are selected automatically by the model when
+their descriptions match the work. Carve and dispatch-work run only when the
+user invokes them.
 
 ## Install
 
@@ -36,8 +38,8 @@ Claude Code marketplace plugin.
 
 The workflow skills reference companion skills when their branches are used:
 `/to-tickets`, `/to-spec`, `/grill-with-docs`, `/wayfinder`, `/implement`,
-`/code-review`, `/tdd`, `/handoff`, and `/autopilot`. Install those separately
-in the host that runs the workflows.
+`/code-review`, `/tdd`, `/handoff`, `/autopilot`, and `/split-to-prs`. Install
+those separately in the host that runs the workflows.
 
 ### Upgrading from hook/card releases
 
@@ -63,16 +65,32 @@ short answer.
 The density levels are `terse`, `default`, and `full`. The model chooses the
 level from the request and the detail the reader needs.
 
+## `ticket-scope` — shared unit evaluation
+
+Ticket-scope is the shared internal evaluator used by carve and pr-carver. It
+checks outcome, seam, shape, acceptance, validation, uncertainty, risk,
+breadth, blockers, and collisions. Vertical slices are preferred; constrained
+layered slices are valid when a real contract or migration order requires them.
+
 ## `/carve` — size the work
 
 Carve layers sizing and collision coordination onto a spec-derived ticket set.
-Each resulting piece must fit one main subagent. Work that does not fit is split;
-an open design choice or risk boundary is flagged for a human. Related pieces
-record dependencies and shared-resource collisions so dispatch-work can
-parallelise safely.
+It uses ticket-scope first, then requires each resulting piece to fit one main
+subagent. Work that does not fit is split; an open design choice or risk
+boundary is flagged for a human. Related pieces record dependencies and
+shared-resource collisions so dispatch-work can parallelise safely.
 
 Invoke `/carve` explicitly after the work has been reduced to a spec and ticket
 set.
+
+## `pr-carver` — size and structure PRs
+
+PR Carver independently measures additions and deletions and raises size-watch
+bands at 500 and 1000 changed lines. It uses ticket-scope to recommend
+independent PRs first, then GitHub native stacked PRs, ordinary stacked Git
+PRs, hybrid combinations, or one PR when splitting adds no value. Keeping a
+Band 3 PR as one unit requires confirmation; branch and PR mutations always
+require authorization.
 
 ## `/dispatch-work` — run the tracker
 
@@ -86,8 +104,8 @@ Invoke `/dispatch-work` explicitly.
 Carve and dispatch-work use the repository model policy when one exists.
 Otherwise they read `subagent.model` and `subagent.effort` from the active
 `lean.config.json`. Those values apply to every implementation, review, and
-PR-babysitting spawn; there is no routing ladder. Lean does not read that
-config.
+PR-babysitting spawn; there is no routing ladder. Lean, ticket-scope, and
+pr-carver do not read that config.
 
 ## What was measured
 

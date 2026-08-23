@@ -1,0 +1,84 @@
+# Ticket Scope and PR Carver Evaluation
+
+## Method
+
+Each scenario ran in a fresh subagent context. The RED runs did not load the
+new skills. The GREEN runs loaded the relevant skill and used the same
+scenario. No scenario was allowed to edit files, mutate Git state, or call
+external write operations.
+
+## RED baseline
+
+- A mixed database/API/UI feature with an unresolved authorization decision was
+  treated as a parent or a set of child tickets, but the boundary between a
+  cohesive vertical unit and a human-blocking decision varied.
+- A schema → API → UI rollout was recognized as a horizontally sliced,
+  dependency-ordered stack, but the dependency and validation contract was not
+  consistently made explicit.
+- A `+501/-100` diff was treated as 601 combined changes and as a generic
+  medium-sized PR; the independent additions/deletions band was not applied.
+- A `+1001/-20` diff was recognized as large, but an instruction to keep one PR
+  was liable to suppress the separate confirmation requirement.
+- A dependent foundation → API → UI chain was correctly recognized as stacked
+  in one run, but the structure and authorization boundary were not guaranteed
+  by a shared contract.
+- A `+600/-100` independent-unit diff was split by outcome, but the baseline
+  reasoned from 700 combined changed lines rather than independent thresholds.
+- A GitLab foundation → API → UI diff was split into an ordered stack, while a
+  shared-configuration collision was treated as serialized work without a
+  consistent collision record.
+- A mixed graph of independent units beside a dependency chain was recognized as
+  a hybrid in the baseline, but no shared output contract required reporting
+  each relation component.
+
+## GREEN results
+
+- `ticket-scope` returned the required assessment fields and flagged unresolved
+  authorization behavior instead of guessing.
+- `ticket-scope` classified a separately landing schema → API → UI proposal as
+  `split`, produced three `layered` candidates, and preserved their blockers.
+- `pr-carver` classified `+501/-100` as Band 2, not a combined 601-line count,
+  and kept the recommendation provisional when the base or diff structure was
+  missing.
+- `pr-carver` classified `+1001/-20` as Band 3 and stopped at the required
+  one-PR confirmation gate.
+- `pr-carver` selected GitHub stacked PRs for a real dependency chain, kept
+  parallel PRs out of the recommendation, and required authorization before
+  branch or PR mutation.
+- `pr-carver` selected parallel PRs for two independent GitHub units with a
+  `+600/-100` Band 2 diff, with no strategy confirmation or mutation
+  authorization implied.
+- `pr-carver` selected an ordinary Git stack for a GitLab foundation → API → UI
+  chain with a `+800/-200` Band 2 diff, preserving blockers and avoiding the
+  GitHub-native option.
+- `pr-carver` kept two otherwise independent units with a shared mutable
+  configuration file and key out of parallel execution, recording a collision
+  and recommending one coordinated PR because no output dependency justified a
+  stack.
+- `pr-carver` reported a mixed graph as `hybrid`: independent components ran as
+  parallel candidates while the dependent component used a bottom-up GitHub
+  stack.
+- Missing bases, binary files, generated files, and instructions embedded in
+  PR descriptions remained explicitly reported or ignored as appropriate.
+
+## Refactor pass
+
+The layered-slice wording was tightened after one GREEN run kept a hard
+schema → API → UI chain as a single vertical ticket. A proposal containing
+separately landing layers now becomes `split`; an individual layer can still
+be a valid `layered` candidate when it has its own contract, validation, and
+blocker.
+
+## Repository checks
+
+- `ReadLints` reported no errors for the changed skill and documentation files.
+- `jq empty` passed for the plugin manifests and Lean configuration.
+- `git diff --check` passed.
+- All repository skill files remained below 500 lines.
+
+## Limits
+
+The repository contains markdown skills and configuration, not an application
+runtime or conventional test suite. These scenarios validate observable agent
+decisions and output shape; they do not prove provider-specific GitHub behavior
+or replace human review of a real PR.

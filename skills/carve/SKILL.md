@@ -14,9 +14,12 @@ Like `/to-tickets`, it runs only when you invoke it.
 
 Carve sizes a **ticket set**, and good tickets come from a spec. If the work only lives in this thread and no `/to-spec` has collapsed it into a plan, run **`/to-spec`** first — reach it via `/grill-with-docs` → `/to-spec`, or `/wayfinder` → `/to-spec` for a foggy effort. Carving raw context skips that collapse and loses the linked detail.
 
-## The one rule
+## The shared scope gate
 
-Judge each piece on the uncertainty that remains **right now**, not the size it started at. A large change whose approach is settled fits one sub-agent; a one-line change whose correct behaviour is still open does not. Size is not the signal — residual uncertainty is.
+Run `ticket-scope` on every candidate before applying carve's tier test. It
+owns the base-unit contract: outcome, seam, shape, acceptance, validation,
+uncertainty, risk, breadth, blockers, and collisions. Carve consumes its
+assessment; it does not redefine those signals.
 
 ## The one tier
 
@@ -34,14 +37,22 @@ Everything runs on the one cheap tier, so carve spends its effort making pieces 
 - Tickets already exist and are broken down enough → take them as they are.
 *Done when:* you hold a ticket set with its blocking edges.
 
-### 2. Mark every piece — fit, split, or flag
-The layer carve adds. Triage each ticket against the signals: does one main-tier sub-agent finish it alone? Mark each **fit**, **split**, or **flag** (human decision) with a one-line reason.
-*Done when (exhaustive):* every ticket is marked fit / split / flag with a reason; nothing is left as "feels complex".
+### 2. Apply the shared evaluator
+Run `ticket-scope` on every ticket. Resolve its `split` and `combine`
+assessments into candidates, and surface every `flag` before dispatch. Carry
+each candidate's shape, blockers, and collisions forward.
+*Done when (exhaustive):* every candidate has a `ticket-scope` assessment; all
+splits and combines are resolved; every flag names its human decision or risk.
 
-### 3. Size each piece to fit — split *or* combine
-A piece must sit at its **natural seam**: one cohesive change a single main-tier sub-agent finishes alone. Move it there from either side:
-- **Too big or mixed to fit** → split it (reuse `/to-tickets`), or convert `local` → `settled` by doing the lookup and writing it in. Where an unknown can't be settled up front, split it into its own upstream **research** piece — or a **flag** for a human — that blocks the impl piece.
-- **Fragmented below the seam** → combine, in whichever form keeps the tracking worth its cost. Pieces that share one file or decision, or that a single sub-agent would reconcile anyway, either **merge** into one ticket (when tracking them apart buys nothing) or **group** — keep the separate tickets but mark them (`group:<name>` label or note) to run as one sub-agent on one stacked branch (when the separate tickets/PRs still earn their review granularity). Fragmenting past the seam pays coordination tax (a brief, a spawn, a review per piece) without buying autonomy.
+### 3. Size each eligible piece to the main tier
+The shared evaluator establishes the natural seam. Carve then asks whether one
+main-tier sub-agent can finish each eligible candidate alone:
+- **Too big for the tier** → split it (reuse `/to-tickets`), then run
+  `ticket-scope` again.
+- **Fragments still below the seam** → combine or group them, then re-check
+  that the resulting piece fits one sub-agent. A `group:<name>` keeps separate
+  review units on one stacked branch when that tracking granularity earns its
+  coordination cost.
 - **Re-check the combined piece fits** — a merged or grouped piece still has to finish in one sub-agent. If its breadth or a decision that now spans it overruns that reach, split or flag it.
 *Done when:* each piece is one cohesive change one main-tier sub-agent can finish — neither mixing settled work with an open decision nor sliced so fine that siblings must be re-stitched.
 
@@ -58,10 +69,11 @@ Write the relationships `/dispatch-work` orchestrates on, each in the tracker me
 ## Reuse
 
 - `/to-tickets` — inherited: the ticket-splitting carve sizes on top of, and the split target when a piece is too big to fit.
+- `ticket-scope` — shared base-unit evaluation: shape, outcome, seam, acceptance, validation, uncertainty, risk, breadth, blockers, and collisions.
 - `/to-spec` — run first when the work is only in context; carve sizes a spec-derived ticket set.
 - `/wayfinder` — upstream for a foggy effort: chart it, `/to-spec` collapses the map, then carve.
 - `/dispatch-work` — downstream: runs the sized tracker, a batch of sub-agents in parallel.
 
 ## Supersedes admino
 
-Carve is the triage half of admino's ladder — collapsed to a single tier. The one rule and the signals stay; the cheap/mid/top rungs go, because everything runs on the one cheap main tier and the only answers to "too much for it" are **split** (carve does it) or **flag** (a human decides). Paired with `/dispatch-work`, the two retire admino's auto-loaded card.
+Carve is the triage half of admino's ladder — collapsed to a single tier. The one-tier target and the **split**/**flag** exits stay; the cheap/mid/top rungs go, because everything runs on the one cheap main tier. Paired with `/dispatch-work`, the two retire admino's auto-loaded card.
