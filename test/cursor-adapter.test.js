@@ -67,6 +67,7 @@ function skillReadEvents(skill, terminalStatus = 'completed') {
     {
       type: 'tool_call',
       call_id: callId,
+      name: 'read',
       status: terminalStatus,
     },
   ];
@@ -601,6 +602,7 @@ test('Cursor Adapter observes only completed read-class Skill operations', async
             {
               type: 'tool_call',
               call_id: callId,
+              name,
               status: 'completed',
             },
           ],
@@ -623,6 +625,114 @@ test('Cursor Adapter observes only completed read-class Skill operations', async
           invokedSkills: ['agent-writing'],
         });
       }
+    });
+  }
+});
+
+test('Cursor Adapter requires stable per-call Skill read identity', async (t) => {
+  const canonicalArgs = {
+    path: '.cursor/skills/agent-writing/SKILL.md',
+  };
+  function event(callId, name, status, args) {
+    return {
+      type: 'tool_call',
+      call_id: callId,
+      name,
+      status,
+      ...(args === undefined ? {} : { args }),
+    };
+  }
+  const cases = [
+    {
+      label: 'omitted terminal args use running metadata',
+      observed: true,
+      events: [
+        event('stable-read', 'read', 'running', canonicalArgs),
+        event('stable-read', 'read', 'completed'),
+      ],
+    },
+    {
+      label: 'terminal non-read rejects running read',
+      observed: false,
+      events: [
+        event('changed-operation', 'read', 'running', canonicalArgs),
+        event('changed-operation', 'write', 'completed', canonicalArgs),
+      ],
+    },
+    {
+      label: 'terminal changed target rejects running read',
+      observed: false,
+      events: [
+        event('changed-target', 'read', 'running', canonicalArgs),
+        event('changed-target', 'read', 'completed', {
+          path: '.agents/skills/agent-writing/SKILL.md',
+        }),
+      ],
+    },
+    {
+      label: 'terminal invalid target rejects running read',
+      observed: false,
+      events: [
+        event('invalid-target', 'read', 'running', canonicalArgs),
+        event('invalid-target', 'read', 'completed', {}),
+      ],
+    },
+    {
+      label: 'duplicate ID non-read reuse clears completed read',
+      observed: false,
+      events: [
+        event('reused-call', 'read', 'running', canonicalArgs),
+        event('reused-call', 'read', 'completed'),
+        event('reused-call', 'edit', 'running', canonicalArgs),
+        event('reused-call', 'edit', 'completed'),
+      ],
+    },
+    {
+      label: 'duplicate ID fresh read still emits once',
+      observed: true,
+      events: [
+        event('reused-read', 'read', 'running', canonicalArgs),
+        event('reused-read', 'read', 'completed'),
+        event('reused-read', 'read', 'running', canonicalArgs),
+        event('reused-read', 'read', 'completed'),
+      ],
+    },
+  ];
+
+  for (const { events, label, observed } of cases) {
+    await t.test(label, async (caseTest) => {
+      const repositoryRoot = createTracerPackage(
+        caseTest,
+        canonicalRepositoryRoot,
+      );
+      const adapter = createCursorAdapter({
+        repositoryRoot,
+        sdk: createSuccessfulSdk({}, {
+          emitSkillReads: false,
+          toolEvents: events,
+        }),
+      });
+
+      const result = await executeProduction({
+        repositoryRoot,
+        adapter,
+        invocation: tracerInvocation(),
+      });
+      const invocationEvidence = result.observations.responses
+        .filter(({ text }) => (
+          text.includes('"kind":"cursor-observed-skill-invocations"')
+        ))
+        .map(({ text }) => JSON.parse(text));
+
+      assert.deepEqual(
+        invocationEvidence,
+        observed
+          ? [{
+            kind: 'cursor-observed-skill-invocations',
+            invokedSkills: ['agent-writing'],
+          }]
+          : [],
+      );
     });
   }
 });

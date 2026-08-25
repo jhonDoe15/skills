@@ -64,11 +64,51 @@ function normalizeTarget(args, projectRoot, toolName) {
   return relative.split(path.sep).join('/');
 }
 
-function observedSkillReadName(normalizedToolName, args, projectRoot) {
-  if (normalizedToolName !== 'read' || !args || typeof args !== 'object') return null;
-  const target = normalizeTarget(args, projectRoot, normalizedToolName);
+function canonicalSkillRead(args, projectRoot) {
+  if (!args || typeof args !== 'object') return null;
+  const target = normalizeTarget(args, projectRoot, 'read');
   const match = /^(?:\.cursor|\.agents)\/skills\/([^/]+)\/SKILL\.md$/.exec(target);
-  return match && /^[a-z0-9-]+$/.test(match[1]) ? match[1] : null;
+  return match && /^[a-z0-9-]+$/.test(match[1])
+    ? { name: match[1], target }
+    : null;
+}
+
+function sameSkillReadIdentity(left, right) {
+  return Boolean(left && right)
+    && left.name === right.name
+    && left.target === right.target;
+}
+
+function updateSkillReadState(event, callId, projectRoot, skillReads) {
+  const eventToolName = normalizeToolName(event.name);
+  if (eventToolName !== 'read') {
+    skillReads.delete(callId);
+    return;
+  }
+
+  if (event.status === 'running') {
+    const identity = canonicalSkillRead(event.args, projectRoot);
+    if (identity) {
+      skillReads.set(callId, { ...identity, status: 'running' });
+    } else {
+      skillReads.delete(callId);
+    }
+    return;
+  }
+
+  const activeRead = skillReads.get(callId);
+  if (event.status !== 'completed' || !activeRead) {
+    skillReads.delete(callId);
+    return;
+  }
+  const terminalIdentity = event.args === undefined
+    ? activeRead
+    : canonicalSkillRead(event.args, projectRoot);
+  if (!sameSkillReadIdentity(activeRead, terminalIdentity)) {
+    skillReads.delete(callId);
+    return;
+  }
+  skillReads.set(callId, { ...activeRead, status: 'completed' });
 }
 
 function collectStreamEvidence(
@@ -93,18 +133,7 @@ function collectStreamEvidence(
     : `unidentified-${calls.size}`;
   const previous = calls.get(callId);
   const name = normalizeToolName(event.name || previous?.rawName);
-  const skillName = observedSkillReadName(
-    name,
-    event.args || previous?.args,
-    projectRoot,
-  );
-  const previousSkillRead = skillReads.get(callId);
-  if (skillName || previousSkillRead) {
-    skillReads.set(callId, {
-      name: skillName || previousSkillRead.name,
-      status: event.status,
-    });
-  }
+  updateSkillReadState(event, callId, projectRoot, skillReads);
   calls.set(callId, {
     rawName: event.name || previous?.rawName,
     name,
