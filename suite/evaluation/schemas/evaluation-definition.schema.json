@@ -85,7 +85,13 @@
           "expected_output",
           "files",
           "expectations"
-        ]
+        ],
+        "properties": {
+          "ablated_dependency": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       }
     },
     "judge": {
@@ -96,5 +102,31 @@
         "dimensions"
       ]
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "evaluation": {
+            "properties": {
+              "layer": {
+                "const": "component"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evals": {
+            "items": {
+              "required": [
+                "ablated_dependency"
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
 }

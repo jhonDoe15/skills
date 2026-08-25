@@ -314,6 +314,16 @@ function validateEvaluationDefinition(definition) {
       evaluation.expectations,
       `definition.evals[${index}].expectations`,
     );
+    if (metadata.layer === 'component') {
+      requireString(
+        evaluation.ablated_dependency,
+        `definition.evals[${index}].ablated_dependency`,
+      );
+    } else if (evaluation.ablated_dependency !== undefined) {
+      throw new EvaluationContractError(
+        `definition.evals[${index}].ablated_dependency is component-only`,
+      );
+    }
     evaluation.expectations.forEach((expectation, expectationIndex) => {
       requireString(
         expectation,
@@ -405,6 +415,16 @@ function manifestContents(manifest) {
   return contents;
 }
 
+function campaignCase(evaluation, layer) {
+  return {
+    id: String(evaluation.id),
+    name: evaluation.name,
+    ...(layer === 'component'
+      ? { ablated_dependency: evaluation.ablated_dependency }
+      : {}),
+  };
+}
+
 function createCampaignManifest({
   definition,
   packageRevision,
@@ -450,10 +470,9 @@ function createCampaignManifest({
     cells: normalizedCells,
     repetitions,
     execution_configuration: structuredClone(executionConfiguration),
-    cases: definition.evals.map((evaluation) => ({
-      id: String(evaluation.id),
-      name: evaluation.name,
-    })),
+    cases: definition.evals.map((evaluation) => (
+      campaignCase(evaluation, definition.evaluation.layer)
+    )),
     arms: [...definition.evaluation.arms],
     thresholds: {
       minimum_treatment_pass_rate:
@@ -487,6 +506,16 @@ function validateCampaignManifest(manifest, definition = null) {
     requireObject(evaluation, `manifest.cases[${index}]`);
     requireString(evaluation.id, `manifest.cases[${index}].id`);
     requireString(evaluation.name, `manifest.cases[${index}].name`);
+    if (manifest.layer === 'component') {
+      requireString(
+        evaluation.ablated_dependency,
+        `manifest.cases[${index}].ablated_dependency`,
+      );
+    } else if (evaluation.ablated_dependency !== undefined) {
+      throw new EvaluationContractError(
+        `manifest.cases[${index}].ablated_dependency is component-only`,
+      );
+    }
   }
   requireArray(manifest.arms, 'manifest.arms');
   requireObject(manifest.execution_configuration, 'manifest.execution_configuration');
@@ -531,10 +560,9 @@ function validateCampaignManifest(manifest, definition = null) {
       );
     }
     if (JSON.stringify(manifest.cases) !== JSON.stringify(
-      definition.evals.map((evaluation) => ({
-        id: String(evaluation.id),
-        name: evaluation.name,
-      })),
+      definition.evals.map((evaluation) => (
+        campaignCase(evaluation, definition.evaluation.layer)
+      )),
     )) {
       throw new EvaluationContractError('manifest cases do not match definition');
     }
@@ -544,6 +572,29 @@ function validateCampaignManifest(manifest, definition = null) {
 
 function caseId(caseDefinition) {
   return String(caseDefinition.id);
+}
+
+function manifestCaseFor(manifest, caseDefinition) {
+  const retainedCase = manifest.cases.find(({ id }) => id === caseId(caseDefinition));
+  if (!retainedCase) {
+    throw new EvaluationContractError(
+      `case ${caseId(caseDefinition)} is not declared by the campaign`,
+    );
+  }
+  return retainedCase;
+}
+
+function componentAblationFor(manifest, caseDefinition) {
+  const retainedCase = manifestCaseFor(manifest, caseDefinition);
+  if (caseDefinition.ablated_dependency !== retainedCase.ablated_dependency) {
+    throw new EvaluationContractError(
+      'component ablation does not match campaign definition',
+    );
+  }
+  return {
+    consumer: manifest.skill,
+    dependency: retainedCase.ablated_dependency,
+  };
 }
 
 function pairingId(manifest, caseDefinition, cell, repetition) {
@@ -578,6 +629,13 @@ function normalizedArm(manifest, caseDefinition, cell, repetition, arm) {
       armDefinition.ablated_dependency,
       'arm.ablated_dependency',
     );
+    const declaredDependency = componentAblationFor(
+      manifest,
+      caseDefinition,
+    ).dependency;
+    if (armDefinition.ablated_dependency !== declaredDependency) {
+      throw new EvaluationContractError('evaluation arm mismatch');
+    }
     normalized.ablated_dependency = armDefinition.ablated_dependency;
   }
   return normalized;
@@ -1006,7 +1064,6 @@ async function runComponentEvaluation({
   cell,
   repetition,
   adapter,
-  dependencyAblation,
   gradeOutput,
 }) {
   validateCampaignManifest(manifest);
@@ -1019,6 +1076,7 @@ async function runComponentEvaluation({
     throw new EvaluationContractError('component evaluation requires gradeOutput');
   }
   packageClosure(repositoryRoot, manifest.skill);
+  const dependencyAblation = componentAblationFor(manifest, caseDefinition);
   const records = [];
   for (const arm of ['treatment', 'component-ablation']) {
     const result = await executeTest({
@@ -1185,7 +1243,8 @@ function createBlindComparison({
   const controlArm = manifest.layer === 'component'
     ? {
       kind: 'component-ablation',
-      ablated_dependency: control.arm.ablated_dependency,
+      ablated_dependency:
+        componentAblationFor(manifest, caseDefinition).dependency,
     }
     : 'no-skill';
   validateRunEvidence({
@@ -1619,7 +1678,7 @@ function replayCampaign({ manifest, definition, runs, judgments }) {
           arm: manifest.layer === 'component'
             ? {
               kind: controlArm,
-              ablated_dependency: control.arm.ablated_dependency,
+              ablated_dependency: caseManifest.ablated_dependency,
             }
             : controlArm,
           record: control,
@@ -1873,9 +1932,38 @@ function buildAdoptionReport({
     ...new Set(allRuns.map(({ model }) => model.resolved).filter(Boolean)),
   ].sort();
   const treatment = runs.filter(({ arm }) => arm.kind === 'treatment');
-  const controls = runs.filter(({ arm }) => arm.kind === 'no-skill');
+  const controlKind = manifest.layer === 'component'
+    ? 'component-ablation'
+    : 'no-skill';
+  const controls = runs.filter(({ arm }) => arm.kind === controlKind);
   const succeeded = (records) => records
     .filter(({ execution }) => execution.status === 'succeeded').length;
+  const executionCost = (records) => records
+    .reduce((sum, { execution }) => sum + (execution.cost_usd || 0), 0);
+  const outcomeLines = manifest.layer === 'component'
+    ? [
+      `Complete consumer outcomes: ${
+        succeeded(treatment)
+      }/${treatment.length} succeeded`,
+      `Dependency-ablated control outcomes: ${
+        succeeded(controls)
+      }/${controls.length} succeeded`,
+      `Ablated dependency: ${
+        [...new Set(manifest.cases.map(
+          ({ ablated_dependency: dependency }) => dependency,
+        ))].sort().join(', ')
+      }`,
+      `Complete consumer cost (USD): ${executionCost(treatment).toFixed(2)}`,
+      `Dependency-ablated control cost (USD): ${
+        executionCost(controls).toFixed(2)
+      }`,
+    ]
+    : [
+      `No-Skill outcomes: ${succeeded(controls)}/${controls.length} succeeded`,
+      `Treatment outcomes: ${
+        succeeded(treatment)
+      }/${treatment.length} succeeded`,
+    ];
   const totalCost = [
     ...allRuns.map(({ execution }) => execution.cost_usd || 0),
     ...judgments.map(({ cost_usd: cost }) => cost || 0),
@@ -1918,8 +2006,7 @@ function buildAdoptionReport({
         : 'not retained'
     }`,
     `Repetitions: ${manifest.repetitions}`,
-    `No-Skill outcomes: ${succeeded(controls)}/${controls.length} succeeded`,
-    `Treatment outcomes: ${succeeded(treatment)}/${treatment.length} succeeded`,
+    ...outcomeLines,
     `Treatment win rate: ${replay.summary.treatment_win_rate.toFixed(2)}`,
     `Treatment expectation pass rate: ${
       replay.summary.treatment_expectation_pass_rate.toFixed(2)

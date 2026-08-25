@@ -18,7 +18,9 @@ The module provides:
 Production package closure always runs against the unmodified canonical graph
 before either matched arm or a component ablation. A missing dependency reports
 its exact canonical name. The evaluator never converts that failure into a
-No-Skill or ablated arm.
+No-Skill or ablated arm. Each component case declares `ablated_dependency` in
+the versioned definition; the campaign fingerprint covers that identity, and
+execution and replay reject retained arms that name a different dependency.
 
 `replayCampaign` and `replayTriggerCampaign` accept retained JSON values and
 have no host or judge callback. They validate complete cells, fingerprints,
@@ -28,6 +30,8 @@ replay requires its retained manifest and definition whenever the authoritative
 definition declares trigger cases. `buildAdoptionReport` renders those replay
 results, including the exact retained run and judgment fingerprints behind its
 verdict and costs, but does not write them or make a suite release decision.
+Outcome reports retain No-Skill/Treatment labels. Component reports identify
+the complete consumer, dependency-ablated control, and declared dependency.
 
 The Incident Investigation runner is the first live tracer. It stages the
 canonical Incident Investigation package in pristine projects and retains

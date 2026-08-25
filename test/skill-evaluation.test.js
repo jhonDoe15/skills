@@ -80,6 +80,9 @@ function testDefinition({
         files: [],
         expectations: ['The output stays read-only.'],
         required_signals: [],
+        ...(layer === 'component'
+          ? { ablated_dependency: 'writing-foundation' }
+          : {}),
       },
     ],
   };
@@ -328,6 +331,17 @@ test('shared schemas accept the normalized Incident Investigation definition', (
     definition: true,
     retainedEvidence: true,
   });
+
+  const componentWithoutAblation = testDefinition({
+    skill: 'agent-writing',
+    scope: 'agent-writing-component',
+    layer: 'component',
+  });
+  delete componentWithoutAblation.evals[0].ablated_dependency;
+  assert.throws(
+    () => validateEvaluationDefinition(componentWithoutAblation),
+    /ablated_dependency/,
+  );
 });
 
 test('suite-wide generated evaluation outputs stay ignored', () => {
@@ -876,6 +890,10 @@ test('component evaluation pairs complete and ablated consumers for offline repl
     layer: 'component',
   });
   const manifest = createManifest(definition);
+  assert.equal(
+    manifest.cases[0].ablated_dependency,
+    definition.evals[0].ablated_dependency,
+  );
   let adapterExecutions = 0;
   const adapter = defineTestAdapter({
     name: 'component-evaluation',
@@ -898,10 +916,6 @@ test('component evaluation pairs complete and ablated consumers for offline repl
     cell: manifest.cells[0],
     repetition: 1,
     adapter,
-    dependencyAblation: {
-      consumer: 'agent-writing',
-      dependency: 'writing-foundation',
-    },
     gradeOutput({ arm, output }) {
       const grade = gradeDeterministicOutput({
         definition,
@@ -962,6 +976,32 @@ test('component evaluation pairs complete and ablated consumers for offline repl
   assert.equal(replay.passed, true);
   assert.equal(replay.summary.expected_runs, 2);
 
+  const wrongDependency = structuredClone(ablated);
+  wrongDependency.arm.ablated_dependency = 'engineering-guidance';
+  wrongDependency.fingerprints.input = hash({
+    campaign_fingerprint: manifest.fingerprint,
+    definition_fingerprint: manifest.definition_fingerprint,
+    scope: manifest.scope,
+    skill: manifest.skill,
+    case: definition.evals[0],
+    host: manifest.cells[0].host,
+    model: manifest.cells[0].model,
+    repetition: 1,
+    arm: wrongDependency.arm,
+    package_revision: manifest.package_revision,
+    execution_configuration: manifest.execution_configuration,
+  });
+  reseal(wrongDependency);
+  assert.throws(
+    () => replayCampaign({
+      manifest,
+      definition,
+      runs: [complete, wrongDependency],
+      judgments: [judgment],
+    }),
+    /evaluation arm mismatch/,
+  );
+
   const incompleteRoot = createPackageFixture(t, ['agent-writing']);
   await assert.rejects(
     runComponentEvaluation({
@@ -971,15 +1011,109 @@ test('component evaluation pairs complete and ablated consumers for offline repl
       cell: manifest.cells[0],
       repetition: 1,
       adapter,
-      dependencyAblation: {
-        consumer: 'agent-writing',
-        dependency: 'writing-foundation',
-      },
       gradeOutput: passingGrade,
     }),
     /Missing internal dependency "writing-foundation"/,
   );
   assert.equal(adapterExecutions, 2);
+});
+
+test('component Adoption report counts the dependency-ablated control', () => {
+  const definition = testDefinition({
+    skill: 'agent-writing',
+    scope: 'agent-writing-to-writing-foundation',
+    layer: 'component',
+  });
+  const manifest = createManifest(definition);
+  const caseDefinition = definition.evals[0];
+  const cell = manifest.cells[0];
+  const completeOutput = 'Frame\nInventory\nMap\nRead-only investigation.';
+  const ablatedOutput = `${completeOutput}\nCOMPONENT_RAW_SENTINEL`;
+  const complete = createRunEvidence({
+    manifest,
+    caseDefinition,
+    cell,
+    repetition: 1,
+    arm: 'treatment',
+    result: normalizedResult({
+      skill: definition.skill_name,
+      model: cell.model,
+      output: completeOutput,
+      invokedSkills: ['writing-foundation', 'agent-writing'],
+    }),
+    deterministicGrade: gradeDeterministicOutput({
+      definition,
+      caseDefinition,
+      output: completeOutput,
+    }),
+  });
+  const ablated = createRunEvidence({
+    manifest,
+    caseDefinition,
+    cell,
+    repetition: 1,
+    arm: {
+      kind: 'component-ablation',
+      ablated_dependency: 'writing-foundation',
+    },
+    result: normalizedResult({
+      skill: definition.skill_name,
+      model: cell.model,
+      output: ablatedOutput,
+      invokedSkills: ['agent-writing'],
+    }),
+    deterministicGrade: {
+      ...gradeDeterministicOutput({
+        definition,
+        caseDefinition,
+        output: ablatedOutput,
+      }),
+      passed: true,
+      status: 'baseline',
+    },
+  });
+  const comparison = createBlindComparison({
+    manifest,
+    definition,
+    caseDefinition,
+    repetition: 1,
+    control: ablated,
+    treatment: complete,
+    judgeModel: 'judge-model',
+  });
+  const judgment = createJudgmentEvidence({
+    comparison,
+    definition,
+    caseDefinition,
+    judgeModel: 'judge-model',
+    judgment: structuredJudgment(comparison),
+    durationMs: 5,
+    costUsd: 0.02,
+  });
+  const runs = [complete, ablated];
+  const judgments = [judgment];
+  const replay = replayCampaign({
+    manifest,
+    definition,
+    runs,
+    judgments,
+  });
+  const report = buildAdoptionReport({
+    manifest,
+    definition,
+    replay,
+    runs,
+    judgments,
+  });
+
+  assert.match(report, /Complete consumer outcomes: 1\/1 succeeded/);
+  assert.match(report, /Dependency-ablated control outcomes: 1\/1 succeeded/);
+  assert.match(report, /Ablated dependency: writing-foundation/);
+  assert.match(report, /Complete consumer cost \(USD\): 0\.01/);
+  assert.match(report, /Dependency-ablated control cost \(USD\): 0\.01/);
+  assert.match(report, /Total cost \(USD\): 0\.04/);
+  assert.match(report, new RegExp(ablated.fingerprints.record));
+  assert.doesNotMatch(report, /COMPONENT_RAW_SENTINEL/);
 });
 
 test('blind comparison is seeded, untrusted, and blocked by a failed lower gate', async (t) => {
