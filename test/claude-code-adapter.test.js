@@ -54,6 +54,10 @@ function createPackageFixture(t, skillNames = [
 function createFakeClaude(t, {
   events,
   exitCode = 0,
+  pluginList = [],
+  pluginListExitCode = 0,
+  pluginListOutput = null,
+  pluginListStderr = '',
 }) {
   const fixtureRoot = fs.mkdtempSync(
     path.join(os.tmpdir(), 'fake-claude-command-'),
@@ -62,35 +66,64 @@ function createFakeClaude(t, {
 
   const commandPath = path.join(fixtureRoot, 'claude');
   const logPath = `${commandPath}.log`;
+  const pluginListStdout = pluginListOutput ?? JSON.stringify(pluginList);
   const script = `#!/usr/bin/env node
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
 
 const args = process.argv.slice(2);
-const skillsRoot = path.join(process.cwd(), '.claude', 'skills');
-const skills = fs.existsSync(skillsRoot)
-  ? fs.readdirSync(skillsRoot).sort()
-  : [];
-const definitions = Object.fromEntries(skills.map((name) => [
-  name,
-  fs.readFileSync(path.join(skillsRoot, name, 'SKILL.md'), 'utf8'),
-]));
-const stdin = fs.readFileSync(0, 'utf8');
-fs.writeFileSync(${JSON.stringify(logPath)}, JSON.stringify({
-  args,
+const environment = {
   autoMemoryDisabled: process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY,
   claudeAiConnectorsEnabled: process.env.ENABLE_CLAUDEAI_MCP_SERVERS,
-  cwd: process.cwd(),
-  definitions,
   hasClaudeCodeEnvironment: Object.hasOwn(process.env, 'CLAUDECODE'),
-  skills,
-  stdin,
-}));
-for (const event of ${JSON.stringify(events)}) {
-  process.stdout.write(JSON.stringify(event) + '\\n');
+};
+const isPluginListCommand = args.length === 3
+  && args[0] === 'plugin'
+  && args[1] === 'list'
+  && args[2] === '--json';
+
+function writeLog(record) {
+  fs.appendFileSync(
+    ${JSON.stringify(logPath)},
+    JSON.stringify(record) + '\\n',
+  );
 }
-process.exitCode = ${exitCode};
+
+if (isPluginListCommand) {
+  writeLog({
+    kind: 'plugin-list',
+    args,
+    cwd: process.cwd(),
+    environment,
+  });
+  process.stdout.write(${JSON.stringify(pluginListStdout)});
+  process.stderr.write(${JSON.stringify(pluginListStderr)});
+  process.exitCode = ${pluginListExitCode};
+} else {
+  const skillsRoot = path.join(process.cwd(), '.claude', 'skills');
+  const skills = fs.existsSync(skillsRoot)
+    ? fs.readdirSync(skillsRoot).sort()
+    : [];
+  const definitions = Object.fromEntries(skills.map((name) => [
+    name,
+    fs.readFileSync(path.join(skillsRoot, name, 'SKILL.md'), 'utf8'),
+  ]));
+  const stdin = fs.readFileSync(0, 'utf8');
+  writeLog({
+    kind: 'session',
+    args,
+    cwd: process.cwd(),
+    definitions,
+    environment,
+    skills,
+    stdin,
+  });
+  for (const event of ${JSON.stringify(events)}) {
+    process.stdout.write(JSON.stringify(event) + '\\n');
+  }
+  process.exitCode = ${exitCode};
+}
 `;
   fs.writeFileSync(commandPath, script, { mode: 0o755 });
 
@@ -98,7 +131,10 @@ process.exitCode = ${exitCode};
 }
 
 function readCommandLog(logPath) {
-  return JSON.parse(fs.readFileSync(logPath, 'utf8'));
+  return fs.readFileSync(logPath, 'utf8')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line));
 }
 
 function invocation(model = REQUESTED_MODEL) {
@@ -203,7 +239,7 @@ test('Claude Code Adapter executes the host-local Agent Writing tracer', async (
   assert.equal(result.durationMs, 17);
   assert.equal(result.costUsd, 0.012);
 
-  const execution = readCommandLog(fakeClaude.logPath);
+  const execution = readCommandLog(fakeClaude.logPath).at(-1);
   assert.deepEqual(execution.skills, ['agent-writing', 'writing-foundation']);
   assert.match(
     execution.definitions['agent-writing'],
@@ -213,7 +249,7 @@ test('Claude Code Adapter executes the host-local Agent Writing tracer', async (
     execution.definitions['agent-writing'],
     /Record that execution reached this canonical dependency/,
   );
-  assert.equal(execution.hasClaudeCodeEnvironment, false);
+  assert.equal(execution.environment.hasClaudeCodeEnvironment, false);
   assert.equal(fs.existsSync(execution.cwd), false);
 
   assert.equal(
@@ -257,7 +293,15 @@ test('Claude Code Adapter executes the host-local Agent Writing tracer', async (
 
 test('Claude Code Adapter suppresses controllable ambient host state', async (t) => {
   const fixtureRoot = createPackageFixture(t);
-  const fakeClaude = createFakeClaude(t, { events: successEvents() });
+  const hostilePluginId = 'hostile@"},"hooks":{"PreToolUse":true';
+  const fakeClaude = createFakeClaude(t, {
+    events: successEvents(),
+    pluginList: [
+      { id: 'formatter@company-tools' },
+      { id: hostilePluginId },
+      { id: 'reviewer@company-tools' },
+    ],
+  });
   const adapter = createClaudeCodeAdapter({
     skillsRoot: path.join(fixtureRoot, 'skills'),
     command: fakeClaude.commandPath,
@@ -270,9 +314,17 @@ test('Claude Code Adapter suppresses controllable ambient host state', async (t)
     invocation: invocation(),
   });
 
-  const execution = readCommandLog(fakeClaude.logPath);
-  assert.equal(execution.autoMemoryDisabled, '1');
-  assert.equal(execution.claudeAiConnectorsEnabled, 'false');
+  const invocations = readCommandLog(fakeClaude.logPath);
+  assert.deepEqual(invocations.map(({ kind }) => kind), [
+    'plugin-list',
+    'session',
+  ]);
+  const [enumeration, execution] = invocations;
+  assert.deepEqual(enumeration.args, ['plugin', 'list', '--json']);
+  assert.equal(enumeration.cwd, execution.cwd);
+  assert.deepEqual(enumeration.environment, execution.environment);
+  assert.equal(execution.environment.autoMemoryDisabled, '1');
+  assert.equal(execution.environment.claudeAiConnectorsEnabled, 'false');
   assert.ok(execution.args.includes('--no-chrome'));
   assert.ok(execution.args.includes('--strict-mcp-config'));
 
@@ -287,8 +339,86 @@ test('Claude Code Adapter suppresses controllable ambient host state', async (t)
     autoMemoryEnabled: false,
     disableAllHooks: true,
     disableClaudeAiConnectors: true,
+    enabledPlugins: {
+      'formatter@company-tools': false,
+      [hostilePluginId]: false,
+      'reviewer@company-tools': false,
+    },
   });
-  assert.equal(Object.hasOwn(settings, 'enabledPlugins'), false);
+  assert.equal(execution.args.includes(hostilePluginId), false);
+});
+
+test('Claude Code Adapter fails before execution when plugin enumeration fails', async (t) => {
+  const fixtureRoot = createPackageFixture(t);
+  const fakeClaude = createFakeClaude(t, {
+    events: successEvents(),
+    pluginListExitCode: 2,
+    pluginListStderr: 'sensitive host detail',
+  });
+  const adapter = createClaudeCodeAdapter({
+    skillsRoot: path.join(fixtureRoot, 'skills'),
+    command: fakeClaude.commandPath,
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+
+  const result = await executeProduction({
+    repositoryRoot: fixtureRoot,
+    adapter,
+    invocation: invocation(),
+  });
+
+  assert.equal(result.status, 'failed');
+  assert.deepEqual(result.failure, {
+    stage: 'startup',
+    code: 'claude-plugin-enumeration-failed',
+    message: 'Claude Code plugin enumeration failed before session startup',
+  });
+  assert.deepEqual(result.observations.toolUses, []);
+  assert.equal(result.model.resolved, null);
+  assert.deepEqual(
+    readCommandLog(fakeClaude.logPath).map(({ kind }) => kind),
+    ['plugin-list'],
+  );
+  assert.doesNotMatch(JSON.stringify(result), /sensitive host detail/);
+});
+
+test('Claude Code Adapter rejects invalid plugin enumeration output', async (t) => {
+  const invalidOutputs = [
+    'not JSON',
+    '{}',
+    '[{"id":""}]',
+    '[{"id":42}]',
+  ];
+
+  for (const pluginListOutput of invalidOutputs) {
+    const fixtureRoot = createPackageFixture(t);
+    const fakeClaude = createFakeClaude(t, {
+      events: successEvents(),
+      pluginListOutput,
+    });
+    const adapter = createClaudeCodeAdapter({
+      skillsRoot: path.join(fixtureRoot, 'skills'),
+      command: fakeClaude.commandPath,
+      timeoutMs: TEST_TIMEOUT_MS,
+    });
+
+    const result = await executeProduction({
+      repositoryRoot: fixtureRoot,
+      adapter,
+      invocation: invocation(),
+    });
+
+    assert.equal(result.status, 'failed');
+    assert.deepEqual(result.failure, {
+      stage: 'setup',
+      code: 'claude-plugin-enumeration-invalid',
+      message: 'Claude Code plugin enumeration returned invalid output',
+    });
+    assert.deepEqual(
+      readCommandLog(fakeClaude.logPath).map(({ kind }) => kind),
+      ['plugin-list'],
+    );
+  }
 });
 
 test('Claude tracer fixture declares a matched No-Skill control outside package construction', (t) => {
@@ -471,7 +601,7 @@ test('Claude Code Adapter returns setup failure before session startup', async (
   assert.equal(fs.existsSync(fakeClaude.logPath), false);
 });
 
-test('Claude Code Adapter returns startup failure when Claude cannot launch', async (t) => {
+test('Claude Code Adapter returns startup failure when plugin enumeration cannot launch', async (t) => {
   const fixtureRoot = createPackageFixture(t);
   const adapter = createClaudeCodeAdapter({
     skillsRoot: path.join(fixtureRoot, 'skills'),
@@ -487,8 +617,11 @@ test('Claude Code Adapter returns startup failure when Claude cannot launch', as
 
   assert.equal(result.status, 'failed');
   assert.equal(result.failure.stage, 'startup');
-  assert.equal(result.failure.code, 'claude-not-started');
-  assert.match(result.failure.message, /^Claude Code failed to start:/);
+  assert.equal(result.failure.code, 'claude-plugin-enumeration-failed');
+  assert.equal(
+    result.failure.message,
+    'Claude Code plugin enumeration failed before session startup',
+  );
   assert.deepEqual(result.observations.responses, []);
   assert.deepEqual(result.observations.toolUses, []);
   assert.equal(result.model.resolved, null);

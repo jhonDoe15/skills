@@ -12,12 +12,29 @@ const {
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1_000;
 const MAX_OUTPUT_BYTES = 20 * 1024 * 1024;
+const MAX_PLUGIN_LIST_BYTES = 1024 * 1024;
+const PLUGIN_LIST_TIMEOUT_MS = 30_000;
 const EMPTY_MCP_CONFIG = JSON.stringify({ mcpServers: {} });
-const ISOLATED_SESSION_SETTINGS = JSON.stringify({
+const BASE_SESSION_SETTINGS = Object.freeze({
   autoMemoryEnabled: false,
   disableAllHooks: true,
   disableClaudeAiConnectors: true,
 });
+const PLUGIN_ENUMERATION_TIMEOUT = {
+  stage: 'startup',
+  code: 'claude-plugin-enumeration-timeout',
+  message: 'Claude Code plugin enumeration timed out before session startup',
+};
+const PLUGIN_ENUMERATION_FAILED = {
+  stage: 'startup',
+  code: 'claude-plugin-enumeration-failed',
+  message: 'Claude Code plugin enumeration failed before session startup',
+};
+const PLUGIN_ENUMERATION_INVALID = {
+  stage: 'setup',
+  code: 'claude-plugin-enumeration-invalid',
+  message: 'Claude Code plugin enumeration returned invalid output',
+};
 const MUTATION_OPERATIONS = new Map([
   ['Write', 'write'],
   ['Edit', 'edit'],
@@ -29,6 +46,15 @@ class ClaudeProjectSetupError extends Error {
   constructor(skillName) {
     super(`missing Skill source "${skillName}"`);
     this.name = 'ClaudeProjectSetupError';
+  }
+}
+
+class ClaudePluginEnumerationError extends Error {
+  constructor({ stage, code, message }) {
+    super(message);
+    this.name = 'ClaudePluginEnumerationError';
+    this.stage = stage;
+    this.code = code;
   }
 }
 
@@ -83,6 +109,58 @@ function createIsolatedProject(skillsRoot, resolvedSkills) {
 
 function cleanupProject(project) {
   if (project) fs.rmSync(project, { recursive: true, force: true });
+}
+
+function createSanitizedEnvironment() {
+  const environment = { ...process.env };
+  delete environment.CLAUDECODE;
+  environment.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1';
+  environment.ENABLE_CLAUDEAI_MCP_SERVERS = 'false';
+  return environment;
+}
+
+function isValidPlugin(plugin) {
+  return plugin !== null
+    && typeof plugin === 'object'
+    && !Array.isArray(plugin)
+    && typeof plugin.id === 'string'
+    && plugin.id.length > 0;
+}
+
+function parsePluginIds(output) {
+  let plugins;
+  try {
+    plugins = JSON.parse(output);
+  } catch {
+    throw new ClaudePluginEnumerationError(PLUGIN_ENUMERATION_INVALID);
+  }
+
+  if (!Array.isArray(plugins) || !plugins.every(isValidPlugin)) {
+    throw new ClaudePluginEnumerationError(PLUGIN_ENUMERATION_INVALID);
+  }
+
+  return plugins.map(({ id }) => id);
+}
+
+function enumeratePluginIds(command, project, environment, timeoutMs) {
+  const result = spawnSync(command, ['plugin', 'list', '--json'], {
+    cwd: project,
+    env: environment,
+    encoding: 'utf8',
+    timeout: Math.min(timeoutMs, PLUGIN_LIST_TIMEOUT_MS),
+    killSignal: 'SIGKILL',
+    maxBuffer: MAX_PLUGIN_LIST_BYTES,
+    shell: false,
+  });
+
+  if (result.error?.code === 'ETIMEDOUT') {
+    throw new ClaudePluginEnumerationError(PLUGIN_ENUMERATION_TIMEOUT);
+  }
+  if (result.error || result.status !== 0) {
+    throw new ClaudePluginEnumerationError(PLUGIN_ENUMERATION_FAILED);
+  }
+
+  return parsePluginIds(result.stdout);
 }
 
 function readSkillInvocation(input, resolvedSkills) {
@@ -273,13 +351,17 @@ function failedResult({
   };
 }
 
-function claudeArguments(invocation, maxBudgetUsd) {
+function claudeArguments(invocation, maxBudgetUsd, pluginIds) {
+  const sessionSettings = JSON.stringify({
+    ...BASE_SESSION_SETTINGS,
+    enabledPlugins: Object.fromEntries(pluginIds.map((id) => [id, false])),
+  });
   const arguments_ = [
     '-p',
     '--setting-sources',
     'project',
     '--settings',
-    ISOLATED_SESSION_SETTINGS,
+    sessionSettings,
     '--strict-mcp-config',
     '--mcp-config',
     EMPTY_MCP_CONFIG,
@@ -351,13 +433,31 @@ function createClaudeCodeAdapter({
           });
         }
 
-        const environment = { ...process.env };
-        delete environment.CLAUDECODE;
-        environment.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1';
-        environment.ENABLE_CLAUDEAI_MCP_SERVERS = 'false';
+        const environment = createSanitizedEnvironment();
+        let pluginIds;
+        try {
+          pluginIds = enumeratePluginIds(
+            command,
+            project,
+            environment,
+            timeoutMs,
+          );
+        } catch (error) {
+          const enumerationError = error instanceof ClaudePluginEnumerationError
+            ? error
+            : new ClaudePluginEnumerationError(PLUGIN_ENUMERATION_FAILED);
+          return failedResult({
+            invocation,
+            context,
+            stage: enumerationError.stage,
+            code: enumerationError.code,
+            message: enumerationError.message,
+            elapsedMs: Date.now() - startedAt,
+          });
+        }
         const processResult = spawnSync(
           command,
-          claudeArguments(invocation, maxBudgetUsd),
+          claudeArguments(invocation, maxBudgetUsd, pluginIds),
           {
             cwd: project,
             env: environment,
