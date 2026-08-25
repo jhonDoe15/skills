@@ -64,15 +64,9 @@ function normalizeTarget(args, projectRoot, toolName) {
   return relative.split(path.sep).join('/');
 }
 
-function observedSkillName(rawName, args, projectRoot) {
-  if (!args || typeof args !== 'object') return null;
-  if (/skill/i.test(String(rawName || ''))) {
-    const directName = args.skillName || args.skill_name || args.skill;
-    if (typeof directName === 'string' && /^[a-z0-9-]+$/.test(directName)) {
-      return directName;
-    }
-  }
-  const target = normalizeTarget(args, projectRoot, 'read');
+function observedSkillReadName(normalizedToolName, args, projectRoot) {
+  if (normalizedToolName !== 'read' || !args || typeof args !== 'object') return null;
+  const target = normalizeTarget(args, projectRoot, normalizedToolName);
   const match = /^(?:\.cursor|\.agents)\/skills\/([^/]+)\/SKILL\.md$/.exec(target);
   return match && /^[a-z0-9-]+$/.test(match[1]) ? match[1] : null;
 }
@@ -99,8 +93,8 @@ function collectStreamEvidence(
     : `unidentified-${calls.size}`;
   const previous = calls.get(callId);
   const name = normalizeToolName(event.name || previous?.rawName);
-  const skillName = observedSkillName(
-    event.name || previous?.rawName,
+  const skillName = observedSkillReadName(
+    name,
     event.args || previous?.args,
     projectRoot,
   );

@@ -549,6 +549,84 @@ test('Cursor Adapter does not present canonical resolution as observed invocatio
   );
 });
 
+test('Cursor Adapter observes only completed read-class Skill operations', async (t) => {
+  const cases = [
+    { label: 'read', name: 'read', observed: true },
+    { label: 'write', name: 'write', observed: false },
+    { label: 'edit', name: 'edit', observed: false },
+    { label: 'delete', name: 'delete', observed: false },
+    { label: 'move', name: 'move', observed: false },
+    { label: 'shell', name: 'shell', observed: false },
+    { label: 'search', name: 'search', observed: false },
+    { label: 'generateImage', name: 'generateImage', observed: false },
+    { label: 'applyAgentDiff', name: 'applyAgentDiff', observed: false },
+    {
+      label: 'read with empty Skill name',
+      name: 'read',
+      observed: false,
+      args: { path: '.cursor/skills//SKILL.md' },
+    },
+    {
+      label: 'ambiguous raw Skill name',
+      name: 'invokeSkill',
+      observed: false,
+      args: { skillName: 'agent-writing' },
+    },
+  ];
+
+  for (const {
+    args = { path: '.cursor/skills/agent-writing/SKILL.md' },
+    label,
+    name,
+    observed,
+  } of cases) {
+    await t.test(label, async (caseTest) => {
+      const repositoryRoot = createTracerPackage(
+        caseTest,
+        canonicalRepositoryRoot,
+      );
+      const callId = `canonical-skill-${name}`;
+      const adapter = createCursorAdapter({
+        repositoryRoot,
+        sdk: createSuccessfulSdk({}, {
+          emitSkillReads: false,
+          toolEvents: [
+            {
+              type: 'tool_call',
+              call_id: callId,
+              name,
+              status: 'running',
+              args,
+            },
+            {
+              type: 'tool_call',
+              call_id: callId,
+              status: 'completed',
+            },
+          ],
+        }),
+      });
+
+      const result = await executeProduction({
+        repositoryRoot,
+        adapter,
+        invocation: tracerInvocation(),
+      });
+      const invocationEvidence = result.observations.responses.find(({ text }) => (
+        text.includes('"kind":"cursor-observed-skill-invocations"')
+      ));
+
+      assert.equal(Boolean(invocationEvidence), observed);
+      if (observed) {
+        assert.deepEqual(JSON.parse(invocationEvidence.text), {
+          kind: 'cursor-observed-skill-invocations',
+          invokedSkills: ['agent-writing'],
+        });
+      }
+    });
+  }
+});
+
 test('Cursor Adapter does not observe failed or cancelled Skill reads', async (t) => {
   const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
   const toolEvents = [
