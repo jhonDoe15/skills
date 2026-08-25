@@ -67,7 +67,13 @@ function skillReadEvents(skill) {
 
 function createSuccessfulSdk(
   observation,
-  { emitSkillReads = true, writeAdditionalArtifacts } = {},
+  {
+    createRunResult,
+    disposeError,
+    emitSkillReads = true,
+    toolEvents = [],
+    writeAdditionalArtifacts,
+  } = {},
 ) {
   class JsonlLocalAgentStore {
     constructor(directory) {
@@ -96,11 +102,13 @@ function createSuccessfulSdk(
           observation.cancelled = true;
         },
         async *stream() {
+          observation.timeline?.push('stream');
           if (emitSkillReads) {
             for (const skill of ['agent-writing', 'writing-foundation']) {
               yield* skillReadEvents(skill);
             }
           }
+          for (const event of toolEvents) yield event;
           yield {
             type: 'assistant',
             message: {
@@ -140,13 +148,14 @@ function createSuccessfulSdk(
         },
         async wait() {
           observation.waited = true;
-          return {
+          const result = {
             id: this.id,
             status: 'finished',
             result: output,
             model: { id: 'resolved-cursor-model' },
             durationMs: 42,
           };
+          return createRunResult ? createRunResult(result) : result;
         },
       };
 
@@ -154,6 +163,7 @@ function createSuccessfulSdk(
         agentId: 'cursor-agent-1',
         async send(prompt) {
           observation.prompt = prompt;
+          observation.timeline?.push('send');
           return run;
         },
         async getUsage() {
@@ -165,6 +175,7 @@ function createSuccessfulSdk(
         },
         async [Symbol.asyncDispose]() {
           observation.disposed = true;
+          if (disposeError) throw disposeError;
         },
       };
     },
@@ -272,6 +283,140 @@ test('Cursor Adapter executes the tracer in a pristine project and normalizes ev
   );
 });
 
+test('Cursor Adapter reports run identifiers before streaming', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const observation = { timeline: [] };
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk(observation),
+    onRunStarted(ids) {
+      observation.ids = ids;
+      observation.timeline.push('callback');
+    },
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  });
+
+  assert.equal(result.status, 'succeeded');
+  assert.deepEqual(observation.ids, {
+    agentId: 'cursor-agent-1',
+    runId: 'cursor-run-1',
+  });
+  assert.deepEqual(observation.timeline.slice(0, 3), [
+    'send',
+    'callback',
+    'stream',
+  ]);
+  assert.equal(
+    result.observations.responses.some(({ text }) => (
+      text.includes('cursor-agent-1') || text.includes('cursor-run-1')
+    )),
+    false,
+  );
+});
+
+test('Cursor Adapter normalizes SDK image and agent diff mutations', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const toolEvents = [
+    {
+      type: 'tool_call',
+      call_id: 'image-attempted',
+      name: 'generateImage',
+      status: 'running',
+      args: { filePath: 'images/pending.png' },
+    },
+    {
+      type: 'tool_call',
+      call_id: 'image-succeeded',
+      name: 'generateImage',
+      status: 'running',
+      args: { filePath: 'images/done.png' },
+    },
+    {
+      type: 'tool_call',
+      call_id: 'image-succeeded',
+      name: 'generateImage',
+      status: 'completed',
+      result: { filePath: 'images/done.png' },
+    },
+    {
+      type: 'tool_call',
+      call_id: 'image-failed',
+      name: 'generateImage',
+      status: 'error',
+      args: { filePath: '../outside.png' },
+    },
+    {
+      type: 'tool_call',
+      call_id: 'diff-attempted',
+      name: 'applyAgentDiff',
+      status: 'running',
+      args: { path: 'src/pending.js' },
+    },
+    {
+      type: 'tool_call',
+      call_id: 'diff-succeeded',
+      name: 'applyAgentDiff',
+      status: 'running',
+      args: { path: 'src/done.js' },
+    },
+    {
+      type: 'tool_call',
+      call_id: 'diff-succeeded',
+      name: 'applyAgentDiff',
+      status: 'completed',
+    },
+    {
+      type: 'tool_call',
+      call_id: 'diff-failed',
+      name: 'applyAgentDiff',
+      status: 'error',
+      args: {},
+    },
+  ];
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk({}, { toolEvents }),
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  });
+
+  for (const expected of [
+    { name: 'write', outcome: 'attempted' },
+    { name: 'write', outcome: 'succeeded' },
+    { name: 'write', outcome: 'failed' },
+    { name: 'edit', outcome: 'attempted' },
+    { name: 'edit', outcome: 'succeeded' },
+    { name: 'edit', outcome: 'failed' },
+  ]) {
+    assert.ok(result.observations.toolUses.some((toolUse) => (
+      toolUse.name === expected.name && toolUse.outcome === expected.outcome
+    )));
+  }
+  for (const expected of [
+    { operation: 'write', target: 'images/pending.png', outcome: 'attempted' },
+    { operation: 'write', target: 'images/done.png', outcome: 'succeeded' },
+    { operation: 'write', target: 'outside-workspace', outcome: 'failed' },
+    { operation: 'edit', target: 'src/pending.js', outcome: 'attempted' },
+    { operation: 'edit', target: 'src/done.js', outcome: 'succeeded' },
+    { operation: 'edit', target: 'workspace', outcome: 'failed' },
+  ]) {
+    assert.ok(result.observations.attemptedMutations.some((mutation) => (
+      mutation.operation === expected.operation
+        && mutation.target === expected.target
+        && mutation.outcome === expected.outcome
+    )));
+  }
+});
+
 test('Cursor Adapter does not present canonical resolution as observed invocation', async (t) => {
   const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
   const adapter = createCursorAdapter({
@@ -354,6 +499,75 @@ test('Cursor Adapter returns bounded safe artifact snapshots', async (t) => {
     false,
   );
   assert.equal(fs.existsSync(observation.createOptions.local.cwd), false);
+});
+
+test('Cursor Adapter normalizes post-run exceptions and still disposes resources', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const observation = {};
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk(observation, {
+      disposeError: new Error('disposal also failed'),
+      createRunResult(result) {
+        return {
+          ...result,
+          get model() {
+            throw new Error('normalization exploded');
+          },
+        };
+      },
+    }),
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  });
+
+  assert.equal(result.status, 'failed');
+  assert.deepEqual(result.failure, {
+    stage: 'result-normalization',
+    code: 'cursor-result-normalization-failed',
+    message: 'normalization exploded',
+  });
+  assert.equal(observation.disposed, true);
+  assert.equal(fs.existsSync(observation.createOptions.local.cwd), false);
+  assert.equal(fs.existsSync(observation.storeDirectory), false);
+});
+
+test('Cursor Adapter normalizes cleanup failure after disposing resources', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const observation = {};
+  const originalRmSync = fs.rmSync;
+  fs.rmSync = function removeThenReportFailure(target, options) {
+    originalRmSync(target, options);
+    if (path.basename(target).startsWith('cursor-suite-execution-')) {
+      throw new Error(`cleanup failed for ${target}`);
+    }
+  };
+  t.after(() => {
+    fs.rmSync = originalRmSync;
+  });
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk(observation),
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  });
+
+  assert.equal(result.status, 'failed');
+  assert.equal(result.failure.stage, 'execution');
+  assert.equal(result.failure.code, 'cursor-temporary-cleanup-failed');
+  assert.equal(result.failure.message.includes('<temporary-project>'), true);
+  assert.equal(result.failure.message.includes(observation.createOptions.local.cwd), false);
+  assert.equal(observation.disposed, true);
+  assert.equal(fs.existsSync(observation.createOptions.local.cwd), false);
+  assert.equal(fs.existsSync(observation.storeDirectory), false);
 });
 
 test('Cursor Adapter reports project setup failure without executing an agent', async (t) => {

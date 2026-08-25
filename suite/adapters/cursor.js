@@ -24,6 +24,8 @@ function copyResolvedSkills(repositoryRoot, projectRoot, resolvedSkills) {
 
 function normalizeToolName(name) {
   const normalized = String(name || '').toLowerCase();
+  if (normalized === 'generateimage') return 'write';
+  if (normalized === 'applyagentdiff') return 'edit';
   if (/write|create/.test(normalized)) return 'write';
   if (/edit|replace|patch/.test(normalized)) return 'edit';
   if (/delete|remove/.test(normalized)) return 'delete';
@@ -414,6 +416,16 @@ async function cancelAndWait(run) {
   return null;
 }
 
+function normalizeSdkId(value) {
+  if (typeof value !== 'string'
+    || value.length === 0
+    || value.length > 256
+    || !/^[A-Za-z0-9._:-]+$/.test(value)) {
+    return null;
+  }
+  return value;
+}
+
 async function executeCursor({
   invocation,
   context,
@@ -421,6 +433,7 @@ async function executeCursor({
   sdk,
   apiKey,
   temporaryRoot,
+  onRunStarted,
 }) {
   const startedAt = Date.now();
   let cursorSdk;
@@ -449,174 +462,219 @@ async function executeCursor({
   let failureStage = 'setup';
   let fallbackCode = 'cursor-setup-failed';
   let costUsd = null;
+  let resolvedModel = null;
+  let durationMs = null;
+  let normalized = null;
+  let cleanupFailure = null;
+  let artifacts = [];
+  let artifactScanTruncated = false;
   const calls = new Map();
   const responseTexts = [];
   const observedSkills = [];
 
   try {
-    executionRoot = fs.mkdtempSync(
-      path.join(temporaryRoot, 'cursor-suite-execution-'),
-    );
-    projectRoot = path.join(executionRoot, 'project');
-    storeRoot = path.join(executionRoot, 'store');
-    fs.mkdirSync(projectRoot);
-    copyResolvedSkills(repositoryRoot, projectRoot, context.resolvedSkills);
-    const store = new cursorSdk.JsonlLocalAgentStore(storeRoot);
-
-    failureStage = 'startup';
-    fallbackCode = 'cursor-startup-failed';
-    agent = await cursorSdk.Agent.create({
-      apiKey,
-      model: { id: invocation.model },
-      local: {
-        cwd: projectRoot,
-        settingSources: ['project'],
-        sandboxOptions: { enabled: true },
-        store,
-      },
-    });
-
-    run = await agent.send(invocation.prompt);
-    failureStage = 'execution';
-    fallbackCode = 'cursor-execution-failed';
-    for await (const event of run.stream()) {
-      collectStreamEvidence(
-        event,
-        projectRoot,
-        calls,
-        responseTexts,
-        observedSkills,
+    try {
+      executionRoot = fs.mkdtempSync(
+        path.join(temporaryRoot, 'cursor-suite-execution-'),
       );
-    }
-    runResult = await run.wait();
-  } catch (error) {
-    failureError = error;
-    if (run) {
-      try {
-        runResult = await cancelAndWait(run);
-      } catch {
-        // The original run failure remains the actionable error.
+      projectRoot = path.join(executionRoot, 'project');
+      storeRoot = path.join(executionRoot, 'store');
+      fs.mkdirSync(projectRoot);
+      copyResolvedSkills(repositoryRoot, projectRoot, context.resolvedSkills);
+      const store = new cursorSdk.JsonlLocalAgentStore(storeRoot);
+
+      failureStage = 'startup';
+      fallbackCode = 'cursor-startup-failed';
+      agent = await cursorSdk.Agent.create({
+        apiKey,
+        model: { id: invocation.model },
+        local: {
+          cwd: projectRoot,
+          settingSources: ['project'],
+          sandboxOptions: { enabled: true },
+          store,
+        },
+      });
+
+      run = await agent.send(invocation.prompt);
+      if (typeof onRunStarted === 'function') {
+        try {
+          await onRunStarted({
+            agentId: normalizeSdkId(agent.agentId),
+            runId: normalizeSdkId(run.id),
+          });
+        } catch {
+          // Observability must not change execution semantics.
+        }
+      }
+      failureStage = 'execution';
+      fallbackCode = 'cursor-execution-failed';
+      for await (const event of run.stream()) {
+        collectStreamEvidence(
+          event,
+          projectRoot,
+          calls,
+          responseTexts,
+          observedSkills,
+        );
+      }
+      runResult = await run.wait();
+    } catch (error) {
+      failureError = error;
+      if (run) {
+        try {
+          runResult = await cancelAndWait(run);
+        } catch {
+          // The original run failure remains the actionable error.
+        }
       }
     }
-  }
 
-  if (agent) {
-    try {
-      const usage = await agent.getUsage();
-      costUsd = Number.isFinite(usage.cost?.chargedCents)
-        ? usage.cost.chargedCents / 100
-        : null;
-    } catch {
-      costUsd = null;
+    if (agent) {
+      try {
+        const usage = await agent.getUsage();
+        costUsd = Number.isFinite(usage.cost?.chargedCents)
+          ? usage.cost.chargedCents / 100
+          : null;
+      } catch {
+        costUsd = null;
+      }
     }
-  }
 
-  let artifacts = [];
-  let artifactScanTruncated = false;
-  if (projectRoot && fs.existsSync(projectRoot)) {
-    try {
+    if (projectRoot && fs.existsSync(projectRoot)) {
       const generatedFiles = listGeneratedFiles(projectRoot);
       artifacts = generatedFiles.files.map((file) => (
         snapshotArtifact(projectRoot, file)
       ));
       artifactScanTruncated = generatedFiles.truncated;
-    } catch (error) {
-      if (!failureError) {
-        failureError = error;
-        failureStage = 'result-normalization';
-        fallbackCode = 'cursor-result-normalization-failed';
-      }
     }
-  }
 
-  if (!failureError && runResult?.status !== 'finished') {
-    failureError = Object.assign(
-      new Error(runResult?.error?.message || `Cursor run ${runResult?.status || 'failed'}`),
-      { code: runResult?.error?.code || `cursor-run-${runResult?.status || 'failed'}` },
-    );
-    failureStage = 'execution';
-    fallbackCode = 'cursor-execution-failed';
-  }
+    if (!failureError && runResult?.status !== 'finished') {
+      failureError = Object.assign(
+        new Error(
+          runResult?.error?.message
+            || `Cursor run ${runResult?.status || 'failed'}`,
+        ),
+        {
+          code: runResult?.error?.code
+            || `cursor-run-${runResult?.status || 'failed'}`,
+        },
+      );
+      failureStage = 'execution';
+      fallbackCode = 'cursor-execution-failed';
+    }
 
-  if (!failureError
-    && (typeof runResult?.result !== 'string'
-      || runResult.result.length === 0
-      || typeof runResult?.model?.id !== 'string'
-      || runResult.model.id.length === 0
-      || !Number.isFinite(runResult.durationMs)
-      || runResult.durationMs < 0)) {
-    failureError = Object.assign(
-      new Error('Cursor run returned incomplete normalized evidence'),
-      { code: 'cursor-result-incomplete' },
-    );
-    failureStage = 'result-normalization';
-    fallbackCode = 'cursor-result-normalization-failed';
-  }
+    if (!failureError
+      && (typeof runResult?.result !== 'string'
+        || runResult.result.length === 0
+        || typeof runResult?.model?.id !== 'string'
+        || runResult.model.id.length === 0
+        || !Number.isFinite(runResult.durationMs)
+        || runResult.durationMs < 0)) {
+      failureError = Object.assign(
+        new Error('Cursor run returned incomplete normalized evidence'),
+        { code: 'cursor-result-incomplete' },
+      );
+      failureStage = 'result-normalization';
+      fallbackCode = 'cursor-result-normalization-failed';
+    }
 
-  const resolvedModel = typeof runResult?.model?.id === 'string'
-    ? runResult.model.id
-    : typeof agent?.model?.id === 'string'
-      ? agent.model.id
-      : null;
-  const durationMs = Number.isFinite(runResult?.durationMs)
-    ? runResult.durationMs
-    : Date.now() - startedAt;
-  let normalized = failureError
-    ? failedResult({
-      invocation,
-      context,
-      stage: failureStage,
-      error: failureError,
-      fallbackCode,
-      executionRoot,
-      durationMs,
-      costUsd,
-      resolvedModel,
-      calls,
-      artifacts,
-      responseTexts: [
-        ...responseTexts,
-        ...(typeof runResult?.result === 'string' ? [runResult.result] : []),
-      ],
-      observedSkills,
-      artifactScanTruncated,
-    })
-    : successfulResult(
-      invocation,
-      context,
-      runResult,
-      costUsd,
-      calls,
-      artifacts,
-      observedSkills,
-      artifactScanTruncated,
-    );
-
-  try {
-    if (agent) await agent[Symbol.asyncDispose]();
-  } catch (error) {
-    if (normalized.status === 'succeeded') {
-      normalized = failedResult({
+    if (typeof runResult?.model?.id === 'string') {
+      resolvedModel = runResult.model.id;
+    } else if (typeof agent?.model?.id === 'string') {
+      resolvedModel = agent.model.id;
+    }
+    durationMs = Number.isFinite(runResult?.durationMs)
+      ? runResult.durationMs
+      : Date.now() - startedAt;
+    normalized = failureError
+      ? failedResult({
         invocation,
         context,
-        stage: 'execution',
-        error,
-        fallbackCode: 'cursor-agent-disposal-failed',
+        stage: failureStage,
+        error: failureError,
+        fallbackCode,
         executionRoot,
         durationMs,
         costUsd,
         resolvedModel,
         calls,
         artifacts,
-        responseTexts: [runResult.result],
+        responseTexts: [
+          ...responseTexts,
+          ...(typeof runResult?.result === 'string' ? [runResult.result] : []),
+        ],
         observedSkills,
         artifactScanTruncated,
-      });
+      })
+      : successfulResult(
+        invocation,
+        context,
+        runResult,
+        costUsd,
+        calls,
+        artifacts,
+        observedSkills,
+        artifactScanTruncated,
+      );
+  } catch (error) {
+    if (!failureError) {
+      failureError = error;
+      failureStage = 'result-normalization';
+      fallbackCode = 'cursor-result-normalization-failed';
     }
   } finally {
-    if (executionRoot) {
-      fs.rmSync(executionRoot, { recursive: true, force: true });
+    if (run && !runResult) {
+      try {
+        runResult = await cancelAndWait(run);
+      } catch (error) {
+        cleanupFailure = {
+          error,
+          fallbackCode: 'cursor-run-cleanup-failed',
+        };
+      }
     }
+    if (agent) {
+      try {
+        await agent[Symbol.asyncDispose]();
+      } catch (error) {
+        cleanupFailure ||= {
+          error,
+          fallbackCode: 'cursor-agent-disposal-failed',
+        };
+      }
+    }
+    if (executionRoot) {
+      try {
+        fs.rmSync(executionRoot, { recursive: true, force: true });
+      } catch (error) {
+        cleanupFailure ||= {
+          error,
+          fallbackCode: 'cursor-temporary-cleanup-failed',
+        };
+      }
+    }
+  }
+
+  durationMs ??= Date.now() - startedAt;
+  if (!normalized || (cleanupFailure && !failureError)) {
+    const activeFailure = failureError || cleanupFailure.error;
+    normalized = failedResult({
+      invocation,
+      context,
+      stage: failureError ? failureStage : 'execution',
+      error: activeFailure,
+      fallbackCode: failureError ? fallbackCode : cleanupFailure.fallbackCode,
+      executionRoot,
+      durationMs,
+      costUsd,
+      resolvedModel,
+      calls,
+      artifacts,
+      responseTexts,
+      observedSkills,
+      artifactScanTruncated,
+    });
   }
   return normalized;
 }
@@ -626,6 +684,7 @@ function createCursorAdapter({
   sdk = null,
   apiKey = process.env.CURSOR_API_KEY,
   temporaryRoot = os.tmpdir(),
+  onRunStarted = null,
 } = {}) {
   if (typeof repositoryRoot !== 'string' || repositoryRoot.length === 0) {
     throw new TypeError('Cursor Adapter requires repositoryRoot');
@@ -641,6 +700,7 @@ function createCursorAdapter({
         sdk,
         apiKey,
         temporaryRoot,
+        onRunStarted,
       });
     },
   });
