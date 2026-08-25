@@ -5,8 +5,8 @@ const {
   discoverCanonicalPackage,
   loadCanonicalSuite,
   resolvePackageDependencies,
+  validateAdapterResult,
   validateInvocation,
-  validateResult,
 } = require('..');
 
 const testAdapters = new WeakSet();
@@ -85,22 +85,11 @@ async function executeTest({
     resolvedSkills: resolution.resolved,
     dependencyAblation: Object.freeze({ ...dependencyAblation }),
   });
-  const result = validateResult(await adapter.execute(invocation, context));
-  if (result.model.requested !== invocation.model) {
-    throw new SuiteContractError('result.model.requested must match invocation.model');
-  }
-  if (result.observations.routing.requestedSkill !== invocation.skill) {
-    throw new SuiteContractError(
-      'result.observations.routing.requestedSkill must match invocation.skill',
-    );
-  }
-  if (JSON.stringify(result.observations.discoveredSkills)
-    !== JSON.stringify(context.discoveredSkills)) {
-    throw new SuiteContractError(
-      'result.observations.discoveredSkills must match canonical discovery',
-    );
-  }
-  return result;
+  return validateAdapterResult(
+    await adapter.execute(invocation, context),
+    invocation,
+    context,
+  );
 }
 
 module.exports = {

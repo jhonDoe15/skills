@@ -204,23 +204,28 @@ function loadCanonicalSuite(repositoryRoot) {
   return validateCanonicalSuite(suite);
 }
 
-function walkSkillDefinitions(directory, repositoryRoot, definitions = []) {
+function walkSkillDefinitions(
+  directory,
+  repositoryRoot,
+  discovery = { definitions: [], symlinks: [] },
+) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     if (entry.name === '.git') continue;
     const entryPath = path.join(directory, entry.name);
     if (entry.isSymbolicLink()) {
+      discovery.symlinks.push(path.relative(repositoryRoot, entryPath));
       if (entry.name === 'SKILL.md') {
-        definitions.push(path.relative(repositoryRoot, entryPath));
+        discovery.definitions.push(path.relative(repositoryRoot, entryPath));
       }
       continue;
     }
     if (entry.isDirectory()) {
-      walkSkillDefinitions(entryPath, repositoryRoot, definitions);
+      walkSkillDefinitions(entryPath, repositoryRoot, discovery);
     } else if (entry.isFile() && entry.name === 'SKILL.md') {
-      definitions.push(path.relative(repositoryRoot, entryPath));
+      discovery.definitions.push(path.relative(repositoryRoot, entryPath));
     }
   }
-  return definitions;
+  return discovery;
 }
 
 function readSkillName(definitionPath) {
@@ -244,7 +249,28 @@ function discoverCanonicalPackage(repositoryRoot) {
   }
 
   const canonicalPrefix = `${suite.skillsSourceRoot}${path.sep}`;
-  const definitions = walkSkillDefinitions(repositoryRoot, repositoryRoot);
+  const { definitions, symlinks } = walkSkillDefinitions(
+    repositoryRoot,
+    repositoryRoot,
+  );
+  const nonCanonicalSkillSymlink = symlinks
+    .filter((symlink) => !symlink.startsWith(canonicalPrefix))
+    .find((symlink) => {
+      const symlinkPath = path.join(repositoryRoot, symlink);
+      const targetPath = path.resolve(
+        path.dirname(symlinkPath),
+        fs.readlinkSync(symlinkPath),
+      );
+      const targetRelative = path.relative(canonicalRoot, targetPath);
+      const targetsCanonicalRoot = targetRelative === ''
+        || (!targetRelative.startsWith('..') && !path.isAbsolute(targetRelative));
+      return symlink.split(path.sep).includes('skills') || targetsCanonicalRoot;
+    });
+  if (nonCanonicalSkillSymlink) {
+    throw new SuiteContractError(
+      `non-canonical symlinked Skill directory "${nonCanonicalSkillSymlink}"`,
+    );
+  }
   const nonCanonical = definitions
     .filter((definition) => !definition.startsWith(canonicalPrefix));
   if (nonCanonical.length > 0) {
@@ -540,6 +566,31 @@ function validateResult(result) {
   return result;
 }
 
+function validateAdapterResult(result, invocation, context) {
+  validateResult(result);
+  if (result.model.requested !== invocation.model) {
+    throw new SuiteContractError('result.model.requested must match invocation.model');
+  }
+  if (result.observations.routing.requestedSkill !== invocation.skill) {
+    throw new SuiteContractError(
+      'result.observations.routing.requestedSkill must match invocation.skill',
+    );
+  }
+  if (JSON.stringify(result.observations.discoveredSkills)
+    !== JSON.stringify(context.discoveredSkills)) {
+    throw new SuiteContractError(
+      'result.observations.discoveredSkills must match canonical discovery',
+    );
+  }
+  if (JSON.stringify(result.observations.routing.invokedSkills)
+    !== JSON.stringify(context.resolvedSkills)) {
+    throw new SuiteContractError(
+      'result.observations.routing.invokedSkills must match resolved Skill invocation order',
+    );
+  }
+  return result;
+}
+
 async function executeProduction({ repositoryRoot, adapter, invocation }) {
   validateInvocation(invocation);
   if (!productionAdapters.has(adapter)) {
@@ -559,22 +610,11 @@ async function executeProduction({ repositoryRoot, adapter, invocation }) {
     discoveredSkills,
     resolvedSkills: resolution.resolved,
   };
-  const result = validateResult(await adapter.execute(invocation, context));
-  if (result.model.requested !== invocation.model) {
-    throw new SuiteContractError('result.model.requested must match invocation.model');
-  }
-  if (result.observations.routing.requestedSkill !== invocation.skill) {
-    throw new SuiteContractError(
-      'result.observations.routing.requestedSkill must match invocation.skill',
-    );
-  }
-  if (JSON.stringify(result.observations.discoveredSkills)
-    !== JSON.stringify(context.discoveredSkills)) {
-    throw new SuiteContractError(
-      'result.observations.discoveredSkills must match canonical discovery',
-    );
-  }
-  return result;
+  return validateAdapterResult(
+    await adapter.execute(invocation, context),
+    invocation,
+    context,
+  );
 }
 
 module.exports = {
@@ -584,6 +624,7 @@ module.exports = {
   executeProduction,
   loadCanonicalSuite,
   resolvePackageDependencies: resolveDependencies,
+  validateAdapterResult,
   validateInvocation,
   validateCanonicalSuite,
   validateResult,

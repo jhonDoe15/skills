@@ -75,6 +75,38 @@ function createPackageFixture(t, skillNames) {
   return fixtureRoot;
 }
 
+function normalizedAdapterResult(invocation, context, {
+  response,
+  artifact,
+  durationMs,
+  invokedSkills = context.resolvedSkills,
+}) {
+  return {
+    status: 'succeeded',
+    observations: {
+      discoveredSkills: context.discoveredSkills,
+      routing: {
+        requestedSkill: invocation.skill,
+        invokedSkills,
+      },
+      responses: [{ text: response }],
+      artifacts: artifact ? [{
+        reference: artifact,
+        mediaType: 'text/markdown',
+      }] : [],
+      toolUses: [],
+      attemptedMutations: [],
+    },
+    failure: null,
+    durationMs,
+    costUsd: 0,
+    model: {
+      requested: invocation.model,
+      resolved: 'resolved-test-model',
+    },
+  };
+}
+
 test('package discovery reads only canonical Skill definitions', (t) => {
   const fixtureRoot = createPackageFixture(t, ['agent-writing', 'writing-foundation']);
 
@@ -99,6 +131,24 @@ test('package discovery reads only canonical Skill definitions', (t) => {
   assert.throws(
     () => discoverCanonicalPackage(fixtureRoot),
     /non-canonical Skill definition.*\.claude\/skills\/agent-writing\/SKILL\.md/,
+  );
+});
+
+test('package discovery rejects noncanonical directory symlinks for Skills', (t) => {
+  const fixtureRoot = createPackageFixture(
+    t,
+    ['agent-writing', 'writing-foundation'],
+  );
+  const hostSkillsRoot = path.join(fixtureRoot, '.claude', 'skills');
+  fs.mkdirSync(hostSkillsRoot, { recursive: true });
+  fs.symlinkSync(
+    path.join(fixtureRoot, 'skills', 'agent-writing'),
+    path.join(hostSkillsRoot, 'agent-writing'),
+  );
+
+  assert.throws(
+    () => discoverCanonicalPackage(fixtureRoot),
+    /non-canonical symlinked Skill directory.*\.claude\/skills\/agent-writing/,
   );
 });
 
@@ -254,42 +304,158 @@ test('production dependency resolution fails before execution with the exact nam
   assert.deepEqual(result.observations.attemptedMutations, []);
 });
 
-test('host Adapters preserve required observations through one normalized Interface', async (t) => {
+test('production and test execution reject Adapter-invented routing', async (t) => {
+  const fixtureRoot = createPackageFixture(
+    t,
+    ['agent-writing', 'writing-foundation'],
+  );
+  const invocation = {
+    requestId: 'routing-integrity',
+    skill: 'agent-writing',
+    prompt: 'Exercise routing integrity.',
+    model: 'test-model',
+  };
+  const productionAdapter = defineProductionAdapter({
+    name: 'invalid-production-routing',
+    async execute(invocation, context) {
+      return normalizedAdapterResult(invocation, context, {
+        response: 'Omitted dependency invocation.',
+        durationMs: 1,
+        invokedSkills: ['agent-writing'],
+      });
+    },
+  });
+  await assert.rejects(
+    executeProduction({
+      repositoryRoot: fixtureRoot,
+      adapter: productionAdapter,
+      invocation,
+    }),
+    /invokedSkills must match resolved Skill invocation order/,
+  );
+
+  const testAdapter = defineTestAdapter({
+    name: 'invalid-test-routing',
+    async execute(invocation, context) {
+      return normalizedAdapterResult(invocation, context, {
+        response: 'Invented ablated dependency invocation.',
+        durationMs: 1,
+        invokedSkills: ['writing-foundation', 'agent-writing'],
+      });
+    },
+  });
+  await assert.rejects(
+    executeTest({
+      repositoryRoot: fixtureRoot,
+      adapter: testAdapter,
+      invocation,
+      dependencyAblation: {
+        consumer: 'agent-writing',
+        dependency: 'writing-foundation',
+      },
+    }),
+    /invokedSkills must match resolved Skill invocation order/,
+  );
+});
+
+test('Claude Code and Cursor fake Adapters share one normalized Interface', async (t) => {
+  const fixtureRoot = createPackageFixture(
+    t,
+    ['agent-writing', 'writing-foundation'],
+  );
+  const invocation = {
+    requestId: 'adapter-conformance',
+    skill: 'agent-writing',
+    prompt: 'Create one agent-facing artifact.',
+    model: 'test-model',
+  };
+  const claudeCodeAdapter = defineProductionAdapter({
+    name: 'claude-code-conformance',
+    async execute(invocation, context) {
+      return normalizedAdapterResult(invocation, context, {
+        response: 'Claude Code normalized artifact.',
+        artifact: 'artifact://claude-code/output.md',
+        durationMs: 12,
+      });
+    },
+  });
+  const cursorAdapter = defineProductionAdapter({
+    name: 'cursor-conformance',
+    execute(invocation, context) {
+      return Promise.resolve(normalizedAdapterResult(invocation, context, {
+        response: 'Cursor normalized artifact.',
+        artifact: 'artifact://cursor/output.md',
+        durationMs: 14,
+      }));
+    },
+  });
+
+  const [claudeCodeResult, cursorResult] = await Promise.all([
+    executeProduction({
+      repositoryRoot: fixtureRoot,
+      adapter: claudeCodeAdapter,
+      invocation,
+    }),
+    executeProduction({
+      repositoryRoot: fixtureRoot,
+      adapter: cursorAdapter,
+      invocation,
+    }),
+  ]);
+
+  for (const result of [claudeCodeResult, cursorResult]) {
+    assert.deepEqual(validateResult(result), result);
+    assert.deepEqual(result.observations.discoveredSkills, [
+      'agent-writing',
+      'writing-foundation',
+    ]);
+    assert.deepEqual(result.observations.routing.invokedSkills, [
+      'writing-foundation',
+      'agent-writing',
+    ]);
+    assert.deepEqual(result.model, {
+      requested: 'test-model',
+      resolved: 'resolved-test-model',
+    });
+  }
+  assert.equal(
+    claudeCodeResult.observations.responses[0].text,
+    'Claude Code normalized artifact.',
+  );
+  assert.equal(
+    cursorResult.observations.responses[0].text,
+    'Cursor normalized artifact.',
+  );
+  assert.equal(claudeCodeResult.durationMs, 12);
+  assert.equal(cursorResult.durationMs, 14);
+  assert.equal(claudeCodeResult.observations.toolUses.length, 0);
+  assert.equal(cursorResult.observations.attemptedMutations.length, 0);
+});
+
+test('host Adapter result preserves normalized artifact observations', async (t) => {
   const fixtureRoot = createPackageFixture(
     t,
     ['agent-writing', 'writing-foundation'],
   );
   const adapter = defineProductionAdapter({
-    name: 'conformance-host',
+    name: 'artifact-conformance',
     async execute(invocation, context) {
-      return {
-        status: 'succeeded',
-        observations: {
-          discoveredSkills: context.discoveredSkills,
-          routing: {
-            requestedSkill: invocation.skill,
-            invokedSkills: context.resolvedSkills,
-          },
-          responses: [{ text: 'Agent-facing artifact created.' }],
-          artifacts: [{
-            reference: 'artifact://agent-writing/output.md',
-            mediaType: 'text/markdown',
-          }],
-          toolUses: [{ name: 'artifact-write', outcome: 'succeeded' }],
-          attemptedMutations: [{
-            operation: 'write',
-            target: 'output.md',
-            outcome: 'succeeded',
-          }],
-        },
-        failure: null,
+      const result = normalizedAdapterResult(invocation, context, {
+        response: 'Agent-facing artifact created.',
+        artifact: 'artifact://agent-writing/output.md',
         durationMs: 12,
-        costUsd: 0.01,
-        model: {
-          requested: invocation.model,
-          resolved: 'resolved-test-model',
-        },
-      };
+      });
+      result.costUsd = 0.01;
+      result.observations.toolUses.push({
+        name: 'artifact-write',
+        outcome: 'succeeded',
+      });
+      result.observations.attemptedMutations.push({
+        operation: 'write',
+        target: 'output.md',
+        outcome: 'succeeded',
+      });
+      return result;
     },
   });
 
