@@ -662,6 +662,23 @@ console.log(JSON.stringify({
   });
   assert.equal(replayed.status, 0, replayed.stderr);
 
+  for (const [fileName, expectedFailure] of [
+    ['trigger-campaign.json', 'missing trigger campaign manifest'],
+    ['trigger-definition.json', 'missing trigger evaluation definition'],
+  ]) {
+    const retainedPath = path.join(resultsDirectory, fileName);
+    const retained = fs.readFileSync(retainedPath, 'utf8');
+    fs.rmSync(retainedPath);
+    const missingTriggerInput = spawnSync(process.execPath, replayArgs, {
+      cwd: repositoryRoot,
+      env: environment,
+      encoding: 'utf8',
+    });
+    assert.equal(missingTriggerInput.status, 1);
+    assert.match(missingTriggerInput.stdout, new RegExp(expectedFailure));
+    fs.writeFileSync(retainedPath, retained);
+  }
+
   const resumed = spawnSync(process.execPath, [...args, '--resume'], {
     cwd: repositoryRoot,
     env: environment,
@@ -671,6 +688,37 @@ console.log(JSON.stringify({
   assert.equal(
     fs.readFileSync(callLog, 'utf8').trim().split(/\r?\n/).length,
     5,
+  );
+
+  const missingEvidencePath = path.join(
+    evalDirectory,
+    'with_skill',
+    'run-1',
+    'evidence.json',
+  );
+  fs.rmSync(missingEvidencePath);
+  const resumedWithoutEvidence = spawnSync(
+    process.execPath,
+    [...args, '--resume'],
+    {
+      cwd: repositoryRoot,
+      env: environment,
+      encoding: 'utf8',
+    },
+  );
+  assert.equal(resumedWithoutEvidence.status, 0, resumedWithoutEvidence.stderr);
+  assert.equal(
+    readJson(path.join(
+      evalDirectory,
+      'with_skill',
+      'run-1',
+      'execution.json',
+    )).resume_reason,
+    'evidence missing',
+  );
+  assert.equal(
+    fs.readFileSync(callLog, 'utf8').trim().split(/\r?\n/).length,
+    6,
   );
 });
 
@@ -817,7 +865,7 @@ test('the normalized Incident scenario runs unchanged through both host cells', 
   );
 });
 
-test('component ablation remains test-only and cannot hide incomplete closure', async (t) => {
+test('component evaluation pairs complete and ablated consumers for offline replay', async (t) => {
   const completeRoot = createPackageFixture(
     t,
     ['agent-writing', 'writing-foundation'],
@@ -836,7 +884,7 @@ test('component ablation remains test-only and cannot hide incomplete closure', 
       return normalizedResult({
         skill: invocation.skill,
         model: invocation.model,
-        output: 'Agent-facing artifact.',
+        output: 'Frame\nInventory\nMap\nRead-only investigation.',
         invokedSkills: context.resolvedSkills,
         discoveredSkills: context.discoveredSkills,
       });
@@ -854,16 +902,65 @@ test('component ablation remains test-only and cannot hide incomplete closure', 
       consumer: 'agent-writing',
       dependency: 'writing-foundation',
     },
-    gradeOutput: passingGrade,
+    gradeOutput({ arm, output }) {
+      const grade = gradeDeterministicOutput({
+        definition,
+        caseDefinition: definition.evals[0],
+        output,
+      });
+      return arm === 'treatment' ? grade : {
+        ...grade,
+        passed: true,
+        status: 'baseline',
+      };
+    },
   });
 
-  assert.equal(adapterExecutions, 1);
-  assert.deepEqual(evidence.arm, {
+  assert.equal(adapterExecutions, 2);
+  assert.deepEqual(
+    evidence.map(({ arm }) => arm.kind),
+    ['treatment', 'component-ablation'],
+  );
+  const complete = evidence[0];
+  const ablated = evidence[1];
+  assert.equal(complete.arm.pairing_id, ablated.arm.pairing_id);
+  assert.deepEqual(ablated.arm, {
     kind: 'component-ablation',
-    pairing_id: evidence.arm.pairing_id,
+    pairing_id: complete.arm.pairing_id,
     ablated_dependency: 'writing-foundation',
   });
-  assert.deepEqual(evidence.execution.routing.invoked_skills, ['agent-writing']);
+  assert.equal(
+    complete.execution.routing.invoked_skills.includes('writing-foundation'),
+    true,
+  );
+  assert.deepEqual(ablated.execution.routing.invoked_skills, ['agent-writing']);
+
+  const comparison = createBlindComparison({
+    manifest,
+    definition,
+    caseDefinition: definition.evals[0],
+    repetition: 1,
+    control: ablated,
+    treatment: complete,
+    judgeModel: 'judge-model',
+  });
+  const judgment = createJudgmentEvidence({
+    comparison,
+    definition,
+    caseDefinition: definition.evals[0],
+    judgeModel: 'judge-model',
+    judgment: structuredJudgment(comparison),
+    durationMs: 5,
+    costUsd: 0.02,
+  });
+  const replay = replayCampaign({
+    manifest,
+    definition,
+    runs: evidence,
+    judgments: [judgment],
+  });
+  assert.equal(replay.passed, true);
+  assert.equal(replay.summary.expected_runs, 2);
 
   const incompleteRoot = createPackageFixture(t, ['agent-writing']);
   await assert.rejects(
@@ -882,7 +979,7 @@ test('component ablation remains test-only and cannot hide incomplete closure', 
     }),
     /Missing internal dependency "writing-foundation"/,
   );
-  assert.equal(adapterExecutions, 1);
+  assert.equal(adapterExecutions, 2);
 });
 
 test('blind comparison is seeded, untrusted, and blocked by a failed lower gate', async (t) => {
@@ -1133,6 +1230,91 @@ test('failed deterministic evidence blocks judging and yields a failed tracer ve
   );
 });
 
+test('offline replay requires every host and model cell to pass thresholds', async (t) => {
+  const definition = testDefinition();
+  definition.config.minimum_treatment_pass_rate = 0.5;
+  definition.config.minimum_treatment_win_rate = 0.5;
+  const manifest = createManifest(definition, {
+    cells: [
+      { host: 'claude-code', model: 'claude-test-model' },
+      { host: 'cursor', model: 'cursor-test-model' },
+    ],
+  });
+  const fixtureRoot = createPackageFixture(t, ['incident-investigation']);
+  const caseDefinition = definition.evals[0];
+  const runs = [];
+  const judgments = [];
+
+  for (const cell of manifest.cells) {
+    const cellRuns = await runMatchedEvaluation({
+      repositoryRoot: fixtureRoot,
+      manifest,
+      caseDefinition,
+      cell,
+      repetition: 1,
+      async executeArm({ arm }) {
+        return normalizedResult({
+          skill: definition.skill_name,
+          model: cell.model,
+          output: arm === 'treatment'
+            ? 'Frame\nInventory\nMap\nRead-only investigation.'
+            : 'Possible cause.',
+          invokedSkills: arm === 'treatment' ? [definition.skill_name] : [],
+          discoveredSkills: arm === 'treatment' ? [definition.skill_name] : [],
+        });
+      },
+      gradeOutput({ arm, output }) {
+        const grade = gradeDeterministicOutput({
+          definition,
+          caseDefinition,
+          output,
+        });
+        return arm === 'treatment' ? grade : {
+          ...grade,
+          passed: true,
+          status: 'baseline',
+        };
+      },
+    });
+    runs.push(...cellRuns);
+    const comparison = createBlindComparison({
+      manifest,
+      definition,
+      caseDefinition,
+      repetition: 1,
+      control: cellRuns[0],
+      treatment: cellRuns[1],
+      judgeModel: 'judge-model',
+    });
+    const judgment = structuredJudgment(comparison);
+    if (cell.host === 'cursor') {
+      judgment.winner = comparison.placement.control;
+    }
+    judgments.push(createJudgmentEvidence({
+      comparison,
+      definition,
+      caseDefinition,
+      judgeModel: 'judge-model',
+      judgment,
+      durationMs: 5,
+      costUsd: 0.02,
+    }));
+  }
+
+  const replay = replayCampaign({
+    manifest,
+    definition,
+    runs,
+    judgments,
+  });
+  assert.equal(replay.summary.treatment_win_rate, 0.5);
+  assert.equal(replay.summary.treatment_expectation_pass_rate, 1);
+  assert.equal(replay.summary.cells[0].thresholds_passed, true);
+  assert.equal(replay.summary.cells[1].thresholds_passed, false);
+  assert.equal(replay.summary.thresholds_passed, false);
+  assert.equal(replay.passed, false);
+});
+
 test('report-only aggregation includes provenance and no suite release claim', async (t) => {
   const campaign = await passingCampaign(t);
   const replay = replayCampaign({
@@ -1159,5 +1341,11 @@ test('report-only aggregation includes provenance and no suite release claim', a
   assert.match(report, /Total cost \(USD\): 0\.04/);
   assert.match(report, /Fixture proves shared machinery/);
   assert.match(report, new RegExp(campaign.manifest.fingerprint));
+  for (const run of campaign.runs) {
+    assert.match(report, new RegExp(run.fingerprints.record));
+  }
+  for (const judgment of campaign.judgments) {
+    assert.match(report, new RegExp(judgment.fingerprint));
+  }
   assert.match(report, /does not make the 19-Skill suite release decision/);
 });

@@ -52,7 +52,7 @@ async function executeTest({
   repositoryRoot,
   adapter,
   invocation,
-  dependencyAblation,
+  dependencyAblation = null,
 }) {
   const contractInvocation = Object.freeze({ ...validateInvocation(invocation) });
   if (!testAdapters.has(adapter)) {
@@ -60,17 +60,21 @@ async function executeTest({
   }
 
   const suite = loadCanonicalSuite(repositoryRoot);
-  validateAblation(suite, contractInvocation, dependencyAblation);
+  if (dependencyAblation) {
+    validateAblation(suite, contractInvocation, dependencyAblation);
+  }
   const packageDefinition = discoverCanonicalPackage(repositoryRoot);
-  const ablatedSuite = {
-    ...suite,
-    runtimeEdges: suite.runtimeEdges.filter((edge) => (
-      edge.consumer !== dependencyAblation.consumer
-        || edge.dependency !== dependencyAblation.dependency
-    )),
-  };
+  const evaluationSuite = dependencyAblation
+    ? {
+      ...suite,
+      runtimeEdges: suite.runtimeEdges.filter((edge) => (
+        edge.consumer !== dependencyAblation.consumer
+          || edge.dependency !== dependencyAblation.dependency
+      )),
+    }
+    : suite;
   const resolution = resolvePackageDependencies(
-    ablatedSuite,
+    evaluationSuite,
     packageDefinition,
     contractInvocation.skill,
   );
@@ -85,7 +89,9 @@ async function executeTest({
       packageDefinition.skills.map(({ name }) => name),
     ),
     resolvedSkills: Object.freeze([...resolution.resolved]),
-    dependencyAblation: Object.freeze({ ...dependencyAblation }),
+    dependencyAblation: dependencyAblation
+      ? Object.freeze({ ...dependencyAblation })
+      : null,
   });
   return validateAdapterResult(
     await adapter.execute(contractInvocation, context),

@@ -1073,6 +1073,9 @@ async function behaviorGate(definition, options, resultsDirectory) {
             );
             const evidencePath = path.join(runDirectory, 'evidence.json');
             const outputPath = path.join(runDirectory, 'output.md');
+            if (options.resume && !fs.existsSync(evidencePath)) {
+              resumeReasons.set(arm, 'evidence missing');
+            }
             if (options.resume && fs.existsSync(evidencePath)) {
               const evidence = readJson(evidencePath);
               let assessment = assessReusableEvidence({
@@ -1680,10 +1683,19 @@ function replayRetainedTriggerEvidence(
   executorModel,
   resultsDirectory,
 ) {
+  if (!Array.isArray(definition.trigger_evals)) {
+    throw new Error('trigger evaluation definition must explicitly declare cases or none');
+  }
+  if (definition.trigger_evals.length === 0) {
+    return null;
+  }
   const manifestPath = path.join(resultsDirectory, 'trigger-campaign.json');
   const definitionPath = path.join(resultsDirectory, 'trigger-definition.json');
-  if (!fs.existsSync(manifestPath) || !fs.existsSync(definitionPath)) {
-    return null;
+  if (!fs.existsSync(manifestPath)) {
+    throw new Error('missing trigger campaign manifest');
+  }
+  if (!fs.existsSync(definitionPath)) {
+    throw new Error('missing trigger evaluation definition');
   }
 
   const manifest = readJson(manifestPath);

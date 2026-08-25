@@ -1019,35 +1019,43 @@ async function runComponentEvaluation({
     throw new EvaluationContractError('component evaluation requires gradeOutput');
   }
   packageClosure(repositoryRoot, manifest.skill);
-  const result = await executeTest({
-    repositoryRoot,
-    adapter,
-    invocation: {
-      requestId: pairingId(manifest, caseDefinition, cell, repetition),
-      skill: manifest.skill,
-      prompt: caseDefinition.prompt,
-      model: cell.model,
-    },
-    dependencyAblation,
-  });
-  const grade = gradeOutput({
-    arm: 'component-ablation',
-    output: outputFromResult(result),
-    result,
-    caseDefinition,
-  });
-  return createRunEvidence({
-    manifest,
-    caseDefinition,
-    cell,
-    repetition,
-    arm: {
-      kind: 'component-ablation',
-      ablated_dependency: dependencyAblation.dependency,
-    },
-    result,
-    deterministicGrade: grade,
-  });
+  const records = [];
+  for (const arm of ['treatment', 'component-ablation']) {
+    const result = await executeTest({
+      repositoryRoot,
+      adapter,
+      invocation: {
+        requestId: pairingId(manifest, caseDefinition, cell, repetition),
+        skill: manifest.skill,
+        prompt: caseDefinition.prompt,
+        model: cell.model,
+      },
+      dependencyAblation: arm === 'component-ablation'
+        ? dependencyAblation
+        : null,
+    });
+    const grade = gradeOutput({
+      arm,
+      output: outputFromResult(result),
+      result,
+      caseDefinition,
+    });
+    records.push(createRunEvidence({
+      manifest,
+      caseDefinition,
+      cell,
+      repetition,
+      arm: arm === 'component-ablation'
+        ? {
+          kind: arm,
+          ablated_dependency: dependencyAblation.dependency,
+        }
+        : arm,
+      result,
+      deterministicGrade: grade,
+    }));
+  }
+  return records;
 }
 
 function triggerGradeFromObservation({
@@ -1174,12 +1182,18 @@ function createBlindComparison({
     host: treatment.host,
     model: treatment.model.requested,
   };
+  const controlArm = manifest.layer === 'component'
+    ? {
+      kind: 'component-ablation',
+      ablated_dependency: control.arm.ablated_dependency,
+    }
+    : 'no-skill';
   validateRunEvidence({
     manifest,
     caseDefinition,
     cell,
     repetition,
-    arm: 'no-skill',
+    arm: controlArm,
     record: control,
   });
   validateRunEvidence({
@@ -1505,15 +1519,39 @@ function addReplayFailure(failures, caseDefinition, cell, repetition, gate) {
   });
 }
 
+function thresholdSummary(judgments, thresholds) {
+  const comparisons = judgments.length;
+  const treatmentWinRate = comparisons === 0
+    ? 0
+    : judgments.filter(({ metrics }) => metrics.treatment_won).length
+      / comparisons;
+  const treatmentExpectationPassRate = comparisons === 0
+    ? 0
+    : judgments.reduce(
+      (sum, evidence) => (
+        sum + evidence.metrics.treatment_expectation_pass_rate
+      ),
+      0,
+    ) / comparisons;
+  const treatmentDimensionsPassed = judgments.every(
+    ({ metrics }) => metrics.treatment_dimensions_passed,
+  );
+  return {
+    comparisons,
+    treatment_win_rate: treatmentWinRate,
+    treatment_expectation_pass_rate: treatmentExpectationPassRate,
+    thresholds_passed: comparisons > 0
+      && treatmentWinRate >= thresholds.minimum_treatment_win_rate
+      && treatmentExpectationPassRate
+        >= thresholds.minimum_treatment_pass_rate
+      && treatmentDimensionsPassed,
+  };
+}
+
 function replayCampaign({ manifest, definition, runs, judgments }) {
   validateCampaignManifest(manifest, definition);
   requireArray(runs, 'runs', true);
   requireArray(judgments, 'judgments', true);
-  if (manifest.layer === 'component') {
-    throw new EvaluationContractError(
-      'component replay requires a component comparison campaign',
-    );
-  }
   const casesById = new Map(
     definition.evals.map((evaluation) => [caseId(evaluation), evaluation]),
   );
@@ -1543,11 +1581,14 @@ function replayCampaign({ manifest, definition, runs, judgments }) {
     const caseDefinition = casesById.get(caseManifest.id);
     for (const cell of manifest.cells) {
       for (let repetition = 1; repetition <= manifest.repetitions; repetition += 1) {
+        const controlArm = manifest.layer === 'component'
+          ? 'component-ablation'
+          : 'no-skill';
         const controlKey = runKey(
           caseDefinition,
           cell,
           repetition,
-          'no-skill',
+          controlArm,
         );
         const treatmentKey = runKey(
           caseDefinition,
@@ -1559,7 +1600,7 @@ function replayCampaign({ manifest, definition, runs, judgments }) {
         const treatment = runIndex.get(treatmentKey);
         if (!control) {
           throw new EvaluationContractError(
-            `missing no-skill evidence for case ${caseManifest.id}`,
+            `missing ${controlArm} evidence for case ${caseManifest.id}`,
           );
         }
         if (!treatment) {
@@ -1575,7 +1616,12 @@ function replayCampaign({ manifest, definition, runs, judgments }) {
           caseDefinition,
           cell,
           repetition,
-          arm: 'no-skill',
+          arm: manifest.layer === 'component'
+            ? {
+              kind: controlArm,
+              ablated_dependency: control.arm.ablated_dependency,
+            }
+            : controlArm,
           record: control,
         });
         validateRunEvidence({
@@ -1614,7 +1660,7 @@ function replayCampaign({ manifest, definition, runs, judgments }) {
             caseDefinition,
             cell,
             repetition,
-            'no-skill-execution',
+            `${controlArm}-execution`,
           );
         }
         if (treatment.execution.status !== 'succeeded') {
@@ -1679,26 +1725,18 @@ function replayCampaign({ manifest, definition, runs, judgments }) {
     throw new EvaluationContractError('unexpected retained judgment evidence');
   }
 
-  const comparisonCount = validJudgments.length;
-  const winRate = comparisonCount === 0
-    ? 0
-    : validJudgments.filter(({ metrics }) => metrics.treatment_won).length
-      / comparisonCount;
-  const expectationRate = comparisonCount === 0
-    ? 0
-    : validJudgments.reduce(
-      (sum, evidence) => (
-        sum + evidence.metrics.treatment_expectation_pass_rate
-      ),
-      0,
-    ) / comparisonCount;
-  const dimensionsPassed = validJudgments.every(
-    ({ metrics }) => metrics.treatment_dimensions_passed,
-  );
-  const thresholdsPassed = comparisonCount > 0
-    && winRate >= manifest.thresholds.minimum_treatment_win_rate
-    && expectationRate >= manifest.thresholds.minimum_treatment_pass_rate
-    && dimensionsPassed;
+  const aggregate = thresholdSummary(validJudgments, manifest.thresholds);
+  const cells = manifest.cells.map((cell) => ({
+    host: cell.host,
+    model: cell.model,
+    ...thresholdSummary(
+      validJudgments.filter((evidence) => (
+        evidence.host === cell.host && evidence.model === cell.model
+      )),
+      manifest.thresholds,
+    ),
+  }));
+  const thresholdsPassed = cells.every((cell) => cell.thresholds_passed);
   return deepFreeze({
     passed: failures.length === 0 && thresholdsPassed,
     scope: manifest.scope,
@@ -1710,10 +1748,12 @@ function replayCampaign({ manifest, definition, runs, judgments }) {
     summary: {
       expected_runs: expectedRuns,
       valid_runs: usedRuns.size,
-      comparisons: comparisonCount,
-      treatment_win_rate: winRate,
-      treatment_expectation_pass_rate: expectationRate,
+      comparisons: aggregate.comparisons,
+      treatment_win_rate: aggregate.treatment_win_rate,
+      treatment_expectation_pass_rate:
+        aggregate.treatment_expectation_pass_rate,
       thresholds_passed: thresholdsPassed,
+      cells,
     },
   });
 }
@@ -1852,6 +1892,14 @@ function buildAdoptionReport({
   const limitations = manifest.limitations.length === 0
     ? '- None recorded'
     : manifest.limitations.map((limitation) => `- ${limitation}`).join('\n');
+  const runFingerprints = allRuns.map((run) => (
+    `- ${run.scope}/${run.case_id}/${run.host}/${run.model.requested}/`
+      + `${run.repetition}/${run.arm.kind}: ${run.fingerprints.record}`
+  )).sort();
+  const judgmentFingerprints = judgments.map((judgment) => (
+    `- ${judgment.scope}/${judgment.case_id}/${judgment.host}/`
+      + `${judgment.model}/${judgment.repetition}: ${judgment.fingerprint}`
+  )).sort();
   return [
     `# ${titleForScope(manifest.scope)} Adoption report`,
     '',
@@ -1891,6 +1939,10 @@ function buildAdoptionReport({
     ...(triggerManifest
       ? [`Trigger campaign fingerprint: ${triggerManifest.fingerprint}`]
       : []),
+    `Run fingerprints (${runFingerprints.length}):`,
+    ...runFingerprints,
+    `Judgment fingerprints (${judgmentFingerprints.length}):`,
+    ...judgmentFingerprints,
     '',
     'This report covers the named tracer and shared evaluation machinery. '
       + 'It does not make the 19-Skill suite release decision.',
