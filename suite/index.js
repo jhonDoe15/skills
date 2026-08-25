@@ -210,7 +210,7 @@ function walkSkillDefinitions(
   discovery = { definitions: [], symlinks: [] },
 ) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    if (entry.name === '.git') continue;
+    if (directory === repositoryRoot && entry.name === '.git') continue;
     const entryPath = path.join(directory, entry.name);
     if (entry.isSymbolicLink()) {
       discovery.symlinks.push(path.relative(repositoryRoot, entryPath));

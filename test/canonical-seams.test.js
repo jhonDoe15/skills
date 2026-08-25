@@ -168,6 +168,22 @@ test('package discovery rejects symlinks nested under canonical Skill directorie
   );
 });
 
+test('package discovery inspects nested symlinks named .git', (t) => {
+  const fixtureRoot = createPackageFixture(
+    t,
+    ['agent-writing', 'writing-foundation'],
+  );
+  fs.symlinkSync(
+    path.join(fixtureRoot, 'skills', 'writing-foundation'),
+    path.join(fixtureRoot, 'skills', 'agent-writing', '.git'),
+  );
+
+  assert.throws(
+    () => discoverCanonicalPackage(fixtureRoot),
+    /symlinked Skill definition.*skills\/agent-writing\/\.git/,
+  );
+});
+
 test('package discovery rejects generated copies inside the canonical root', (t) => {
   const fixtureRoot = createPackageFixture(t, ['agent-writing', 'writing-foundation']);
   const generatedCopy = path.join(
