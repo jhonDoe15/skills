@@ -79,6 +79,8 @@ const definitions = Object.fromEntries(skills.map((name) => [
 const stdin = fs.readFileSync(0, 'utf8');
 fs.writeFileSync(${JSON.stringify(logPath)}, JSON.stringify({
   args,
+  autoMemoryDisabled: process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY,
+  claudeAiConnectorsEnabled: process.env.ENABLE_CLAUDEAI_MCP_SERVERS,
   cwd: process.cwd(),
   definitions,
   hasClaudeCodeEnvironment: Object.hasOwn(process.env, 'CLAUDECODE'),
@@ -187,7 +189,7 @@ test('Claude Code Adapter executes the host-local Agent Writing tracer', async (
     invokedSkills: ['writing-foundation', 'agent-writing'],
   });
   assert.deepEqual(result.observations.toolUses, [
-    { name: 'Skill', outcome: 'invoked agent-writing' },
+    { name: 'SlashCommand', outcome: 'submitted /agent-writing' },
     { name: 'Skill', outcome: 'invoked writing-foundation' },
   ]);
   assert.deepEqual(result.observations.artifacts, [{
@@ -251,6 +253,41 @@ test('Claude Code Adapter executes the host-local Agent Writing tracer', async (
     ),
     ['--max-budget-usd', '0.25'],
   );
+});
+
+test('Claude Code Adapter suppresses controllable ambient host state', async (t) => {
+  const fixtureRoot = createPackageFixture(t);
+  const fakeClaude = createFakeClaude(t, { events: successEvents() });
+  const adapter = createClaudeCodeAdapter({
+    skillsRoot: path.join(fixtureRoot, 'skills'),
+    command: fakeClaude.commandPath,
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+
+  await executeProduction({
+    repositoryRoot: fixtureRoot,
+    adapter,
+    invocation: invocation(),
+  });
+
+  const execution = readCommandLog(fakeClaude.logPath);
+  assert.equal(execution.autoMemoryDisabled, '1');
+  assert.equal(execution.claudeAiConnectorsEnabled, 'false');
+  assert.ok(execution.args.includes('--no-chrome'));
+  assert.ok(execution.args.includes('--strict-mcp-config'));
+
+  const mcpConfigIndex = execution.args.indexOf('--mcp-config');
+  assert.deepEqual(JSON.parse(execution.args[mcpConfigIndex + 1]), {
+    mcpServers: {},
+  });
+
+  const settingsIndex = execution.args.indexOf('--settings');
+  assert.deepEqual(JSON.parse(execution.args[settingsIndex + 1]), {
+    autoMemoryEnabled: false,
+    disableAllHooks: true,
+    disableClaudeAiConnectors: true,
+    enabledPlugins: {},
+  });
 });
 
 test('Claude tracer fixture declares a matched No-Skill control outside package construction', (t) => {
@@ -332,7 +369,7 @@ test('Claude Code Adapter normalizes tool, mutation, and file artifact evidence'
   });
 
   assert.deepEqual(result.observations.toolUses, [
-    { name: 'Skill', outcome: 'invoked agent-writing' },
+    { name: 'SlashCommand', outcome: 'submitted /agent-writing' },
     { name: 'Skill', outcome: 'invoked writing-foundation' },
     { name: 'Write', outcome: 'succeeded' },
   ]);
@@ -497,8 +534,8 @@ test('Claude Code Adapter preserves partial evidence after execution starts', as
     'Agent Writing started, then the evaluated session failed.',
   );
   assert.deepEqual(result.observations.toolUses, [{
-    name: 'Skill',
-    outcome: 'invoked agent-writing',
+    name: 'SlashCommand',
+    outcome: 'submitted /agent-writing',
   }]);
   assert.deepEqual(result.model, {
     requested: REQUESTED_MODEL,
@@ -593,9 +630,11 @@ test('live Claude Code executes the host-local Agent Writing tracer', {
   assert.ok(result.model.resolved);
   assert.deepEqual(
     result.observations.toolUses
-      .filter(({ name }) => name === 'Skill')
-      .map(({ outcome }) => outcome),
-    ['invoked agent-writing', 'invoked writing-foundation'],
+      .map(({ name, outcome }) => [name, outcome]),
+    [
+      ['SlashCommand', 'submitted /agent-writing'],
+      ['Skill', 'invoked writing-foundation'],
+    ],
   );
   const output = result.observations.responses[0]?.text || '';
   for (const check of tracer.deterministicChecks) {

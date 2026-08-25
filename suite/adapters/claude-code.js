@@ -12,6 +12,13 @@ const {
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1_000;
 const MAX_OUTPUT_BYTES = 20 * 1024 * 1024;
+const EMPTY_MCP_CONFIG = JSON.stringify({ mcpServers: {} });
+const ISOLATED_SESSION_SETTINGS = JSON.stringify({
+  autoMemoryEnabled: false,
+  disableAllHooks: true,
+  disableClaudeAiConnectors: true,
+  enabledPlugins: {},
+});
 const MUTATION_OPERATIONS = new Map([
   ['Write', 'write'],
   ['Edit', 'edit'],
@@ -133,18 +140,15 @@ function parseClaudeStream(stdout, requestedSkill, resolvedSkills, project) {
       if (typeof event.model === 'string' && event.model.length > 0) {
         evidence.resolvedModel = event.model;
       }
+      evidence.toolUses.push({
+        name: 'SlashCommand',
+        outcome: `submitted /${requestedSkill}`,
+      });
       for (const skillName of [
         ...(event.skills || []),
         ...(event.slash_commands || []),
       ]) {
         evidence.availableSkills.add(String(skillName).replace(/^\//, ''));
-      }
-      if (evidence.availableSkills.has(requestedSkill)) {
-        evidence.observedSkillInvocations.add(requestedSkill);
-        evidence.toolUses.push({
-          name: 'Skill',
-          outcome: `invoked ${requestedSkill}`,
-        });
       }
     }
 
@@ -275,6 +279,12 @@ function claudeArguments(invocation, maxBudgetUsd) {
     '-p',
     '--setting-sources',
     'project',
+    '--settings',
+    ISOLATED_SESSION_SETTINGS,
+    '--strict-mcp-config',
+    '--mcp-config',
+    EMPTY_MCP_CONFIG,
+    '--no-chrome',
     '--no-session-persistence',
     '--tools',
     'Skill',
@@ -344,6 +354,8 @@ function createClaudeCodeAdapter({
 
         const environment = { ...process.env };
         delete environment.CLAUDECODE;
+        environment.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1';
+        environment.ENABLE_CLAUDEAI_MCP_SERVERS = 'false';
         const processResult = spawnSync(
           command,
           claudeArguments(invocation, maxBudgetUsd),
@@ -435,7 +447,8 @@ function createClaudeCodeAdapter({
         }
 
         const unobservedSkill = context.resolvedSkills.find((skillName) => (
-          !evidence.observedSkillInvocations.has(skillName)
+          skillName !== invocation.skill
+          && !evidence.observedSkillInvocations.has(skillName)
         ));
         if (unobservedSkill) {
           return fail(
