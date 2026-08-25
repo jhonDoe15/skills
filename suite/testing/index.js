@@ -54,13 +54,13 @@ async function executeTest({
   invocation,
   dependencyAblation,
 }) {
-  validateInvocation(invocation);
+  const contractInvocation = Object.freeze({ ...validateInvocation(invocation) });
   if (!testAdapters.has(adapter)) {
     throw new SuiteContractError('test execution requires a test Adapter');
   }
 
   const suite = loadCanonicalSuite(repositoryRoot);
-  validateAblation(suite, invocation, dependencyAblation);
+  validateAblation(suite, contractInvocation, dependencyAblation);
   const packageDefinition = discoverCanonicalPackage(repositoryRoot);
   const ablatedSuite = {
     ...suite,
@@ -72,7 +72,7 @@ async function executeTest({
   const resolution = resolvePackageDependencies(
     ablatedSuite,
     packageDefinition,
-    invocation.skill,
+    contractInvocation.skill,
   );
   if (resolution.missingSkill) {
     throw new SuiteContractError(
@@ -81,13 +81,15 @@ async function executeTest({
   }
 
   const context = Object.freeze({
-    discoveredSkills: packageDefinition.skills.map(({ name }) => name),
-    resolvedSkills: resolution.resolved,
+    discoveredSkills: Object.freeze(
+      packageDefinition.skills.map(({ name }) => name),
+    ),
+    resolvedSkills: Object.freeze([...resolution.resolved]),
     dependencyAblation: Object.freeze({ ...dependencyAblation }),
   });
   return validateAdapterResult(
-    await adapter.execute(invocation, context),
-    invocation,
+    await adapter.execute(contractInvocation, context),
+    contractInvocation,
     context,
   );
 }

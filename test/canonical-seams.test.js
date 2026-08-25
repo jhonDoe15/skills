@@ -152,6 +152,22 @@ test('package discovery rejects noncanonical directory symlinks for Skills', (t)
   );
 });
 
+test('package discovery rejects symlinks nested under canonical Skill directories', (t) => {
+  const fixtureRoot = createPackageFixture(
+    t,
+    ['agent-writing', 'writing-foundation'],
+  );
+  fs.symlinkSync(
+    path.join(fixtureRoot, 'skills', 'writing-foundation'),
+    path.join(fixtureRoot, 'skills', 'agent-writing', 'dependency-copy'),
+  );
+
+  assert.throws(
+    () => discoverCanonicalPackage(fixtureRoot),
+    /symlinked Skill definition.*skills\/agent-writing\/dependency-copy/,
+  );
+});
+
 test('package discovery rejects generated copies inside the canonical root', (t) => {
   const fixtureRoot = createPackageFixture(t, ['agent-writing', 'writing-foundation']);
   const generatedCopy = path.join(
@@ -197,7 +213,7 @@ test('package discovery rejects aliases, symlinks, and fallback roots', (t) => {
   );
   assert.throws(
     () => discoverCanonicalPackage(symlinkRoot),
-    /symlinked Skill definition "writing-foundation"/,
+    /symlinked Skill definition "skills\/writing-foundation\/SKILL\.md"/,
   );
 
   const fallbackRoot = createPackageFixture(t, ['agent-writing']);
@@ -356,6 +372,83 @@ test('production and test execution reject Adapter-invented routing', async (t) 
     }),
     /invokedSkills must match resolved Skills/,
   );
+});
+
+test('production Adapters cannot mutate normalized contract inputs', async (t) => {
+  const fixtureRoot = createPackageFixture(
+    t,
+    ['agent-writing', 'writing-foundation'],
+  );
+  const adapter = defineProductionAdapter({
+    name: 'production-input-integrity',
+    async execute(invocation, context) {
+      assert.throws(() => {
+        invocation.skill = 'to-humans';
+      }, TypeError);
+      assert.throws(() => {
+        context.resolvedSkills.pop();
+      }, TypeError);
+      return normalizedAdapterResult(invocation, context, {
+        response: 'Contract inputs remained unchanged.',
+        durationMs: 1,
+      });
+    },
+  });
+
+  const result = await executeProduction({
+    repositoryRoot: fixtureRoot,
+    adapter,
+    invocation: {
+      requestId: 'production-input-integrity',
+      skill: 'agent-writing',
+      prompt: 'Exercise immutable production inputs.',
+      model: 'test-model',
+    },
+  });
+
+  assert.deepEqual(result.observations.routing.invokedSkills, [
+    'writing-foundation',
+    'agent-writing',
+  ]);
+});
+
+test('test Adapters cannot mutate normalized contract inputs', async (t) => {
+  const fixtureRoot = createPackageFixture(
+    t,
+    ['agent-writing', 'writing-foundation'],
+  );
+  const adapter = defineTestAdapter({
+    name: 'test-input-integrity',
+    async execute(invocation, context) {
+      assert.throws(() => {
+        invocation.skill = 'to-humans';
+      }, TypeError);
+      assert.throws(() => {
+        context.resolvedSkills.push('writing-foundation');
+      }, TypeError);
+      return normalizedAdapterResult(invocation, context, {
+        response: 'Test contract inputs remained unchanged.',
+        durationMs: 1,
+      });
+    },
+  });
+
+  const result = await executeTest({
+    repositoryRoot: fixtureRoot,
+    adapter,
+    invocation: {
+      requestId: 'test-input-integrity',
+      skill: 'agent-writing',
+      prompt: 'Exercise immutable test inputs.',
+      model: 'test-model',
+    },
+    dependencyAblation: {
+      consumer: 'agent-writing',
+      dependency: 'writing-foundation',
+    },
+  });
+
+  assert.deepEqual(result.observations.routing.invokedSkills, ['agent-writing']);
 });
 
 test('Claude Code and Cursor fake Adapters share one normalized Interface', async (t) => {

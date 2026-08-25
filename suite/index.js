@@ -253,6 +253,13 @@ function discoverCanonicalPackage(repositoryRoot) {
     repositoryRoot,
     repositoryRoot,
   );
+  const canonicalSkillSymlink = symlinks
+    .find((symlink) => symlink.startsWith(canonicalPrefix));
+  if (canonicalSkillSymlink) {
+    throw new SuiteContractError(
+      `symlinked Skill definition "${canonicalSkillSymlink}"`,
+    );
+  }
   const nonCanonicalSkillSymlink = symlinks
     .filter((symlink) => !symlink.startsWith(canonicalPrefix))
     .find((symlink) => {
@@ -599,27 +606,33 @@ function validateAdapterResult(result, invocation, context) {
 }
 
 async function executeProduction({ repositoryRoot, adapter, invocation }) {
-  validateInvocation(invocation);
+  const contractInvocation = Object.freeze({ ...validateInvocation(invocation) });
   if (!productionAdapters.has(adapter)) {
     throw new SuiteContractError('production execution requires a production Adapter');
   }
 
   const suite = loadCanonicalSuite(repositoryRoot);
   const packageDefinition = discoverCanonicalPackage(repositoryRoot);
-  const discoveredSkills = packageDefinition.skills.map(({ name }) => name);
-  const resolution = resolveDependencies(suite, packageDefinition, invocation.skill);
+  const discoveredSkills = Object.freeze(
+    packageDefinition.skills.map(({ name }) => name),
+  );
+  const resolution = resolveDependencies(
+    suite,
+    packageDefinition,
+    contractInvocation.skill,
+  );
   if (resolution.missingSkill) {
     return validateResult(
-      missingDependencyResult(invocation, discoveredSkills, resolution),
+      missingDependencyResult(contractInvocation, discoveredSkills, resolution),
     );
   }
-  const context = {
+  const context = Object.freeze({
     discoveredSkills,
-    resolvedSkills: resolution.resolved,
-  };
+    resolvedSkills: Object.freeze([...resolution.resolved]),
+  });
   return validateAdapterResult(
-    await adapter.execute(invocation, context),
-    invocation,
+    await adapter.execute(contractInvocation, context),
+    contractInvocation,
     context,
   );
 }
