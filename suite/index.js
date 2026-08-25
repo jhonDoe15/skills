@@ -79,6 +79,14 @@ function assertUnique(values, field) {
   }
 }
 
+function buildDependencyMap(skillNames, edges) {
+  const dependencies = new Map([...skillNames].map((name) => [name, []]));
+  for (const edge of edges) {
+    dependencies.get(edge.consumer).push(edge.dependency);
+  }
+  return dependencies;
+}
+
 function validateInventory(suite) {
   requireArray(suite.inventory, 'inventory');
   requireArray(suite.aliases, 'aliases');
@@ -105,10 +113,7 @@ function validateInventory(suite) {
 }
 
 function assertAcyclic(skillNames, edges) {
-  const dependencies = new Map([...skillNames].map((name) => [name, []]));
-  for (const edge of edges) {
-    dependencies.get(edge.consumer).push(edge.dependency);
-  }
+  const dependencies = buildDependencyMap(skillNames, edges);
 
   const visiting = new Set();
   const visited = new Set();
@@ -327,12 +332,10 @@ function validateInvocation(invocation) {
 
 function resolveDependencies(suite, packageDefinition, requestedSkill) {
   const installed = new Set(packageDefinition.skills.map(({ name }) => name));
-  const dependencies = new Map(
-    suite.inventory.map(({ name }) => [name, []]),
+  const dependencies = buildDependencyMap(
+    suite.inventory.map(({ name }) => name),
+    suite.runtimeEdges,
   );
-  for (const edge of suite.runtimeEdges) {
-    dependencies.get(edge.consumer).push(edge.dependency);
-  }
 
   const resolved = [];
   const visited = new Set();
@@ -357,13 +360,13 @@ function resolveDependencies(suite, packageDefinition, requestedSkill) {
   return failure || { resolved };
 }
 
-function missingDependencyResult(invocation, packageDefinition, failure) {
+function missingDependencyResult(invocation, discoveredSkills, failure) {
   const internalDependency = failure.code === 'missing-internal-dependency';
   const noun = internalDependency ? 'internal dependency' : 'requested Skill';
   return {
     status: 'failed',
     observations: {
-      discoveredSkills: packageDefinition.skills.map(({ name }) => name),
+      discoveredSkills,
       routing: {
         requestedSkill: invocation.skill,
         invokedSkills: [],
@@ -414,6 +417,14 @@ function requireString(value, field, allowNull = false) {
   }
 }
 
+function validateUniqueStringArray(value, field) {
+  requireArray(value, field);
+  for (const [index, item] of value.entries()) {
+    requireString(item, `${field}[${index}]`);
+  }
+  assertUnique(value, field);
+}
+
 function validateObservationItems(items, fields, itemName) {
   requireArray(items, itemName);
   for (const [index, item] of items.entries()) {
@@ -448,11 +459,10 @@ function validateResult(result) {
     [],
     'result.observations',
   );
-  requireArray(result.observations.discoveredSkills, 'result.observations.discoveredSkills');
-  for (const [index, name] of result.observations.discoveredSkills.entries()) {
-    requireString(name, `result.observations.discoveredSkills[${index}]`);
-  }
-  assertUnique(result.observations.discoveredSkills, 'result.observations.discoveredSkills');
+  validateUniqueStringArray(
+    result.observations.discoveredSkills,
+    'result.observations.discoveredSkills',
+  );
 
   assertFields(
     result.observations.routing,
@@ -464,14 +474,7 @@ function validateResult(result) {
     result.observations.routing.requestedSkill,
     'result.observations.routing.requestedSkill',
   );
-  requireArray(
-    result.observations.routing.invokedSkills,
-    'result.observations.routing.invokedSkills',
-  );
-  for (const [index, name] of result.observations.routing.invokedSkills.entries()) {
-    requireString(name, `result.observations.routing.invokedSkills[${index}]`);
-  }
-  assertUnique(
+  validateUniqueStringArray(
     result.observations.routing.invokedSkills,
     'result.observations.routing.invokedSkills',
   );
@@ -545,14 +548,15 @@ async function executeProduction({ repositoryRoot, adapter, invocation }) {
 
   const suite = loadCanonicalSuite(repositoryRoot);
   const packageDefinition = discoverCanonicalPackage(repositoryRoot);
+  const discoveredSkills = packageDefinition.skills.map(({ name }) => name);
   const resolution = resolveDependencies(suite, packageDefinition, invocation.skill);
   if (resolution.missingSkill) {
     return validateResult(
-      missingDependencyResult(invocation, packageDefinition, resolution),
+      missingDependencyResult(invocation, discoveredSkills, resolution),
     );
   }
   const context = {
-    discoveredSkills: packageDefinition.skills.map(({ name }) => name),
+    discoveredSkills,
     resolvedSkills: resolution.resolved,
   };
   const result = validateResult(await adapter.execute(invocation, context));
