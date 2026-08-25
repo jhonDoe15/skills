@@ -9,8 +9,10 @@ const test = require('node:test');
 const { executeProduction } = require('../suite');
 const { createCursorAdapter } = require('../suite/adapters/cursor');
 const {
+  AGENT_WRITING_SKILL,
   createTracerPackage,
   tracerCase,
+  WRITING_FOUNDATION_MARKER,
 } = require('./fixtures/cursor-agent-writing-tracer');
 
 const canonicalRepositoryRoot = path.resolve(__dirname, '..');
@@ -25,7 +27,48 @@ function listFiles(directory, root = directory) {
     .sort();
 }
 
-function createSuccessfulSdk(observation) {
+function responsePayload(result, kind) {
+  for (const { text } of result.observations.responses) {
+    try {
+      const payload = JSON.parse(text);
+      if (payload?.kind === kind) return payload;
+    } catch {
+      // Ignore non-JSON model responses.
+    }
+  }
+  assert.fail(`missing ${kind} response`);
+}
+
+function resolveArtifact(result, artifact) {
+  const match = /^response:\/\/(\d+)$/.exec(artifact.reference);
+  assert.ok(match, `unresolvable artifact reference: ${artifact.reference}`);
+  const response = result.observations.responses[Number(match[1])];
+  assert.ok(response, `missing artifact response: ${artifact.reference}`);
+  return JSON.parse(response.text);
+}
+
+function resolveArtifacts(result) {
+  return result.observations.artifacts.map((artifact) => (
+    resolveArtifact(result, artifact)
+  ));
+}
+
+function skillReadEvents(skill) {
+  const callId = `read-skill-${skill}`;
+  const args = { path: `.cursor/skills/${skill}/SKILL.md` };
+  return ['running', 'completed'].map((status) => ({
+    type: 'tool_call',
+    call_id: callId,
+    name: 'read',
+    status,
+    args,
+  }));
+}
+
+function createSuccessfulSdk(
+  observation,
+  { emitSkillReads = true, writeAdditionalArtifacts } = {},
+) {
   class JsonlLocalAgentStore {
     constructor(directory) {
       observation.storeDirectory = directory;
@@ -53,6 +96,11 @@ function createSuccessfulSdk(observation) {
           observation.cancelled = true;
         },
         async *stream() {
+          if (emitSkillReads) {
+            for (const skill of ['agent-writing', 'writing-foundation']) {
+              yield* skillReadEvents(skill);
+            }
+          }
           yield {
             type: 'assistant',
             message: {
@@ -78,6 +126,9 @@ function createSuccessfulSdk(observation) {
               status: 'complete',
             }, null, 2)}\n`,
           );
+          if (writeAdditionalArtifacts) {
+            writeAdditionalArtifacts(options.local.cwd);
+          }
           yield {
             type: 'tool_call',
             call_id: 'tool-1',
@@ -164,20 +215,36 @@ test('Cursor Adapter executes the tracer in a pristine project and normalizes ev
     requestedSkill: 'agent-writing',
     invokedSkills: ['writing-foundation', 'agent-writing'],
   });
+  assert.deepEqual(
+    responsePayload(result, 'cursor-observed-skill-invocations'),
+    {
+      kind: 'cursor-observed-skill-invocations',
+      invokedSkills: ['agent-writing', 'writing-foundation'],
+    },
+  );
   assert.match(result.observations.responses[0].text, /Activation: When /);
   assert.match(result.observations.responses[0].text, /Behavior: /);
   assert.match(result.observations.responses[0].text, /Completion: Complete when /);
-  assert.deepEqual(
-    result.observations.artifacts.map(({ reference }) => reference),
-    [
-      'workspace://agent-instructions.md',
-      'workspace://agent-writing-trace.json',
-    ],
-  );
-  assert.deepEqual(result.observations.toolUses, [{
-    name: 'write',
-    outcome: 'succeeded',
-  }]);
+  const snapshots = resolveArtifacts(result);
+  assert.deepEqual(snapshots.map(({ path: artifactPath }) => artifactPath), [
+    'agent-instructions.md',
+    'agent-writing-trace.json',
+  ]);
+  assert.match(snapshots[0].content, /Activation: When /);
+  assert.deepEqual(JSON.parse(snapshots[1].content), {
+    invokedSkills: ['writing-foundation', 'agent-writing'],
+    status: 'complete',
+  });
+  assert.deepEqual(result.observations.toolUses, [
+    {
+      name: 'read',
+      outcome: 'succeeded',
+    },
+    {
+      name: 'write',
+      outcome: 'succeeded',
+    },
+  ]);
   assert.ok(result.observations.attemptedMutations.some((mutation) => (
     mutation.operation === 'write'
       && mutation.target === 'agent-instructions.md'
@@ -197,10 +264,96 @@ test('Cursor Adapter executes the tracer in a pristine project and normalizes ev
   assert.equal(fs.existsSync(observation.storeDirectory), false);
   assert.equal(tracerCase.control.kind, 'no-skill');
   assert.deepEqual(tracerCase.control.installedSkills, []);
+  assert.doesNotMatch(AGENT_WRITING_SKILL, /disable-model-invocation/);
+  assert.doesNotMatch(WRITING_FOUNDATION_MARKER, /disable-model-invocation/);
   assert.deepEqual(
     tracerCase.gateOrder,
     ['deterministic', 'qualitative'],
   );
+});
+
+test('Cursor Adapter does not present canonical resolution as observed invocation', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk({}, { emitSkillReads: false }),
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  });
+
+  assert.deepEqual(result.observations.routing.invokedSkills, [
+    'writing-foundation',
+    'agent-writing',
+  ]);
+  assert.equal(
+    result.observations.responses.some(({ text }) => (
+      text.includes('"kind":"cursor-observed-skill-invocations"')
+    )),
+    false,
+  );
+});
+
+test('Cursor Adapter returns bounded safe artifact snapshots', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const outsideRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'cursor-adapter-outside-test-'),
+  );
+  t.after(() => fs.rmSync(outsideRoot, { recursive: true, force: true }));
+  const outsideFile = path.join(outsideRoot, 'outside.txt');
+  fs.writeFileSync(outsideFile, 'outside content must not be captured\n');
+  const observation = {};
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk(observation, {
+      writeAdditionalArtifacts(projectRoot) {
+        fs.writeFileSync(
+          path.join(projectRoot, 'oversized.txt'),
+          Buffer.alloc((64 * 1024) + 1, 'x'),
+        );
+        fs.writeFileSync(
+          path.join(projectRoot, 'binary.bin'),
+          Buffer.from([0, 255, 1, 254]),
+        );
+        fs.symlinkSync(outsideFile, path.join(projectRoot, 'outside-link.txt'));
+      },
+    }),
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  });
+
+  const snapshots = resolveArtifacts(result);
+  const byPath = new Map(snapshots.map((snapshot) => [snapshot.path, snapshot]));
+  assert.deepEqual(byPath.get('oversized.txt'), {
+    kind: 'cursor-artifact-snapshot',
+    path: 'oversized.txt',
+    status: 'omitted',
+    reason: 'oversized',
+    sizeBytes: (64 * 1024) + 1,
+    limitBytes: 64 * 1024,
+  });
+  assert.deepEqual(byPath.get('binary.bin'), {
+    kind: 'cursor-artifact-snapshot',
+    path: 'binary.bin',
+    status: 'omitted',
+    reason: 'unsupported-media-type',
+    sizeBytes: 4,
+  });
+  assert.equal(byPath.has('outside-link.txt'), false);
+  assert.equal(
+    result.observations.responses.some(({ text }) => (
+      text.includes('outside content must not be captured')
+    )),
+    false,
+  );
+  assert.equal(fs.existsSync(observation.createOptions.local.cwd), false);
 });
 
 test('Cursor Adapter reports project setup failure without executing an agent', async (t) => {
@@ -301,6 +454,9 @@ test('Cursor Adapter preserves partial evidence and cancels an interrupted run',
             this.status = 'cancelled';
           },
           async *stream() {
+            for (const skill of ['agent-writing', 'writing-foundation']) {
+              yield* skillReadEvents(skill);
+            }
             yield {
               type: 'assistant',
               message: {
@@ -375,17 +531,37 @@ test('Cursor Adapter preserves partial evidence and cancels an interrupted run',
     code: 'stream_interrupted',
     message: 'stream interrupted',
   });
-  assert.deepEqual(result.observations.responses, [{
-    text: 'Activation: When a JSON path is supplied.',
-  }]);
-  assert.deepEqual(result.observations.artifacts, [{
-    reference: 'workspace://agent-instructions.md',
-    mediaType: 'text/markdown',
-  }]);
-  assert.deepEqual(result.observations.toolUses, [{
-    name: 'write',
-    outcome: 'attempted',
-  }]);
+  assert.equal(
+    result.observations.responses[0].text,
+    'Activation: When a JSON path is supplied.',
+  );
+  assert.deepEqual(
+    responsePayload(result, 'cursor-observed-skill-invocations'),
+    {
+      kind: 'cursor-observed-skill-invocations',
+      invokedSkills: ['agent-writing', 'writing-foundation'],
+    },
+  );
+  const partialSnapshot = resolveArtifact(
+    result,
+    result.observations.artifacts[0],
+  );
+  assert.deepEqual(partialSnapshot, {
+    kind: 'cursor-artifact-snapshot',
+    path: 'agent-instructions.md',
+    status: 'captured',
+    content: 'Activation: When a JSON path is supplied.\n',
+  });
+  assert.deepEqual(result.observations.toolUses, [
+    {
+      name: 'read',
+      outcome: 'succeeded',
+    },
+    {
+      name: 'write',
+      outcome: 'attempted',
+    },
+  ]);
   assert.ok(result.observations.attemptedMutations.some((mutation) => (
     mutation.operation === 'write'
       && mutation.target === 'agent-instructions.md'

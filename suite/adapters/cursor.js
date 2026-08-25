@@ -6,6 +6,9 @@ const path = require('node:path');
 
 const { defineProductionAdapter } = require('..');
 
+const MAX_ARTIFACT_BYTES = 64 * 1024;
+const MAX_ARTIFACT_FILES = 64;
+
 function loadCursorSdk() {
   return require('@cursor/sdk');
 }
@@ -54,7 +57,26 @@ function normalizeTarget(args, projectRoot, toolName) {
   return relative.split(path.sep).join('/');
 }
 
-function collectStreamEvidence(event, projectRoot, calls, responseTexts) {
+function observedSkillName(rawName, args, projectRoot) {
+  if (!args || typeof args !== 'object') return null;
+  if (/skill/i.test(String(rawName || ''))) {
+    const directName = args.skillName || args.skill_name || args.skill;
+    if (typeof directName === 'string' && /^[a-z0-9-]+$/.test(directName)) {
+      return directName;
+    }
+  }
+  const target = normalizeTarget(args, projectRoot, 'read');
+  const match = /^(?:\.cursor|\.agents)\/skills\/([^/]+)\/SKILL\.md$/.exec(target);
+  return match && /^[a-z0-9-]+$/.test(match[1]) ? match[1] : null;
+}
+
+function collectStreamEvidence(
+  event,
+  projectRoot,
+  calls,
+  responseTexts,
+  observedSkills,
+) {
   if (event?.type === 'assistant') {
     for (const block of event.message?.content || []) {
       if (block?.type === 'text' && typeof block.text === 'string') {
@@ -70,6 +92,14 @@ function collectStreamEvidence(event, projectRoot, calls, responseTexts) {
     : `unidentified-${calls.size}`;
   const previous = calls.get(callId);
   const name = normalizeToolName(event.name || previous?.rawName);
+  const skillName = observedSkillName(
+    event.name || previous?.rawName,
+    event.args || previous?.args,
+    projectRoot,
+  );
+  if (skillName && !observedSkills.includes(skillName)) {
+    observedSkills.push(skillName);
+  }
   calls.set(callId, {
     rawName: event.name || previous?.rawName,
     name,
@@ -82,23 +112,120 @@ function collectStreamEvidence(event, projectRoot, calls, responseTexts) {
 function mediaTypeFor(filePath) {
   if (filePath.endsWith('.md')) return 'text/markdown';
   if (filePath.endsWith('.json')) return 'application/json';
-  return 'text/plain';
+  if (filePath.endsWith('.txt')) return 'text/plain';
+  return 'application/octet-stream';
 }
 
-function listGeneratedFiles(directory, relativeDirectory = '') {
-  const absoluteDirectory = path.join(directory, relativeDirectory);
-  return fs.readdirSync(absoluteDirectory, { withFileTypes: true })
-    .flatMap((entry) => {
-      if (relativeDirectory === '' && entry.name === '.cursor') return [];
+function listGeneratedFiles(directory) {
+  const files = [];
+  let truncated = false;
+
+  function visit(relativeDirectory = '') {
+    const absoluteDirectory = path.join(directory, relativeDirectory);
+    const entries = fs.readdirSync(absoluteDirectory, { withFileTypes: true })
+      .sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      if (relativeDirectory === '' && entry.name === '.cursor') continue;
+      if (files.length >= MAX_ARTIFACT_FILES) {
+        truncated = true;
+        return;
+      }
       const relativePath = path.join(relativeDirectory, entry.name);
       if (entry.isDirectory()) {
-        return listGeneratedFiles(directory, relativePath);
+        visit(relativePath);
+        if (truncated) return;
+      } else if (entry.isFile()) {
+        files.push(relativePath.split(path.sep).join('/'));
       }
-      return entry.isFile()
-        ? [relativePath.split(path.sep).join('/')]
-        : [];
-    })
-    .sort();
+    }
+  }
+
+  visit();
+  return { files, truncated };
+}
+
+function omittedArtifact(mediaType, payload, reason, details = {}) {
+  return {
+    mediaType,
+    payload: {
+      ...payload,
+      status: 'omitted',
+      reason,
+      ...details,
+    },
+  };
+}
+
+function snapshotArtifact(projectRoot, file) {
+  const mediaType = mediaTypeFor(file);
+  const payload = {
+    kind: 'cursor-artifact-snapshot',
+    path: file,
+  };
+  const absolutePath = path.resolve(projectRoot, file);
+  const relativePath = path.relative(projectRoot, absolutePath);
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    return omittedArtifact(mediaType, payload, 'outside-workspace');
+  }
+
+  let descriptor;
+  try {
+    descriptor = fs.openSync(
+      absolutePath,
+      fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0),
+    );
+    const stats = fs.fstatSync(descriptor);
+    if (!stats.isFile()) {
+      return omittedArtifact(mediaType, payload, 'not-regular-file');
+    }
+    if (mediaType === 'application/octet-stream') {
+      return omittedArtifact(
+        mediaType,
+        payload,
+        'unsupported-media-type',
+        { sizeBytes: stats.size },
+      );
+    }
+    if (stats.size > MAX_ARTIFACT_BYTES) {
+      return omittedArtifact(mediaType, payload, 'oversized', {
+        sizeBytes: stats.size,
+        limitBytes: MAX_ARTIFACT_BYTES,
+      });
+    }
+
+    const buffer = Buffer.alloc(stats.size + 1);
+    const bytesRead = fs.readSync(descriptor, buffer, 0, buffer.length, 0);
+    if (bytesRead > MAX_ARTIFACT_BYTES) {
+      return omittedArtifact(mediaType, payload, 'oversized', {
+        sizeBytes: bytesRead,
+        limitBytes: MAX_ARTIFACT_BYTES,
+      });
+    }
+    let content;
+    try {
+      content = new TextDecoder('utf-8', { fatal: true })
+        .decode(buffer.subarray(0, bytesRead));
+    } catch {
+      return omittedArtifact(
+        mediaType,
+        payload,
+        'invalid-utf8',
+        { sizeBytes: bytesRead },
+      );
+    }
+    return {
+      mediaType,
+      payload: {
+        ...payload,
+        status: 'captured',
+        content,
+      },
+    };
+  } catch {
+    return omittedArtifact(mediaType, payload, 'unreadable');
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+  }
 }
 
 function deduplicate(items, key) {
@@ -109,8 +236,10 @@ function normalizedObservations(
   invocation,
   context,
   calls,
-  files,
+  artifacts,
   responseTexts,
+  observedSkills,
+  artifactScanTruncated,
 ) {
   const toolUses = [...calls.values()].map(({ name, outcome }) => ({
     name,
@@ -123,11 +252,45 @@ function normalizedObservations(
       target,
       outcome,
     }));
-  attemptedMutations.push(...files.map((file) => ({
+  attemptedMutations.push(...artifacts.map(({ payload }) => ({
     operation: 'write',
-    target: file,
+    target: payload.path,
     outcome: 'succeeded',
   })));
+
+  const responses = deduplicate(
+    responseTexts.filter((text) => typeof text === 'string' && text.length > 0)
+      .map((text) => ({ text })),
+    ({ text }) => text,
+  );
+  const observedInvocations = observedSkills.filter((name) => (
+    context.resolvedSkills.includes(name)
+  ));
+  if (observedInvocations.length > 0) {
+    responses.push({
+      text: JSON.stringify({
+        kind: 'cursor-observed-skill-invocations',
+        invokedSkills: observedInvocations,
+      }),
+    });
+  }
+  if (artifactScanTruncated) {
+    responses.push({
+      text: JSON.stringify({
+        kind: 'cursor-artifact-scan',
+        status: 'truncated',
+        limitFiles: MAX_ARTIFACT_FILES,
+      }),
+    });
+  }
+  const normalizedArtifacts = artifacts.map(({ mediaType, payload }) => {
+    const responseIndex = responses.length;
+    responses.push({ text: JSON.stringify(payload) });
+    return {
+      reference: `response://${responseIndex}`,
+      mediaType,
+    };
+  });
 
   return {
     discoveredSkills: [...context.discoveredSkills],
@@ -135,15 +298,8 @@ function normalizedObservations(
       requestedSkill: invocation.skill,
       invokedSkills: [...context.resolvedSkills],
     },
-    responses: deduplicate(
-      responseTexts.filter((text) => typeof text === 'string' && text.length > 0)
-        .map((text) => ({ text })),
-      ({ text }) => text,
-    ),
-    artifacts: files.map((file) => ({
-      reference: `workspace://${file}`,
-      mediaType: mediaTypeFor(file),
-    })),
+    responses,
+    artifacts: normalizedArtifacts,
     toolUses: deduplicate(
       toolUses,
       ({ name, outcome }) => `${name}\0${outcome}`,
@@ -161,7 +317,9 @@ function successfulResult(
   runResult,
   costUsd,
   calls,
-  files,
+  artifacts,
+  observedSkills,
+  artifactScanTruncated,
 ) {
   return {
     status: 'succeeded',
@@ -169,8 +327,10 @@ function successfulResult(
       invocation,
       context,
       calls,
-      files,
+      artifacts,
       [runResult.result],
+      observedSkills,
+      artifactScanTruncated,
     ),
     failure: null,
     durationMs: runResult.durationMs,
@@ -204,8 +364,10 @@ function failedResult({
   costUsd,
   resolvedModel,
   calls = new Map(),
-  files = [],
+  artifacts = [],
   responseTexts = [],
+  observedSkills = [],
+  artifactScanTruncated = false,
 }) {
   const failure = errorDetails(error, fallbackCode, executionRoot);
   return {
@@ -214,8 +376,10 @@ function failedResult({
       invocation,
       context,
       calls,
-      files,
+      artifacts,
       responseTexts,
+      observedSkills,
+      artifactScanTruncated,
     ),
     failure: {
       stage,
@@ -287,6 +451,7 @@ async function executeCursor({
   let costUsd = null;
   const calls = new Map();
   const responseTexts = [];
+  const observedSkills = [];
 
   try {
     executionRoot = fs.mkdtempSync(
@@ -315,7 +480,13 @@ async function executeCursor({
     failureStage = 'execution';
     fallbackCode = 'cursor-execution-failed';
     for await (const event of run.stream()) {
-      collectStreamEvidence(event, projectRoot, calls, responseTexts);
+      collectStreamEvidence(
+        event,
+        projectRoot,
+        calls,
+        responseTexts,
+        observedSkills,
+      );
     }
     runResult = await run.wait();
   } catch (error) {
@@ -340,10 +511,15 @@ async function executeCursor({
     }
   }
 
-  let files = [];
+  let artifacts = [];
+  let artifactScanTruncated = false;
   if (projectRoot && fs.existsSync(projectRoot)) {
     try {
-      files = listGeneratedFiles(projectRoot);
+      const generatedFiles = listGeneratedFiles(projectRoot);
+      artifacts = generatedFiles.files.map((file) => (
+        snapshotArtifact(projectRoot, file)
+      ));
+      artifactScanTruncated = generatedFiles.truncated;
     } catch (error) {
       if (!failureError) {
         failureError = error;
@@ -397,11 +573,13 @@ async function executeCursor({
       costUsd,
       resolvedModel,
       calls,
-      files,
+      artifacts,
       responseTexts: [
         ...responseTexts,
         ...(typeof runResult?.result === 'string' ? [runResult.result] : []),
       ],
+      observedSkills,
+      artifactScanTruncated,
     })
     : successfulResult(
       invocation,
@@ -409,7 +587,9 @@ async function executeCursor({
       runResult,
       costUsd,
       calls,
-      files,
+      artifacts,
+      observedSkills,
+      artifactScanTruncated,
     );
 
   try {
@@ -427,8 +607,10 @@ async function executeCursor({
         costUsd,
         resolvedModel,
         calls,
-        files,
+        artifacts,
         responseTexts: [runResult.result],
+        observedSkills,
+        artifactScanTruncated,
       });
     }
   } finally {

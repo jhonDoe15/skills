@@ -6,20 +6,21 @@ const path = require('node:path');
 
 const AGENT_WRITING_SKILL = `---
 name: agent-writing
-description: Test-only tracer for an explicit request to write an agent-facing instruction artifact.
-disable-model-invocation: true
+description: Use when explicitly asked to create agent-facing instructions with activation, behavior, and completion conditions.
 ---
 
 # Agent Writing tracer
 
-Use \`writing-foundation\` by its canonical Skill name. Do not copy or restate
-that dependency's behavior.
+Before producing artifacts, read
+\`.cursor/skills/writing-foundation/SKILL.md\` and apply its canonical invocation
+marker. Do not copy or invent Foundation behavior.
 
 For the supplied request:
 
 1. Create \`agent-instructions.md\` with a reachable activation condition, one
    observable behavior, and a completion condition.
-2. Create \`agent-writing-trace.json\` with this exact invocation evidence:
+2. After both canonical Skill files have been read, create
+   \`agent-writing-trace.json\` with this exact invocation evidence:
    \`{"invokedSkills":["writing-foundation","agent-writing"],"status":"complete"}\`.
 3. Return the artifact paths and repeat the activation, behavior, and completion
    conditions so the result is inspectable after the temporary project is gone.
@@ -29,14 +30,13 @@ Complete when both files exist and the response contains all three conditions.
 
 const WRITING_FOUNDATION_MARKER = `---
 name: writing-foundation
-description: Test-only dependency marker consumed only by the Agent Writing tracer.
-disable-model-invocation: true
+description: Use when the Agent Writing tracer requests its canonical dependency marker.
 ---
 
 # Writing Foundation tracer marker
 
-Record that this canonical dependency was invoked. This fixture intentionally
-defines no writing behavior.
+Return only the canonical invocation marker \`writing-foundation\` to the
+requesting tracer. This fixture intentionally defines no writing behavior.
 `;
 
 const tracerCase = Object.freeze({
