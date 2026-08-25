@@ -53,16 +53,23 @@ function resolveArtifacts(result) {
   ));
 }
 
-function skillReadEvents(skill) {
+function skillReadEvents(skill, terminalStatus = 'completed') {
   const callId = `read-skill-${skill}`;
   const args = { path: `.cursor/skills/${skill}/SKILL.md` };
-  return ['running', 'completed'].map((status) => ({
-    type: 'tool_call',
-    call_id: callId,
-    name: 'read',
-    status,
-    args,
-  }));
+  return [
+    {
+      type: 'tool_call',
+      call_id: callId,
+      name: 'read',
+      status: 'running',
+      args,
+    },
+    {
+      type: 'tool_call',
+      call_id: callId,
+      status: terminalStatus,
+    },
+  ];
 }
 
 function createSuccessfulSdk(
@@ -434,6 +441,58 @@ test('Cursor Adapter does not present canonical resolution as observed invocatio
     'writing-foundation',
     'agent-writing',
   ]);
+  assert.equal(
+    result.observations.responses.some(({ text }) => (
+      text.includes('"kind":"cursor-observed-skill-invocations"')
+    )),
+    false,
+  );
+});
+
+test('Cursor Adapter does not observe failed or cancelled Skill reads', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const toolEvents = [
+    ...skillReadEvents('agent-writing', 'error'),
+    ...skillReadEvents('writing-foundation', 'cancelled'),
+  ];
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk({}, {
+      emitSkillReads: false,
+      toolEvents,
+    }),
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  });
+
+  assert.equal(
+    result.observations.responses.some(({ text }) => (
+      text.includes('"kind":"cursor-observed-skill-invocations"')
+    )),
+    false,
+  );
+});
+
+test('Cursor Adapter does not observe incomplete Skill reads', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk({}, {
+      emitSkillReads: false,
+      toolEvents: [skillReadEvents('agent-writing')[0]],
+    }),
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  });
+
   assert.equal(
     result.observations.responses.some(({ text }) => (
       text.includes('"kind":"cursor-observed-skill-invocations"')

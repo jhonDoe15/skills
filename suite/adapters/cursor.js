@@ -77,7 +77,7 @@ function collectStreamEvidence(
   projectRoot,
   calls,
   responseTexts,
-  observedSkills,
+  skillReads,
 ) {
   if (event?.type === 'assistant') {
     for (const block of event.message?.content || []) {
@@ -99,8 +99,12 @@ function collectStreamEvidence(
     event.args || previous?.args,
     projectRoot,
   );
-  if (skillName && !observedSkills.includes(skillName)) {
-    observedSkills.push(skillName);
+  const previousSkillRead = skillReads.get(callId);
+  if (skillName || previousSkillRead) {
+    skillReads.set(callId, {
+      name: skillName || previousSkillRead.name,
+      status: event.status,
+    });
   }
   calls.set(callId, {
     rawName: event.name || previous?.rawName,
@@ -109,6 +113,14 @@ function collectStreamEvidence(
     target: normalizeTarget(event.args || previous?.args, projectRoot, name),
     args: event.args || previous?.args,
   });
+}
+
+function successfulObservedSkills(skillReads) {
+  const observedSkills = new Set();
+  for (const { name, status } of skillReads.values()) {
+    if (status === 'completed') observedSkills.add(name);
+  }
+  return [...observedSkills];
 }
 
 function mediaTypeFor(filePath) {
@@ -470,7 +482,8 @@ async function executeCursor({
   let artifactScanTruncated = false;
   const calls = new Map();
   const responseTexts = [];
-  const observedSkills = [];
+  const skillReads = new Map();
+  let observedSkills = [];
 
   try {
     try {
@@ -515,7 +528,7 @@ async function executeCursor({
           projectRoot,
           calls,
           responseTexts,
-          observedSkills,
+          skillReads,
         );
       }
       runResult = await run.wait();
@@ -548,6 +561,7 @@ async function executeCursor({
       ));
       artifactScanTruncated = generatedFiles.truncated;
     }
+    observedSkills = successfulObservedSkills(skillReads);
 
     if (!failureError && runResult?.status !== 'finished') {
       failureError = Object.assign(
