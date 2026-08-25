@@ -282,12 +282,13 @@ test('Claude Code Adapter suppresses controllable ambient host state', async (t)
   });
 
   const settingsIndex = execution.args.indexOf('--settings');
-  assert.deepEqual(JSON.parse(execution.args[settingsIndex + 1]), {
+  const settings = JSON.parse(execution.args[settingsIndex + 1]);
+  assert.deepEqual(settings, {
     autoMemoryEnabled: false,
     disableAllHooks: true,
     disableClaudeAiConnectors: true,
-    enabledPlugins: {},
   });
+  assert.equal(Object.hasOwn(settings, 'enabledPlugins'), false);
 });
 
 test('Claude tracer fixture declares a matched No-Skill control outside package construction', (t) => {

@@ -17,7 +17,6 @@ const ISOLATED_SESSION_SETTINGS = JSON.stringify({
   autoMemoryEnabled: false,
   disableAllHooks: true,
   disableClaudeAiConnectors: true,
-  enabledPlugins: {},
 });
 const MUTATION_OPERATIONS = new Map([
   ['Write', 'write'],
