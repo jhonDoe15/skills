@@ -331,7 +331,7 @@ test('production and test execution reject Adapter-invented routing', async (t) 
       adapter: productionAdapter,
       invocation,
     }),
-    /invokedSkills must match resolved Skill invocation order/,
+    /invokedSkills must match resolved Skills/,
   );
 
   const testAdapter = defineTestAdapter({
@@ -354,7 +354,7 @@ test('production and test execution reject Adapter-invented routing', async (t) 
         dependency: 'writing-foundation',
       },
     }),
-    /invokedSkills must match resolved Skill invocation order/,
+    /invokedSkills must match resolved Skills/,
   );
 });
 
@@ -386,6 +386,7 @@ test('Claude Code and Cursor fake Adapters share one normalized Interface', asyn
         response: 'Cursor normalized artifact.',
         artifact: 'artifact://cursor/output.md',
         durationMs: 14,
+        invokedSkills: [...context.resolvedSkills].reverse(),
       }));
     },
   });
@@ -409,15 +410,19 @@ test('Claude Code and Cursor fake Adapters share one normalized Interface', asyn
       'agent-writing',
       'writing-foundation',
     ]);
-    assert.deepEqual(result.observations.routing.invokedSkills, [
-      'writing-foundation',
-      'agent-writing',
-    ]);
     assert.deepEqual(result.model, {
       requested: 'test-model',
       resolved: 'resolved-test-model',
     });
   }
+  assert.deepEqual(claudeCodeResult.observations.routing.invokedSkills, [
+    'writing-foundation',
+    'agent-writing',
+  ]);
+  assert.deepEqual(cursorResult.observations.routing.invokedSkills, [
+    'agent-writing',
+    'writing-foundation',
+  ]);
   assert.equal(
     claudeCodeResult.observations.responses[0].text,
     'Claude Code normalized artifact.',

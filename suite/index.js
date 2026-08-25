@@ -451,6 +451,11 @@ function validateUniqueStringArray(value, field) {
   assertUnique(value, field);
 }
 
+function containsExactly(actual, expected) {
+  return actual.length === expected.length
+    && expected.every((item) => actual.includes(item));
+}
+
 function validateObservationItems(items, fields, itemName) {
   requireArray(items, itemName);
   for (const [index, item] of items.entries()) {
@@ -582,10 +587,12 @@ function validateAdapterResult(result, invocation, context) {
       'result.observations.discoveredSkills must match canonical discovery',
     );
   }
-  if (JSON.stringify(result.observations.routing.invokedSkills)
-    !== JSON.stringify(context.resolvedSkills)) {
+  if (!containsExactly(
+    result.observations.routing.invokedSkills,
+    context.resolvedSkills,
+  )) {
     throw new SuiteContractError(
-      'result.observations.routing.invokedSkills must match resolved Skill invocation order',
+      'result.observations.routing.invokedSkills must match resolved Skills',
     );
   }
   return result;
