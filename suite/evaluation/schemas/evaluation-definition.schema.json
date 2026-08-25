@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jhonDoe15.github.io/skills/schemas/skill-evaluation-definition-v1.json",
+  "title": "Skill Evaluation definition",
+  "type": "object",
+  "required": [
+    "skill_name",
+    "version",
+    "evaluation",
+    "config",
+    "evals",
+    "judge"
+  ],
+  "properties": {
+    "skill_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "layer",
+        "skill",
+        "hosts",
+        "arms"
+      ],
+      "properties": {
+        "scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "layer": {
+          "enum": [
+            "role",
+            "component",
+            "outcome",
+            "trigger"
+          ]
+        },
+        "skill": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hosts": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "arms": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "no-skill",
+              "treatment",
+              "component-ablation"
+            ]
+          }
+        }
+      }
+    },
+    "config": {
+      "type": "object"
+    },
+    "evals": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "prompt",
+          "expected_output",
+          "files",
+          "expectations"
+        ]
+      }
+    },
+    "judge": {
+      "type": "object",
+      "required": [
+        "score_range",
+        "minimum_dimension_score",
+        "dimensions"
+      ]
+    }
+  }
+}

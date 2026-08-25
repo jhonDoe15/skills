@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jhonDoe15.github.io/skills/schemas/skill-evaluation-retained-evidence-v1.json",
+  "title": "Skill Evaluation retained evidence",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "kind",
+    "campaign_fingerprint",
+    "scope",
+    "case_id",
+    "host",
+    "repetition"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "kind": {
+      "enum": [
+        "skill-evaluation-run",
+        "skill-evaluation-judgment"
+      ]
+    },
+    "campaign_fingerprint": {
+      "$ref": "#/$defs/fingerprint"
+    },
+    "scope": {
+      "type": "string",
+      "minLength": 1
+    },
+    "case_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repetition": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "arm": {
+      "type": "object",
+      "required": [
+        "kind",
+        "pairing_id"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "no-skill",
+            "treatment",
+            "component-ablation"
+          ]
+        },
+        "pairing_id": {
+          "$ref": "#/$defs/fingerprint"
+        },
+        "ablated_dependency": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "required": [
+        "status",
+        "duration_ms",
+        "cost_usd",
+        "discovered_skills",
+        "observable_tool_use",
+        "attempted_mutations",
+        "output",
+        "routing"
+      ]
+    },
+    "deterministic": {
+      "type": "object",
+      "required": [
+        "passed",
+        "checks"
+      ]
+    },
+    "fingerprints": {
+      "type": "object",
+      "required": [
+        "input",
+        "output",
+        "record"
+      ]
+    },
+    "judge": {
+      "type": "object",
+      "required": [
+        "model",
+        "rubric",
+        "placement"
+      ]
+    },
+    "comparison_fingerprint": {
+      "$ref": "#/$defs/fingerprint"
+    },
+    "judgment": {
+      "type": "object"
+    },
+    "fingerprint": {
+      "$ref": "#/$defs/fingerprint"
+    }
+  },
+  "$defs": {
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "skill-evaluation-run"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "model",
+          "arm",
+          "package_revision",
+          "execution_configuration",
+          "execution",
+          "deterministic",
+          "fingerprints"
+        ]
+      },
+      "else": {
+        "required": [
+          "model",
+          "pairing_id",
+          "judge",
+          "comparison_fingerprint",
+          "judgment",
+          "metrics",
+          "duration_ms",
+          "cost_usd",
+          "fingerprint"
+        ]
+      }
+    }
+  ]
+}
