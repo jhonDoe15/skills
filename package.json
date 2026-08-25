@@ -1,0 +1,14 @@
+{
+  "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "@cursor/sdk": "1.0.28"
+  },
+  "overrides": {
+    "@connectrpc/connect-node": {
+      "undici": "6.28.0"
+    }
+  }
+}
