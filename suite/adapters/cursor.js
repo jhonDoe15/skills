@@ -42,6 +42,12 @@ function normalizeOutcome(status) {
   return 'attempted';
 }
 
+function isOutsideWorkspace(relativePath) {
+  return relativePath === '..'
+    || relativePath.startsWith(`..${path.sep}`)
+    || path.isAbsolute(relativePath);
+}
+
 function normalizeTarget(args, projectRoot, toolName) {
   if (toolName === 'shell') return 'workspace';
   const candidate = args && typeof args === 'object'
@@ -53,9 +59,8 @@ function normalizeTarget(args, projectRoot, toolName) {
     ? path.resolve(candidate)
     : path.resolve(projectRoot, candidate);
   const relative = path.relative(projectRoot, absolute);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    return 'outside-workspace';
-  }
+  if (isOutsideWorkspace(relative)) return 'outside-workspace';
+  if (relative === '') return 'workspace';
   return relative.split(path.sep).join('/');
 }
 
@@ -178,7 +183,7 @@ function snapshotArtifact(projectRoot, file) {
   };
   const absolutePath = path.resolve(projectRoot, file);
   const relativePath = path.relative(projectRoot, absolutePath);
-  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+  if (isOutsideWorkspace(relativePath)) {
     return omittedArtifact(mediaType, payload, 'outside-workspace');
   }
 

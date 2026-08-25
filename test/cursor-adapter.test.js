@@ -115,7 +115,10 @@ function createSuccessfulSdk(
               yield* skillReadEvents(skill);
             }
           }
-          for (const event of toolEvents) yield event;
+          const emittedToolEvents = typeof toolEvents === 'function'
+            ? toolEvents(options.local.cwd)
+            : toolEvents;
+          for (const event of emittedToolEvents) yield event;
           yield {
             type: 'assistant',
             message: {
@@ -422,6 +425,103 @@ test('Cursor Adapter normalizes SDK image and agent diff mutations', async (t) =
         && mutation.outcome === expected.outcome
     )));
   }
+});
+
+test('Cursor Adapter preserves root and dot-prefixed in-workspace targets', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk({}, {
+      toolEvents(projectRoot) {
+        function completedToolEvent(callId, name, args) {
+          return {
+            type: 'tool_call',
+            call_id: callId,
+            name,
+            status: 'completed',
+            args,
+          };
+        }
+
+        return [
+          completedToolEvent(
+            'root-relative',
+            'generateImage',
+            { filePath: '.' },
+          ),
+          completedToolEvent(
+            'root-absolute',
+            'applyAgentDiff',
+            { path: projectRoot },
+          ),
+          completedToolEvent(
+            'dot-prefixed-file',
+            'generateImage',
+            { filePath: '..notes.md' },
+          ),
+          completedToolEvent(
+            'dot-prefixed-directory',
+            'applyAgentDiff',
+            { path: '..draft/note.txt' },
+          ),
+          completedToolEvent(
+            'parent-escape',
+            'delete',
+            { path: '../outside.txt' },
+          ),
+        ];
+      },
+      writeAdditionalArtifacts(projectRoot) {
+        fs.writeFileSync(path.join(projectRoot, '..notes.md'), 'visible notes\n');
+        fs.mkdirSync(path.join(projectRoot, '..draft'));
+        fs.writeFileSync(
+          path.join(projectRoot, '..draft', 'note.txt'),
+          'visible draft\n',
+        );
+      },
+    }),
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  });
+
+  for (const expected of [
+    { operation: 'write', target: 'workspace' },
+    { operation: 'edit', target: 'workspace' },
+    { operation: 'write', target: '..notes.md' },
+    { operation: 'edit', target: '..draft/note.txt' },
+    { operation: 'delete', target: 'outside-workspace' },
+  ]) {
+    assert.ok(result.observations.attemptedMutations.some((mutation) => (
+      mutation.operation === expected.operation
+        && mutation.target === expected.target
+        && mutation.outcome === 'succeeded'
+    )));
+  }
+  const snapshots = new Map(
+    resolveArtifacts(result).map((snapshot) => [snapshot.path, snapshot]),
+  );
+  assert.deepEqual(
+    snapshots.get('..notes.md'),
+    {
+      kind: 'cursor-artifact-snapshot',
+      path: '..notes.md',
+      status: 'captured',
+      content: 'visible notes\n',
+    },
+  );
+  assert.deepEqual(
+    snapshots.get('..draft/note.txt'),
+    {
+      kind: 'cursor-artifact-snapshot',
+      path: '..draft/note.txt',
+      status: 'captured',
+      content: 'visible draft\n',
+    },
+  );
 });
 
 test('Cursor Adapter does not present canonical resolution as observed invocation', async (t) => {
