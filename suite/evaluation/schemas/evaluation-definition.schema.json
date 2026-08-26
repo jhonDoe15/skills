@@ -90,6 +90,20 @@
           "ablated_dependency": {
             "type": "string",
             "minLength": 1
+          },
+          "should_trigger": {
+            "type": "boolean"
+          },
+          "required_skill_loads": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "canonical_invocation": {
+            "type": "boolean"
           }
         }
       }
