@@ -12,7 +12,7 @@ const {
 } = require('..');
 const { executeTest } = require('../testing');
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const VALID_LAYERS = new Set(['role', 'component', 'outcome', 'trigger']);
 const VALID_ARMS = new Set(['no-skill', 'treatment', 'component-ablation']);
 
@@ -79,6 +79,87 @@ function validateObjectItems(value, fields, field) {
       );
     }
   }
+}
+
+function normalizedControlPolicy(policy, target) {
+  const source = policy || {};
+  for (const field of ['dependencies', 'aliases']) {
+    if (source[field] !== undefined && !Array.isArray(source[field])) {
+      throw new EvaluationContractError(`control policy ${field} must be an array`);
+    }
+  }
+  const conflictingOwners =
+    source.conflictingOwners || source.conflicting_owners || [];
+  if (!Array.isArray(conflictingOwners)) {
+    throw new EvaluationContractError(
+      'control policy conflictingOwners must be an array',
+    );
+  }
+  const normalized = {
+    target: source.target || target,
+    dependencies: [...(source.dependencies || [])],
+    aliases: [...(source.aliases || [])],
+    conflictingOwners: [...conflictingOwners],
+  };
+  requireString(normalized.target, 'control policy target');
+  for (const [field, values] of Object.entries({
+    dependencies: normalized.dependencies,
+    aliases: normalized.aliases,
+    conflictingOwners: normalized.conflictingOwners,
+  })) {
+    validateStringArray(values, `control policy ${field}`);
+  }
+  for (const name of controlPolicySkillsUnchecked(normalized)) {
+    if (!/^[a-z0-9-]+$/.test(name)) {
+      throw new EvaluationContractError(
+        `control policy Skill name is not canonical: "${name}"`,
+      );
+    }
+  }
+  return normalized;
+}
+
+function controlPolicySkillsUnchecked(policy) {
+  return [
+    policy.target,
+    ...policy.dependencies,
+    ...policy.aliases,
+    ...policy.conflictingOwners,
+  ];
+}
+
+function controlPolicySkills(policy, target) {
+  const normalized = normalizedControlPolicy(policy, target);
+  return [...new Set(controlPolicySkillsUnchecked(normalized))];
+}
+
+function inspectNoSkillContamination(observations, policy) {
+  requireObject(observations, 'No-Skill observations');
+  const prohibitedSkills = controlPolicySkills(
+    policy,
+    policy?.target,
+  );
+  const prohibited = new Set(prohibitedSkills);
+  const provisioningMatches = [
+    ...new Set(
+      observations.preExecutionInventory.skillDefinitions
+        .map(({ name }) => name)
+        .filter((name) => prohibited.has(name)),
+    ),
+  ];
+  const runtimeMatches = [
+    ...new Set(
+      observations.skillEvents
+        .map(({ name }) => name)
+        .filter((name) => prohibited.has(name)),
+    ),
+  ];
+  return {
+    clean: provisioningMatches.length === 0 && runtimeMatches.length === 0,
+    prohibitedSkills,
+    provisioningMatches,
+    runtimeMatches,
+  };
 }
 
 function arraysEqual(left, right) {
@@ -319,6 +400,18 @@ function validateEvaluationDefinition(definition) {
         evaluation.ablated_dependency,
         `definition.evals[${index}].ablated_dependency`,
       );
+    } else if (metadata.layer === 'trigger') {
+      if (typeof evaluation.should_trigger !== 'boolean') {
+        throw new EvaluationContractError(
+          `definition.evals[${index}].should_trigger must be a boolean`,
+        );
+      }
+      if (evaluation.required_skill_loads !== undefined) {
+        validateStringArray(
+          evaluation.required_skill_loads,
+          `definition.evals[${index}].required_skill_loads`,
+        );
+      }
     } else if (evaluation.ablated_dependency !== undefined) {
       throw new EvaluationContractError(
         `definition.evals[${index}].ablated_dependency is component-only`,
@@ -432,6 +525,7 @@ function createCampaignManifest({
   repetitions,
   executionConfiguration,
   limitations,
+  controlPolicy = null,
 }) {
   validateEvaluationDefinition(definition);
   requireString(packageRevision, 'packageRevision');
@@ -482,6 +576,10 @@ function createCampaignManifest({
     },
     randomization_seed: definition.config.randomization_seed,
     limitations: [...limitations],
+    control_policy: normalizedControlPolicy(
+      controlPolicy,
+      definition.evaluation.skill,
+    ),
   };
   manifest.fingerprint = fingerprintValue(manifest);
   return deepFreeze(manifest);
@@ -531,6 +629,15 @@ function validateCampaignManifest(manifest, definition = null) {
   if (!Number.isInteger(manifest.repetitions) || manifest.repetitions < 1) {
     throw new EvaluationContractError(
       'manifest.repetitions must be a positive integer',
+    );
+  }
+  const controlPolicy = normalizedControlPolicy(
+    manifest.control_policy,
+    manifest.skill,
+  );
+  if (controlPolicy.target !== manifest.skill) {
+    throw new EvaluationContractError(
+      'manifest control policy target must match manifest.skill',
     );
   }
   if (definition) {
@@ -699,6 +806,36 @@ function sealRunRecord(record) {
   return deepFreeze(record);
 }
 
+function retainedPreExecutionInventory(inventory) {
+  return {
+    skill_definitions: structuredClone(inventory.skillDefinitions),
+    plugins: [...inventory.plugins],
+    rule_sources: [...inventory.ruleSources],
+    package_digest: inventory.packageDigest,
+    truncated: inventory.truncated,
+  };
+}
+
+function normalizedPreExecutionInventory(inventory) {
+  return {
+    skillDefinitions: structuredClone(inventory.skill_definitions),
+    plugins: [...inventory.plugins],
+    ruleSources: [...inventory.rule_sources],
+    packageDigest: inventory.package_digest,
+    truncated: inventory.truncated,
+  };
+}
+
+function retainedControlContamination(observations, policy) {
+  const contamination = inspectNoSkillContamination(observations, policy);
+  return {
+    clean: contamination.clean,
+    prohibited_skills: contamination.prohibitedSkills,
+    provisioning_matches: contamination.provisioningMatches,
+    runtime_matches: contamination.runtimeMatches,
+  };
+}
+
 function createRunEvidence({
   manifest,
   caseDefinition,
@@ -707,6 +844,7 @@ function createRunEvidence({
   arm,
   result,
   deterministicGrade,
+  controlPolicy = null,
 }) {
   validateCampaignManifest(manifest);
   validateCell(cell, 'cell');
@@ -755,7 +893,14 @@ function createRunEvidence({
       status: result.status,
       duration_ms: result.durationMs,
       cost_usd: result.costUsd,
-      discovered_skills: [...result.observations.discoveredSkills],
+      package_skills: [...result.observations.packageSkills],
+      host_available_skills: structuredClone(
+        result.observations.hostAvailableSkills,
+      ),
+      pre_execution_inventory: retainedPreExecutionInventory(
+        result.observations.preExecutionInventory,
+      ),
+      skill_events: structuredClone(result.observations.skillEvents),
       observable_tool_use: structuredClone(result.observations.toolUses),
       attempted_mutations: structuredClone(
         result.observations.attemptedMutations,
@@ -763,8 +908,14 @@ function createRunEvidence({
       artifacts: structuredClone(result.observations.artifacts),
       routing: {
         requested_skill: result.observations.routing.requestedSkill,
-        invoked_skills: [...result.observations.routing.invokedSkills],
+        resolved_skills: [...result.observations.routing.resolvedSkills],
       },
+      control_contamination: normalized.kind === 'no-skill'
+        ? retainedControlContamination(
+          result.observations,
+          controlPolicy || manifest.control_policy,
+        )
+        : null,
       output,
       failure: structuredClone(result.failure),
     },
@@ -871,8 +1022,17 @@ function validateRunEvidence({
     true,
   );
   validateStringArray(
-    record.execution.discovered_skills,
-    'run evidence execution.discovered_skills',
+    record.execution.package_skills,
+    'run evidence execution.package_skills',
+  );
+  requireObject(
+    record.execution.pre_execution_inventory,
+    'run evidence execution.pre_execution_inventory',
+  );
+  requireArray(
+    record.execution.skill_events,
+    'run evidence execution.skill_events',
+    true,
   );
   validateObjectItems(
     record.execution.observable_tool_use,
@@ -895,9 +1055,87 @@ function validateRunEvidence({
     'run evidence execution.routing.requested_skill',
   );
   validateStringArray(
-    record.execution.routing.invoked_skills,
-    'run evidence execution.routing.invoked_skills',
+    record.execution.routing.resolved_skills,
+    'run evidence execution.routing.resolved_skills',
   );
+  validateResult({
+    status: record.execution.status,
+    observations: {
+      packageSkills: record.execution.package_skills,
+      hostAvailableSkills: record.execution.host_available_skills,
+      preExecutionInventory: normalizedPreExecutionInventory(
+        record.execution.pre_execution_inventory,
+      ),
+      skillEvents: record.execution.skill_events,
+      routing: {
+        requestedSkill: record.execution.routing.requested_skill,
+        resolvedSkills: record.execution.routing.resolved_skills,
+      },
+      responses: record.execution.output
+        ? [{ text: record.execution.output }]
+        : [],
+      artifacts: record.execution.artifacts,
+      toolUses: record.execution.observable_tool_use,
+      attemptedMutations: record.execution.attempted_mutations,
+    },
+    failure: record.execution.failure,
+    durationMs: record.execution.duration_ms,
+    costUsd: record.execution.cost_usd,
+    model: {
+      requested: record.model.requested,
+      resolved: record.model.resolved,
+    },
+  });
+  if (expectedArm.kind === 'no-skill') {
+    requireObject(
+      record.execution.control_contamination,
+      'run evidence execution.control_contamination',
+    );
+    if (typeof record.execution.control_contamination.clean !== 'boolean') {
+      throw new EvaluationContractError(
+        'run evidence execution.control_contamination.clean must be a boolean',
+      );
+    }
+    for (const field of [
+      'prohibited_skills',
+      'provisioning_matches',
+      'runtime_matches',
+    ]) {
+      validateStringArray(
+        record.execution.control_contamination[field],
+        `run evidence execution.control_contamination.${field}`,
+      );
+    }
+    if (!record.execution.control_contamination.prohibited_skills
+      .includes(manifest.skill)) {
+      throw new EvaluationContractError(
+        'No-Skill contamination policy omits the target Skill',
+      );
+    }
+    const recomputed = inspectNoSkillContamination(
+      observationsFromExecution(record.execution),
+      {
+        target: manifest.skill,
+        dependencies:
+          record.execution.control_contamination.prohibited_skills
+            .filter((name) => name !== manifest.skill),
+      },
+    );
+    if (!fingerprintsMatch(record.execution.control_contamination, {
+      clean: recomputed.clean,
+      prohibited_skills: recomputed.prohibitedSkills,
+      provisioning_matches: recomputed.provisioningMatches,
+      runtime_matches: recomputed.runtimeMatches,
+    })) {
+      throw new EvaluationContractError(
+        'No-Skill contamination evidence mismatch',
+      );
+    }
+  } else if (record.execution.control_contamination !== null) {
+    throw new EvaluationContractError(
+      'non-control run evidence cannot contain control contamination',
+    );
+  }
   if (record.execution.status === 'succeeded'
     && record.execution.failure !== null) {
     throw new EvaluationContractError(
@@ -952,15 +1190,39 @@ function assessReusableEvidence({
     if (record.execution.status !== 'succeeded') {
       return { reusable: false, reason: 'execution not successful' };
     }
-    const recomputed = gradeDeterministicOutput({
-      definition,
-      caseDefinition,
-      output: record.execution.output,
-    });
+    const recomputed = manifest.layer === 'trigger'
+      ? triggerGradeFromObservation({
+        caseDefinition,
+        skill: definition.skill_name,
+        status: record.execution.status,
+        skillEvents: record.execution.skill_events,
+      })
+      : gradeDeterministicOutput({
+        definition,
+        caseDefinition,
+        output: record.execution.output,
+      });
     if (!fingerprintsMatch(record.deterministic.checks, recomputed.checks)
       || (record.arm.kind !== 'no-skill'
         && record.deterministic.passed !== recomputed.passed)) {
       return { reusable: false, reason: 'deterministic grade mismatch' };
+    }
+    if (record.arm.kind === 'no-skill') {
+      if (!record.execution.control_contamination.clean) {
+        return { reusable: false, reason: 'No-Skill control contaminated' };
+      }
+    } else if (record.arm.kind === 'treatment') {
+      const requiredLoads = manifest.layer === 'component'
+        ? [manifest.skill, componentAblationFor(manifest, caseDefinition).dependency]
+        : manifest.layer === 'trigger'
+          ? caseDefinition.required_skill_loads || [manifest.skill]
+          : [manifest.skill];
+      if (!requiredLoads.every((name) => recordLoadedSkill(record, name))) {
+        return {
+          reusable: false,
+          reason: 'activation evidence not successful',
+        };
+      }
     }
   } catch (error) {
     if (error.message === 'input fingerprint mismatch'
@@ -1024,18 +1286,34 @@ async function runMatchedEvaluation({
   }
   const closure = packageClosure(repositoryRoot, manifest.skill);
   const frozenCase = deepFreeze(structuredClone(caseDefinition));
-  const context = {
+  const sharedContext = {
     caseDefinition: frozenCase,
     cell: deepFreeze({ ...cell }),
     executionConfiguration: manifest.execution_configuration,
-    packageDefinition: closure.packageDefinition,
-    resolvedSkills: deepFreeze([...closure.resolvedSkills]),
   };
+  const controlPolicy = normalizedControlPolicy({
+    ...manifest.control_policy,
+    dependencies: [...new Set([
+      ...manifest.control_policy.dependencies,
+      ...closure.resolvedSkills.filter((name) => name !== manifest.skill),
+    ])],
+  }, manifest.skill);
   const records = [];
   for (const arm of ['no-skill', 'treatment']) {
+    const treatment = arm === 'treatment';
+    const provisioning = deepFreeze({
+      installedSkills: treatment ? [...closure.resolvedSkills] : [],
+      packageDefinition: treatment
+        ? closure.packageDefinition
+        : {
+          canonicalRoot: null,
+          skills: [],
+        },
+    });
     const result = await executeArm(deepFreeze({
-      ...context,
+      ...sharedContext,
       arm,
+      provisioning,
     }));
     validateResult(result);
     const grade = gradeOutput({
@@ -1052,6 +1330,7 @@ async function runMatchedEvaluation({
       arm,
       result,
       deterministicGrade: grade,
+      controlPolicy,
     }));
   }
   return records;
@@ -1120,19 +1399,27 @@ function triggerGradeFromObservation({
   caseDefinition,
   skill,
   status,
-  discoveredSkills,
-  toolUses,
-  output,
+  skillEvents,
 }) {
-  const outputPatterns = caseDefinition.expected_output_patterns || [];
-  const outputMatches = outputPatterns.length > 0
-    && compilePatterns(outputPatterns, 'trigger output patterns')
-      .some((pattern) => pattern.test(output.trim()));
-  const invoked = toolUses.some(({ name }) => name === 'Skill');
-  const triggered = invoked || outputMatches;
-  const explicitlyRequested = caseDefinition.prompt.trimStart()
-    .startsWith(`/${skill}`);
-  const available = discoveredSkills.includes(skill);
+  const requiredLoads = caseDefinition.required_skill_loads || [skill];
+  validateStringArray(requiredLoads, 'caseDefinition.required_skill_loads');
+  const attempted = skillEvents.some((event) => (
+    event.name === skill
+      && ['select', 'load'].includes(event.operation)
+  ));
+  const loaded = (name) => skillEvents.some((event) => (
+    event.name === name
+      && event.operation === 'load'
+      && event.status === 'succeeded'
+  ));
+  const shouldTrigger = caseDefinition.should_trigger;
+  const activationMatches = shouldTrigger
+    ? requiredLoads.every(loaded)
+    : !attempted;
+  const slashRequest = caseDefinition.prompt.trimStart().startsWith('/');
+  const canonicalRequest = new RegExp(
+    `^/${skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$)`,
+  ).test(caseDefinition.prompt.trimStart());
   const checks = [
     deterministicCheck(
       'trigger execution',
@@ -1141,13 +1428,17 @@ function triggerGradeFromObservation({
     ),
     deterministicCheck(
       'trigger activation',
-      triggered === caseDefinition.should_trigger,
-      `expected=${caseDefinition.should_trigger} observed=${triggered}`,
+      activationMatches,
+      shouldTrigger
+        ? `required=${requiredLoads.join(',')} loaded=${
+          requiredLoads.filter(loaded).join(',') || 'none'
+        }`
+        : `target=${skill} attempted=${attempted}`,
     ),
     deterministicCheck(
-      'explicit trigger availability',
-      !explicitlyRequested || available,
-      `explicit=${explicitlyRequested} available=${available}`,
+      'canonical trigger request',
+      !slashRequest || canonicalRequest,
+      `slash=${slashRequest} exact=${canonicalRequest}`,
     ),
   ];
   return {
@@ -1168,9 +1459,7 @@ function gradeTriggerResult({ definition, caseDefinition, result }) {
     caseDefinition,
     skill: definition.skill_name,
     status: result.status,
-    discoveredSkills: result.observations.discoveredSkills,
-    toolUses: result.observations.toolUses,
-    output: outputFromResult(result),
+    skillEvents: result.observations.skillEvents,
   });
 }
 
@@ -1225,6 +1514,86 @@ function seededTreatmentPlacement(seed, caseDefinition, repetition) {
   return digest[0] % 2 === 0 ? 'A' : 'B';
 }
 
+function recordLoadedSkill(record, name) {
+  return record.execution.skill_events.some((event) => (
+    event.name === name
+      && event.operation === 'load'
+      && event.status === 'succeeded'
+  ));
+}
+
+function recordAttemptedSkill(record, name) {
+  return record.execution.skill_events.some((event) => (
+    event.name === name
+      && ['select', 'load'].includes(event.operation)
+  ));
+}
+
+function observationsFromExecution(execution) {
+  return {
+    packageSkills: execution.package_skills,
+    hostAvailableSkills: execution.host_available_skills,
+    preExecutionInventory: normalizedPreExecutionInventory(
+      execution.pre_execution_inventory,
+    ),
+    skillEvents: execution.skill_events,
+    routing: {
+      requestedSkill: execution.routing.requested_skill,
+      resolvedSkills: execution.routing.resolved_skills,
+    },
+  };
+}
+
+function pairControlPolicy(manifest, treatment) {
+  return normalizedControlPolicy({
+    ...manifest.control_policy,
+    dependencies: [...new Set([
+      ...manifest.control_policy.dependencies,
+      ...treatment.execution.routing.resolved_skills
+        .filter((name) => name !== manifest.skill),
+    ])],
+  }, manifest.skill);
+}
+
+function assertPairLifecycleGates(manifest, caseDefinition, control, treatment) {
+  if (control.arm.kind === 'no-skill') {
+    const contamination = inspectNoSkillContamination(
+      observationsFromExecution(control.execution),
+      pairControlPolicy(manifest, treatment),
+    );
+    const retained = control.execution.control_contamination;
+    if (!fingerprintsMatch(retained, {
+      clean: contamination.clean,
+      prohibited_skills: contamination.prohibitedSkills,
+      provisioning_matches: contamination.provisioningMatches,
+      runtime_matches: contamination.runtimeMatches,
+    })) {
+      throw new EvaluationContractError('No-Skill contamination evidence mismatch');
+    }
+    if (!contamination.clean) {
+      throw new EvaluationContractError('No-Skill control contamination gate failed');
+    }
+    if (!recordLoadedSkill(treatment, manifest.skill)) {
+      throw new EvaluationContractError('treatment activation gate failed');
+    }
+    return;
+  }
+
+  const dependency = componentAblationFor(manifest, caseDefinition).dependency;
+  if (!recordLoadedSkill(treatment, manifest.skill)
+    || !recordLoadedSkill(treatment, dependency)) {
+    throw new EvaluationContractError(
+      'component treatment activation gate failed',
+    );
+  }
+  if (!recordLoadedSkill(control, manifest.skill)
+    || recordAttemptedSkill(control, dependency)) {
+    throw new EvaluationContractError(
+      'component ablation activation gate failed',
+    );
+  }
+}
+
 function createBlindComparison({
   manifest,
   definition,
@@ -1267,6 +1636,15 @@ function createBlindComparison({
     || treatment.execution.status !== 'succeeded') {
     throw new EvaluationContractError('execution gate failed before judging');
   }
+  if (control.arm.pairing_id !== treatment.arm.pairing_id) {
+    throw new EvaluationContractError('pairing mismatch');
+  }
+  assertPairLifecycleGates(
+    manifest,
+    caseDefinition,
+    control,
+    treatment,
+  );
   const recomputedTreatmentGrade = gradeDeterministicOutput({
     definition,
     caseDefinition,
@@ -1278,9 +1656,6 @@ function createBlindComparison({
   );
   if (!treatmentGradeMatches || !recomputedTreatmentGrade.passed) {
     throw new EvaluationContractError('deterministic gate failed before judging');
-  }
-  if (control.arm.pairing_id !== treatment.arm.pairing_id) {
-    throw new EvaluationContractError('pairing mismatch');
   }
 
   const treatmentPlacement = seededTreatmentPlacement(
@@ -1712,6 +2087,25 @@ function replayCampaign({ manifest, definition, runs, judgments }) {
         }
 
         let lowerGatePassed = true;
+        try {
+          assertPairLifecycleGates(
+            manifest,
+            caseDefinition,
+            control,
+            treatment,
+          );
+        } catch (error) {
+          lowerGatePassed = false;
+          addReplayFailure(
+            failures,
+            caseDefinition,
+            cell,
+            repetition,
+            /control contamination/i.test(error.message)
+              ? 'no-skill-contamination'
+              : 'treatment-activation',
+          );
+        }
         if (control.execution.status !== 'succeeded') {
           lowerGatePassed = false;
           addReplayFailure(
@@ -1731,7 +2125,7 @@ function replayCampaign({ manifest, definition, runs, judgments }) {
             repetition,
             'treatment-execution',
           );
-        } else if (!treatmentGrade.passed) {
+        } else if (lowerGatePassed && !treatmentGrade.passed) {
           lowerGatePassed = false;
           addReplayFailure(
             failures,
@@ -1860,9 +2254,7 @@ function replayTriggerCampaign({ manifest, definition, runs }) {
           caseDefinition,
           skill: definition.skill_name,
           status: record.execution.status,
-          discoveredSkills: record.execution.discovered_skills,
-          toolUses: record.execution.observable_tool_use,
-          output: record.execution.output,
+          skillEvents: record.execution.skill_events,
         });
         if (!fingerprintsMatch(record.deterministic, grade)) {
           throw new EvaluationContractError('trigger grade mismatch');
@@ -2047,6 +2439,8 @@ module.exports = {
   createRunEvidence,
   fingerprintValue,
   gradeDeterministicOutput,
+  gradeTriggerResult,
+  inspectNoSkillContamination,
   replayCampaign,
   replayTriggerCampaign,
   runComponentEvaluation,

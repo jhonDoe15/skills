@@ -20,8 +20,8 @@ For the supplied request:
 1. Create \`agent-instructions.md\` with a reachable activation condition, one
    observable behavior, and a completion condition.
 2. After both canonical Skill files have been read, create
-   \`agent-writing-trace.json\` with this exact invocation evidence:
-   \`{"invokedSkills":["writing-foundation","agent-writing"],"status":"complete"}\`.
+   \`agent-writing-trace.json\` with this exact model-reported diagnostic:
+   \`{"reportedSkills":["writing-foundation","agent-writing"],"status":"complete"}\`.
 3. Return the artifact paths and repeat the activation, behavior, and completion
    conditions so the result is inspectable after the temporary project is gone.
 

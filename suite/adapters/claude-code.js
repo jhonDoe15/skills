@@ -1,6 +1,7 @@
 'use strict';
 
 const { spawnSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -13,11 +14,14 @@ const {
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1_000;
 const MAX_OUTPUT_BYTES = 20 * 1024 * 1024;
 const MAX_PLUGIN_LIST_BYTES = 1024 * 1024;
+const MAX_OBSERVER_LOG_BYTES = 1024 * 1024;
 const PLUGIN_LIST_TIMEOUT_MS = 30_000;
+const HOOK_OBSERVER_VERSION = 'claude-code-hooks-v1';
+const STREAM_OBSERVER_VERSION = 'claude-code-stream-json-v1';
+const OBSERVER_LOG_ENV = 'SUITE_CLAUDE_SKILL_OBSERVER_LOG';
 const EMPTY_MCP_CONFIG = JSON.stringify({ mcpServers: {} });
 const BASE_SESSION_SETTINGS = Object.freeze({
   autoMemoryEnabled: false,
-  disableAllHooks: true,
   disableClaudeAiConnectors: true,
 });
 const PLUGIN_ENUMERATION_TIMEOUT = {
@@ -111,12 +115,108 @@ function cleanupProject(project) {
   if (project) fs.rmSync(project, { recursive: true, force: true });
 }
 
-function createSanitizedEnvironment() {
+function createSanitizedEnvironment(observerLog = null) {
   const environment = { ...process.env };
   delete environment.CLAUDECODE;
   environment.CLAUDE_CODE_DISABLE_AUTO_MEMORY = '1';
   environment.ENABLE_CLAUDEAI_MCP_SERVERS = 'false';
+  if (observerLog) environment[OBSERVER_LOG_ENV] = observerLog;
   return environment;
+}
+
+function fingerprint(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function emptyPreExecutionInventory() {
+  return {
+    skillDefinitions: [],
+    plugins: [],
+    ruleSources: [],
+    packageDigest: fingerprint(''),
+    truncated: false,
+  };
+}
+
+function preExecutionInventory(project, resolvedSkills) {
+  const skillDefinitions = resolvedSkills.map((name) => {
+    const relativePath = path.join('.claude', 'skills', name, 'SKILL.md')
+      .split(path.sep)
+      .join('/');
+    return {
+      name,
+      path: relativePath,
+      digest: fingerprint(fs.readFileSync(path.join(project, relativePath))),
+    };
+  });
+  return {
+    skillDefinitions,
+    plugins: [],
+    ruleSources: [],
+    packageDigest: fingerprint(JSON.stringify(
+      skillDefinitions.map(({ name, digest }) => ({ name, digest })),
+    )),
+    truncated: false,
+  };
+}
+
+function createSkillObserver(project) {
+  const observerDirectory = path.join(project, '.claude', 'hooks');
+  const scriptPath = path.join(observerDirectory, 'skill-observer.js');
+  const logPath = path.join(observerDirectory, 'skill-events.jsonl');
+  fs.mkdirSync(observerDirectory, { recursive: true });
+  fs.writeFileSync(scriptPath, `#!/usr/bin/env node
+'use strict';
+const fs = require('node:fs');
+const input = fs.readFileSync(0, 'utf8');
+const event = JSON.parse(input);
+const target = process.env.${OBSERVER_LOG_ENV};
+if (target) {
+  const size = fs.existsSync(target) ? fs.statSync(target).size : 0;
+  const payload = Buffer.from(JSON.stringify(event) + '\\n');
+  if (payload.length <= ${MAX_OBSERVER_LOG_BYTES} - size) {
+    fs.appendFileSync(target, payload);
+  }
+}
+`);
+  return { logPath, scriptPath };
+}
+
+function observerHooks(scriptPath) {
+  const hook = {
+    type: 'command',
+    command: process.execPath,
+    args: [scriptPath],
+  };
+  const skillHook = () => [{
+    matcher: 'Skill',
+    hooks: [{ ...hook, args: [...hook.args] }],
+  }];
+  return {
+    PermissionDenied: skillHook(),
+    PostToolUse: skillHook(),
+    PostToolUseFailure: skillHook(),
+    PreToolUse: skillHook(),
+    UserPromptExpansion: [{
+      hooks: [{ ...hook, args: [...hook.args] }],
+    }],
+  };
+}
+
+function readObserverEvents(logPath) {
+  if (!fs.existsSync(logPath)) return [];
+  const stats = fs.statSync(logPath);
+  if (!stats.isFile() || stats.size > MAX_OBSERVER_LOG_BYTES) return [];
+  return fs.readFileSync(logPath, 'utf8')
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line)];
+      } catch {
+        return [];
+      }
+    });
 }
 
 function isValidPlugin(plugin) {
@@ -163,11 +263,11 @@ function enumeratePluginIds(command, project, environment, timeoutMs) {
   return parsePluginIds(result.stdout);
 }
 
-function readSkillInvocation(input, resolvedSkills) {
-  const serialized = JSON.stringify(input || {});
-  return resolvedSkills.find((skillName) => (
-    serialized.includes(`"${skillName}"`)
-  )) || null;
+function readSkillInvocation(input) {
+  const skill = input && typeof input === 'object' ? input.skill : null;
+  return typeof skill === 'string' && /^[a-z0-9-]+$/.test(skill)
+    ? skill
+    : null;
 }
 
 function mutationFromTool(content, project) {
@@ -185,7 +285,234 @@ function mutationFromTool(content, project) {
   };
 }
 
-function parseClaudeStream(stdout, requestedSkill, resolvedSkills, project) {
+function eventProvenance({
+  mechanism,
+  eventType,
+  observerVersion,
+  runId,
+  statusSource = 'observed',
+}) {
+  return {
+    host: 'claude-code',
+    mechanism,
+    eventType,
+    observerVersion,
+    ...(runId ? { runId } : {}),
+    statusSource,
+  };
+}
+
+function lifecycleEvent({
+  name,
+  operation,
+  status,
+  trigger,
+  callId,
+  provenance,
+}) {
+  return {
+    name,
+    operation,
+    status,
+    ...(trigger ? { trigger } : {}),
+    ...(callId ? { callId } : {}),
+    provenance,
+  };
+}
+
+function lifecycleEventIdentity(event) {
+  return [
+    event.provenance.host,
+    event.provenance.runId || '',
+    event.callId || '',
+    event.provenance.eventType,
+    event.name,
+    event.operation,
+    event.status,
+  ].join('\0');
+}
+
+function deduplicateLifecycleEvents(events) {
+  const seen = new Set();
+  return events.filter((event) => {
+    const identity = lifecycleEventIdentity(event);
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+}
+
+function exactTelemetrySkill(event) {
+  const attributes = event.attributes && typeof event.attributes === 'object'
+    ? event.attributes
+    : event;
+  if (attributes.tool_name !== 'Skill') return null;
+  if (typeof attributes.skill_name === 'string') {
+    return /^[a-z0-9-]+$/.test(attributes.skill_name)
+      ? attributes.skill_name
+      : null;
+  }
+  if (typeof attributes.tool_parameters !== 'string') return null;
+  try {
+    const parameters = JSON.parse(attributes.tool_parameters);
+    return typeof parameters.skill_name === 'string'
+      && /^[a-z0-9-]+$/.test(parameters.skill_name)
+      ? parameters.skill_name
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function observerSkillEvents(events, requestId) {
+  const normalized = [];
+  for (const event of events) {
+    const hookEvent = event.hook_event_name;
+    const runId = event.session_id || requestId;
+    if (hookEvent === 'UserPromptExpansion') {
+      const name = event.command_name;
+      if (event.expansion_type !== 'slash_command'
+        || typeof name !== 'string'
+        || !/^[a-z0-9-]+$/.test(name)) {
+        continue;
+      }
+      const provenance = eventProvenance({
+        mechanism: 'user-prompt-expansion',
+        eventType: hookEvent,
+        observerVersion: HOOK_OBSERVER_VERSION,
+        runId,
+      });
+      normalized.push(
+        lifecycleEvent({
+          name,
+          operation: 'select',
+          status: 'succeeded',
+          trigger: 'user',
+          provenance,
+        }),
+        lifecycleEvent({
+          name,
+          operation: 'load',
+          status: 'succeeded',
+          trigger: 'user',
+          provenance,
+        }),
+      );
+      continue;
+    }
+
+    if (['PreToolUse', 'PostToolUse', 'PostToolUseFailure', 'PermissionDenied']
+      .includes(hookEvent)) {
+      if (event.tool_name !== 'Skill') continue;
+      const name = readSkillInvocation(event.tool_input);
+      if (!name) continue;
+      const callId = typeof event.tool_use_id === 'string'
+        ? event.tool_use_id
+        : null;
+      const provenance = eventProvenance({
+        mechanism: 'skill-tool-hook',
+        eventType: hookEvent,
+        observerVersion: HOOK_OBSERVER_VERSION,
+        runId,
+      });
+      if (hookEvent === 'PermissionDenied') {
+        normalized.push(lifecycleEvent({
+          name,
+          operation: 'select',
+          status: 'rejected',
+          trigger: 'model',
+          callId,
+          provenance,
+        }));
+      } else if (hookEvent === 'PreToolUse') {
+        normalized.push(
+          lifecycleEvent({
+            name,
+            operation: 'select',
+            status: 'started',
+            trigger: 'model',
+            callId,
+            provenance,
+          }),
+          lifecycleEvent({
+            name,
+            operation: 'load',
+            status: 'started',
+            trigger: 'model',
+            callId,
+            provenance,
+          }),
+        );
+      } else {
+        normalized.push(lifecycleEvent({
+          name,
+          operation: 'load',
+          status: hookEvent === 'PostToolUse'
+            ? 'succeeded'
+            : event.is_interrupt
+              ? 'cancelled'
+              : 'failed',
+          trigger: 'model',
+          callId,
+          provenance,
+        }));
+      }
+      continue;
+    }
+
+    const eventName = event.event_name || event.name || event.type;
+    if (!['claude_code.tool_decision', 'claude_code.tool_result']
+      .includes(eventName)) {
+      continue;
+    }
+    const attributes = event.attributes && typeof event.attributes === 'object'
+      ? event.attributes
+      : event;
+    const name = exactTelemetrySkill(event);
+    if (!name) continue;
+    const callId = typeof attributes.tool_use_id === 'string'
+      ? attributes.tool_use_id
+      : null;
+    const provenance = eventProvenance({
+      mechanism: 'otel-tool-lifecycle',
+      eventType: eventName,
+      observerVersion: HOOK_OBSERVER_VERSION,
+      runId: attributes.session_id || runId,
+    });
+    if (eventName === 'claude_code.tool_decision') {
+      normalized.push(lifecycleEvent({
+        name,
+        operation: 'select',
+        status: attributes.decision === 'reject' ? 'rejected' : 'started',
+        trigger: 'model',
+        callId,
+        provenance,
+      }));
+      if (attributes.decision !== 'reject') {
+        normalized.push(lifecycleEvent({
+          name,
+          operation: 'load',
+          status: 'started',
+          trigger: 'model',
+          callId,
+          provenance,
+        }));
+      }
+    } else {
+      normalized.push(lifecycleEvent({
+        name,
+        operation: 'load',
+        status: String(attributes.success) === 'true' ? 'succeeded' : 'failed',
+        trigger: 'model',
+        callId,
+        provenance,
+      }));
+    }
+  }
+  return deduplicateLifecycleEvents(normalized);
+}
+
+function parseClaudeStream(stdout, requestedSkill, project, requestId) {
   const evidence = {
     initialized: false,
     resultEventSeen: false,
@@ -195,7 +522,7 @@ function parseClaudeStream(stdout, requestedSkill, resolvedSkills, project) {
     costUsd: null,
     durationMs: null,
     availableSkills: new Set(),
-    observedSkillInvocations: new Set(),
+    skillEvents: [],
     toolUses: [],
     attemptedMutations: [],
     artifacts: [],
@@ -222,8 +549,8 @@ function parseClaudeStream(stdout, requestedSkill, resolvedSkills, project) {
         outcome: `submitted /${requestedSkill}`,
       });
       for (const skillName of [
-        ...(event.skills || []),
-        ...(event.slash_commands || []),
+        ...(Array.isArray(event.skills) ? event.skills : []),
+        ...(Array.isArray(event.slash_commands) ? event.slash_commands : []),
       ]) {
         evidence.availableSkills.add(String(skillName).replace(/^\//, ''));
       }
@@ -239,9 +566,8 @@ function parseClaudeStream(stdout, requestedSkill, resolvedSkills, project) {
         }
 
         const skillName = content.name === 'Skill'
-          ? readSkillInvocation(content.input, resolvedSkills)
+          ? readSkillInvocation(content.input)
           : null;
-        if (skillName) evidence.observedSkillInvocations.add(skillName);
 
         const toolUse = {
           name: content.name,
@@ -259,8 +585,40 @@ function parseClaudeStream(stdout, requestedSkill, resolvedSkills, project) {
             ? 'text/markdown'
             : 'application/octet-stream',
         };
+        if (skillName) {
+          const callId = typeof content.id === 'string' ? content.id : null;
+          const provenance = eventProvenance({
+            mechanism: 'stream-json-fallback',
+            eventType: 'assistant.tool_use',
+            observerVersion: STREAM_OBSERVER_VERSION,
+            runId: requestId,
+          });
+          evidence.skillEvents.push(
+            lifecycleEvent({
+              name: skillName,
+              operation: 'select',
+              status: 'started',
+              trigger: 'model',
+              callId,
+              provenance,
+            }),
+            lifecycleEvent({
+              name: skillName,
+              operation: 'load',
+              status: 'started',
+              trigger: 'model',
+              callId,
+              provenance,
+            }),
+          );
+        }
         if (typeof content.id === 'string') {
-          toolIndexes.set(content.id, { artifact, toolIndex, mutationIndex });
+          toolIndexes.set(content.id, {
+            artifact,
+            mutationIndex,
+            skillName,
+            toolIndex,
+          });
         }
       }
     }
@@ -272,12 +630,25 @@ function parseClaudeStream(stdout, requestedSkill, resolvedSkills, project) {
           continue;
         }
         const indexes = toolIndexes.get(content.tool_use_id);
-        if (!indexes || evidence.toolUses[indexes.toolIndex].name === 'Skill') {
+        if (!indexes) continue;
+        const outcome = content.is_error ? 'failed' : 'succeeded';
+        if (indexes.skillName) {
+          evidence.skillEvents.push(lifecycleEvent({
+            name: indexes.skillName,
+            operation: 'load',
+            status: outcome,
+            trigger: 'model',
+            callId: content.tool_use_id,
+            provenance: eventProvenance({
+              mechanism: 'stream-json-fallback',
+              eventType: 'user.tool_result',
+              observerVersion: STREAM_OBSERVER_VERSION,
+              runId: requestId,
+            }),
+          }));
+          evidence.toolUses[indexes.toolIndex].outcome = outcome;
           continue;
         }
-        const outcome = content.is_error
-          ? 'failed'
-          : 'succeeded';
         evidence.toolUses[indexes.toolIndex].outcome = outcome;
         if (indexes.mutationIndex !== null) {
           evidence.attemptedMutations[indexes.mutationIndex].outcome = outcome;
@@ -307,15 +678,77 @@ function parseClaudeStream(stdout, requestedSkill, resolvedSkills, project) {
   return evidence;
 }
 
+function mergeSkillEvents(streamEvents, observedEvents) {
+  const observedCallIds = new Set(
+    observedEvents.map(({ callId }) => callId).filter(Boolean),
+  );
+  return deduplicateLifecycleEvents([
+    ...observedEvents,
+    ...streamEvents.filter(({ callId }) => (
+      !callId || !observedCallIds.has(callId)
+    )),
+  ]);
+}
+
+function finalizeOpenSkillLoads(events, cancelled) {
+  const terminal = new Set(
+    events
+      .filter(({ operation, status, callId }) => (
+        operation === 'load'
+          && callId
+          && !['started', 'unknown'].includes(status)
+      ))
+      .map(({ name, callId }) => `${name}\0${callId}`),
+  );
+  const inferred = [];
+  for (const event of events) {
+    if (event.operation !== 'load' || event.status !== 'started' || !event.callId) {
+      continue;
+    }
+    const key = `${event.name}\0${event.callId}`;
+    if (terminal.has(key)) continue;
+    terminal.add(key);
+    inferred.push(lifecycleEvent({
+      name: event.name,
+      operation: 'load',
+      status: cancelled ? 'cancelled' : 'unknown',
+      trigger: event.trigger,
+      callId: event.callId,
+      provenance: eventProvenance({
+        mechanism: 'run-finalization',
+        eventType: cancelled ? 'run.cancelled' : 'run.ended',
+        observerVersion: event.provenance.observerVersion,
+        runId: event.provenance.runId,
+        statusSource: 'inferred',
+      }),
+    }));
+  }
+  return deduplicateLifecycleEvents([...events, ...inferred]);
+}
+
 function observations(context, invocation, evidence = {}) {
   const responses = evidence.resultText
     ? [{ text: evidence.resultText }]
     : [];
   return {
-    discoveredSkills: context.discoveredSkills,
+    packageSkills: context.packageSkills,
+    hostAvailableSkills: evidence.initialized
+      ? {
+        names: [...(evidence.availableSkills || [])],
+        provenance: eventProvenance({
+          mechanism: 'stream-json-init',
+          eventType: 'system.init',
+          observerVersion: STREAM_OBSERVER_VERSION,
+          runId: invocation.requestId,
+        }),
+      }
+      : null,
+    preExecutionInventory:
+      evidence.preExecutionInventory || emptyPreExecutionInventory(),
+    skillEvents: evidence.skillEvents || [],
     routing: {
       requestedSkill: invocation.skill,
-      invokedSkills: context.resolvedSkills,
+      resolvedSkills: context.resolvedSkills,
     },
     responses,
     artifacts: [
@@ -351,10 +784,16 @@ function failedResult({
   };
 }
 
-function claudeArguments(invocation, maxBudgetUsd, pluginIds) {
+function claudeArguments(
+  invocation,
+  maxBudgetUsd,
+  pluginIds,
+  observerScript,
+) {
   const sessionSettings = JSON.stringify({
     ...BASE_SESSION_SETTINGS,
     enabledPlugins: Object.fromEntries(pluginIds.map((id) => [id, false])),
+    hooks: observerHooks(observerScript),
   });
   const arguments_ = [
     '-p',
@@ -433,7 +872,9 @@ function createClaudeCodeAdapter({
           });
         }
 
-        const environment = createSanitizedEnvironment();
+        const observer = createSkillObserver(project);
+        const inventory = preExecutionInventory(project, context.resolvedSkills);
+        const environment = createSanitizedEnvironment(observer.logPath);
         let pluginIds;
         try {
           pluginIds = enumeratePluginIds(
@@ -453,11 +894,17 @@ function createClaudeCodeAdapter({
             code: enumerationError.code,
             message: enumerationError.message,
             elapsedMs: Date.now() - startedAt,
+            evidence: { preExecutionInventory: inventory },
           });
         }
         const processResult = spawnSync(
           command,
-          claudeArguments(invocation, maxBudgetUsd, pluginIds),
+          claudeArguments(
+            invocation,
+            maxBudgetUsd,
+            pluginIds,
+            observer.scriptPath,
+          ),
           {
             cwd: project,
             env: environment,
@@ -472,8 +919,20 @@ function createClaudeCodeAdapter({
         const evidence = parseClaudeStream(
           processResult.stdout || '',
           invocation.skill,
-          context.resolvedSkills,
           project,
+          invocation.requestId,
+        );
+        evidence.preExecutionInventory = inventory;
+        evidence.skillEvents = mergeSkillEvents(
+          evidence.skillEvents,
+          observerSkillEvents(
+            readObserverEvents(observer.logPath),
+            invocation.requestId,
+          ),
+        );
+        evidence.skillEvents = finalizeOpenSkillLoads(
+          evidence.skillEvents,
+          processResult.error?.code === 'ETIMEDOUT',
         );
         function fail(stage, code, message) {
           return failedResult({
@@ -542,18 +1001,6 @@ function createClaudeCodeAdapter({
             'execution',
             'claude-skill-unavailable',
             `Claude Code did not discover Skill "${unavailableSkill}"`,
-          );
-        }
-
-        const unobservedSkill = context.resolvedSkills.find((skillName) => (
-          skillName !== invocation.skill
-          && !evidence.observedSkillInvocations.has(skillName)
-        ));
-        if (unobservedSkill) {
-          return fail(
-            'execution',
-            'claude-invocation-unobserved',
-            `Claude Code did not record invocation of Skill "${unobservedSkill}"`,
           );
         }
 

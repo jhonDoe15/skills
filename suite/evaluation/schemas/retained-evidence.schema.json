@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://jhonDoe15.github.io/skills/schemas/skill-evaluation-retained-evidence-v1.json",
+  "$id": "https://jhonDoe15.github.io/skills/schemas/skill-evaluation-retained-evidence-v2.json",
   "title": "Skill Evaluation retained evidence",
   "type": "object",
   "required": [
@@ -14,7 +14,7 @@
   ],
   "properties": {
     "schema_version": {
-      "const": 1
+      "const": 2
     },
     "kind": {
       "enum": [
@@ -70,12 +70,135 @@
         "status",
         "duration_ms",
         "cost_usd",
-        "discovered_skills",
+        "package_skills",
+        "host_available_skills",
+        "pre_execution_inventory",
+        "skill_events",
         "observable_tool_use",
         "attempted_mutations",
         "output",
-        "routing"
-      ]
+        "routing",
+        "control_contamination"
+      ],
+      "properties": {
+        "package_skills": {
+          "$ref": "#/$defs/skillNames"
+        },
+        "host_available_skills": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "names",
+                "provenance"
+              ],
+              "properties": {
+                "names": {
+                  "$ref": "#/$defs/skillNames"
+                },
+                "provenance": {
+                  "$ref": "#/$defs/provenance"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "pre_execution_inventory": {
+          "type": "object",
+          "required": [
+            "skill_definitions",
+            "plugins",
+            "rule_sources",
+            "package_digest",
+            "truncated"
+          ],
+          "properties": {
+            "skill_definitions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "path",
+                  "digest"
+                ],
+                "properties": {
+                  "name": {
+                    "$ref": "#/$defs/skillName"
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "digest": {
+                    "$ref": "#/$defs/fingerprint"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "plugins": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            },
+            "rule_sources": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            },
+            "package_digest": {
+              "$ref": "#/$defs/fingerprint"
+            },
+            "truncated": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "skill_events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/skillEvent"
+          }
+        },
+        "routing": {
+          "type": "object",
+          "required": [
+            "requested_skill",
+            "resolved_skills"
+          ],
+          "properties": {
+            "requested_skill": {
+              "$ref": "#/$defs/skillName"
+            },
+            "resolved_skills": {
+              "$ref": "#/$defs/skillNames"
+            }
+          },
+          "additionalProperties": false
+        },
+        "control_contamination": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/controlContamination"
+            }
+          ]
+        }
+      }
     },
     "deterministic": {
       "type": "object",
@@ -111,6 +234,126 @@
     }
   },
   "$defs": {
+    "skillName": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "skillNames": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/skillName"
+      },
+      "uniqueItems": true
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "host",
+        "mechanism",
+        "eventType",
+        "observerVersion",
+        "statusSource"
+      ],
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mechanism": {
+          "type": "string",
+          "minLength": 1
+        },
+        "eventType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "observerVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "statusSource": {
+          "enum": [
+            "observed",
+            "inferred"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "skillEvent": {
+      "type": "object",
+      "required": [
+        "name",
+        "operation",
+        "status",
+        "provenance"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/skillName"
+        },
+        "operation": {
+          "enum": [
+            "select",
+            "load"
+          ]
+        },
+        "status": {
+          "enum": [
+            "started",
+            "succeeded",
+            "failed",
+            "rejected",
+            "cancelled",
+            "unknown"
+          ]
+        },
+        "trigger": {
+          "enum": [
+            "user",
+            "model",
+            "host",
+            "unknown"
+          ]
+        },
+        "callId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      },
+      "additionalProperties": false
+    },
+    "controlContamination": {
+      "type": "object",
+      "required": [
+        "clean",
+        "prohibited_skills",
+        "provisioning_matches",
+        "runtime_matches"
+      ],
+      "properties": {
+        "clean": {
+          "type": "boolean"
+        },
+        "prohibited_skills": {
+          "$ref": "#/$defs/skillNames"
+        },
+        "provisioning_matches": {
+          "$ref": "#/$defs/skillNames"
+        },
+        "runtime_matches": {
+          "$ref": "#/$defs/skillNames"
+        }
+      },
+      "additionalProperties": false
+    },
     "fingerprint": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"

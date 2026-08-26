@@ -141,7 +141,7 @@ function createSuccessfulSdk(
           fs.writeFileSync(
             path.join(options.local.cwd, 'agent-writing-trace.json'),
             `${JSON.stringify({
-              invokedSkills: ['writing-foundation', 'agent-writing'],
+              reportedSkills: ['writing-foundation', 'agent-writing'],
               status: 'complete',
             }, null, 2)}\n`,
           );
@@ -235,14 +235,30 @@ test('Cursor Adapter executes the tracer in a pristine project and normalizes ev
   assert.equal(result.status, 'succeeded');
   assert.deepEqual(result.observations.routing, {
     requestedSkill: 'agent-writing',
-    invokedSkills: ['writing-foundation', 'agent-writing'],
+    resolvedSkills: ['writing-foundation', 'agent-writing'],
   });
+  assert.equal(result.observations.hostAvailableSkills, null);
+  assert.deepEqual(result.observations.packageSkills, [
+    'agent-writing',
+    'writing-foundation',
+  ]);
   assert.deepEqual(
-    responsePayload(result, 'cursor-observed-skill-invocations'),
-    {
-      kind: 'cursor-observed-skill-invocations',
-      invokedSkills: ['agent-writing', 'writing-foundation'],
-    },
+    result.observations.skillEvents.map(({ name, operation, status }) => (
+      [name, operation, status]
+    )),
+    [
+      ['agent-writing', 'load', 'started'],
+      ['agent-writing', 'load', 'succeeded'],
+      ['writing-foundation', 'load', 'started'],
+      ['writing-foundation', 'load', 'succeeded'],
+    ],
+  );
+  assert.equal(
+    result.observations.skillEvents.every(({ provenance }) => (
+      provenance.observerVersion === '@cursor/sdk@1.0.28'
+        && provenance.mechanism === 'sdk-canonical-skill-read'
+    )),
+    true,
   );
   assert.match(result.observations.responses[0].text, /Activation: When /);
   assert.match(result.observations.responses[0].text, /Behavior: /);
@@ -254,7 +270,7 @@ test('Cursor Adapter executes the tracer in a pristine project and normalizes ev
   ]);
   assert.match(snapshots[0].content, /Activation: When /);
   assert.deepEqual(JSON.parse(snapshots[1].content), {
-    invokedSkills: ['writing-foundation', 'agent-writing'],
+    reportedSkills: ['writing-foundation', 'agent-writing'],
     status: 'complete',
   });
   assert.deepEqual(result.observations.toolUses, [
@@ -525,7 +541,7 @@ test('Cursor Adapter preserves root and dot-prefixed in-workspace targets', asyn
   );
 });
 
-test('Cursor Adapter does not present canonical resolution as observed invocation', async (t) => {
+test('Cursor Adapter does not present canonical resolution as observed lifecycle', async (t) => {
   const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
   const adapter = createCursorAdapter({
     repositoryRoot,
@@ -538,21 +554,23 @@ test('Cursor Adapter does not present canonical resolution as observed invocatio
     invocation: tracerInvocation(),
   });
 
-  assert.deepEqual(result.observations.routing.invokedSkills, [
+  assert.deepEqual(result.observations.routing.resolvedSkills, [
     'writing-foundation',
     'agent-writing',
   ]);
-  assert.equal(
-    result.observations.responses.some(({ text }) => (
-      text.includes('"kind":"cursor-observed-skill-invocations"')
-    )),
-    false,
-  );
+  assert.deepEqual(result.observations.skillEvents, []);
 });
 
 test('Cursor Adapter observes only completed read-class Skill operations', async (t) => {
   const cases = [
     { label: 'read', name: 'read', observed: true },
+    { label: 'renamed read tool', name: 'ReadFile', observed: true },
+    {
+      label: 'agents Skill root',
+      name: 'read',
+      observed: true,
+      args: { path: '.agents/skills/agent-writing/SKILL.md' },
+    },
     { label: 'write', name: 'write', observed: false },
     { label: 'edit', name: 'edit', observed: false },
     { label: 'delete', name: 'delete', observed: false },
@@ -566,6 +584,20 @@ test('Cursor Adapter observes only completed read-class Skill operations', async
       name: 'read',
       observed: false,
       args: { path: '.cursor/skills//SKILL.md' },
+    },
+    {
+      label: 'read with wrong Skill path',
+      name: 'read',
+      observed: false,
+      args: { path: '.cursor/skills/agent-writing/references/SKILL.md' },
+    },
+    {
+      label: 'read with normalized traversal path',
+      name: 'read',
+      observed: false,
+      args: {
+        path: '.cursor/skills/writing-foundation/../agent-writing/SKILL.md',
+      },
     },
     {
       label: 'ambiguous raw Skill name',
@@ -614,32 +646,58 @@ test('Cursor Adapter observes only completed read-class Skill operations', async
         adapter,
         invocation: tracerInvocation(),
       });
-      const invocationEvidence = result.observations.responses.find(({ text }) => (
-        text.includes('"kind":"cursor-observed-skill-invocations"')
-      ));
-
-      assert.equal(Boolean(invocationEvidence), observed);
-      if (observed) {
-        assert.deepEqual(JSON.parse(invocationEvidence.text), {
-          kind: 'cursor-observed-skill-invocations',
-          invokedSkills: ['agent-writing'],
-        });
-      }
+      assert.equal(
+        result.observations.skillEvents.some(({ status }) => (
+          status === 'succeeded'
+        )),
+        observed,
+      );
     });
   }
+});
+
+test('Cursor Adapter requires a host call ID for Skill lifecycle evidence', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk({}, {
+      emitSkillReads: false,
+      toolEvents: [
+        {
+          type: 'tool_call',
+          name: 'read',
+          status: 'running',
+          args: { path: '.cursor/skills/agent-writing/SKILL.md' },
+        },
+        {
+          type: 'tool_call',
+          name: 'read',
+          status: 'completed',
+        },
+      ],
+    }),
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  });
+  assert.deepEqual(result.observations.skillEvents, []);
 });
 
 test('Cursor Adapter requires stable per-call Skill read identity', async (t) => {
   const canonicalArgs = {
     path: '.cursor/skills/agent-writing/SKILL.md',
   };
-  function event(callId, name, status, args) {
+  function event(callId, name, status, args, extra = {}) {
     return {
       type: 'tool_call',
       call_id: callId,
       name,
       status,
       ...(args === undefined ? {} : { args }),
+      ...extra,
     };
   }
   const cases = [
@@ -660,6 +718,14 @@ test('Cursor Adapter requires stable per-call Skill read identity', async (t) =>
       ],
     },
     {
+      label: 'terminal changed read tool rejects running identity',
+      observed: false,
+      events: [
+        event('changed-read-tool', 'read', 'running', canonicalArgs),
+        event('changed-read-tool', 'ReadFile', 'completed'),
+      ],
+    },
+    {
       label: 'terminal changed target rejects running read',
       observed: false,
       events: [
@@ -675,6 +741,34 @@ test('Cursor Adapter requires stable per-call Skill read identity', async (t) =>
       events: [
         event('invalid-target', 'read', 'running', canonicalArgs),
         event('invalid-target', 'read', 'completed', {}),
+      ],
+    },
+    {
+      label: 'truncated running arguments cannot establish identity',
+      observed: false,
+      events: [
+        event(
+          'truncated-running',
+          'read',
+          'running',
+          canonicalArgs,
+          { truncated: { args: true } },
+        ),
+        event('truncated-running', 'read', 'completed'),
+      ],
+    },
+    {
+      label: 'terminal truncation reuses complete running identity',
+      observed: true,
+      events: [
+        event('truncated-terminal', 'read', 'running', canonicalArgs),
+        event(
+          'truncated-terminal',
+          'read',
+          'completed',
+          { path: '.cursor/skills/agent' },
+          { truncated: { args: true } },
+        ),
       ],
     },
     {
@@ -718,26 +812,85 @@ test('Cursor Adapter requires stable per-call Skill read identity', async (t) =>
         adapter,
         invocation: tracerInvocation(),
       });
-      const invocationEvidence = result.observations.responses
-        .filter(({ text }) => (
-          text.includes('"kind":"cursor-observed-skill-invocations"')
-        ))
-        .map(({ text }) => JSON.parse(text));
-
       assert.deepEqual(
-        invocationEvidence,
+        result.observations.skillEvents
+          .filter(({ status }) => status === 'succeeded')
+          .map(({ name }) => name),
         observed
-          ? [{
-            kind: 'cursor-observed-skill-invocations',
-            invokedSkills: ['agent-writing'],
-          }]
+          ? ['agent-writing']
           : [],
       );
     });
   }
 });
 
-test('Cursor Adapter does not observe failed or cancelled Skill reads', async (t) => {
+test('Cursor Adapter deduplicates transport events and preserves repeated loads', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const first = skillReadEvents('agent-writing').map((event) => ({
+    ...event,
+    call_id: 'first-load',
+  }));
+  const second = skillReadEvents('agent-writing').map((event) => ({
+    ...event,
+    call_id: 'second-load',
+  }));
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk({}, {
+      emitSkillReads: false,
+      toolEvents: [first[0], first[0], first[1], first[1], ...second],
+    }),
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  });
+
+  assert.deepEqual(
+    result.observations.skillEvents.map(({ status, callId }) => [status, callId]),
+    [
+      ['started', 'first-load'],
+      ['succeeded', 'first-load'],
+      ['started', 'second-load'],
+      ['succeeded', 'second-load'],
+    ],
+  );
+});
+
+test('Cursor Adapter preserves interleaved lifecycle event order', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const [firstStart, firstEnd] = skillReadEvents('agent-writing')
+    .map((event) => ({ ...event, call_id: 'first-load' }));
+  const [secondStart, secondEnd] = skillReadEvents('writing-foundation')
+    .map((event) => ({ ...event, call_id: 'second-load' }));
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk({}, {
+      emitSkillReads: false,
+      toolEvents: [firstStart, secondStart, secondEnd, firstEnd],
+    }),
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  });
+
+  assert.deepEqual(
+    result.observations.skillEvents.map(({ name, status }) => [name, status]),
+    [
+      ['agent-writing', 'started'],
+      ['writing-foundation', 'started'],
+      ['writing-foundation', 'succeeded'],
+      ['agent-writing', 'succeeded'],
+    ],
+  );
+});
+
+test('Cursor Adapter preserves failed and incomplete Skill reads', async (t) => {
   const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
   const toolEvents = [
     ...skillReadEvents('agent-writing', 'error'),
@@ -757,11 +910,14 @@ test('Cursor Adapter does not observe failed or cancelled Skill reads', async (t
     invocation: tracerInvocation(),
   });
 
-  assert.equal(
-    result.observations.responses.some(({ text }) => (
-      text.includes('"kind":"cursor-observed-skill-invocations"')
-    )),
-    false,
+  assert.deepEqual(
+    result.observations.skillEvents.map(({ name, status }) => [name, status]),
+    [
+      ['agent-writing', 'started'],
+      ['agent-writing', 'failed'],
+      ['writing-foundation', 'started'],
+      ['writing-foundation', 'unknown'],
+    ],
   );
 });
 
@@ -781,11 +937,12 @@ test('Cursor Adapter does not observe incomplete Skill reads', async (t) => {
     invocation: tracerInvocation(),
   });
 
-  assert.equal(
-    result.observations.responses.some(({ text }) => (
-      text.includes('"kind":"cursor-observed-skill-invocations"')
-    )),
-    false,
+  assert.deepEqual(
+    result.observations.skillEvents.map(({ name, status }) => [name, status]),
+    [
+      ['agent-writing', 'started'],
+      ['agent-writing', 'unknown'],
+    ],
   );
 });
 
@@ -982,7 +1139,7 @@ test('Cursor Adapter reports SDK startup failure and cleans the project', async 
     code: 'authentication_failed',
     message: 'Invalid API key',
   });
-  assert.deepEqual(result.observations.routing.invokedSkills, [
+  assert.deepEqual(result.observations.routing.resolvedSkills, [
     'writing-foundation',
     'agent-writing',
   ]);
@@ -1015,9 +1172,8 @@ test('Cursor Adapter preserves partial evidence and cancels an interrupted run',
             this.status = 'cancelled';
           },
           async *stream() {
-            for (const skill of ['agent-writing', 'writing-foundation']) {
-              yield* skillReadEvents(skill);
-            }
+            yield* skillReadEvents('agent-writing');
+            yield skillReadEvents('writing-foundation')[0];
             yield {
               type: 'assistant',
               message: {
@@ -1097,11 +1253,17 @@ test('Cursor Adapter preserves partial evidence and cancels an interrupted run',
     'Activation: When a JSON path is supplied.',
   );
   assert.deepEqual(
-    responsePayload(result, 'cursor-observed-skill-invocations'),
-    {
-      kind: 'cursor-observed-skill-invocations',
-      invokedSkills: ['agent-writing', 'writing-foundation'],
-    },
+    result.observations.skillEvents.map(({ name, status }) => [name, status]),
+    [
+      ['agent-writing', 'started'],
+      ['agent-writing', 'succeeded'],
+      ['writing-foundation', 'started'],
+      ['writing-foundation', 'cancelled'],
+    ],
+  );
+  assert.equal(
+    result.observations.skillEvents.at(-1).provenance.statusSource,
+    'inferred',
   );
   const partialSnapshot = resolveArtifact(
     result,
@@ -1117,6 +1279,10 @@ test('Cursor Adapter preserves partial evidence and cancels an interrupted run',
     {
       name: 'read',
       outcome: 'succeeded',
+    },
+    {
+      name: 'read',
+      outcome: 'attempted',
     },
     {
       name: 'write',

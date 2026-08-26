@@ -58,6 +58,7 @@ function createFakeClaude(t, {
   pluginListExitCode = 0,
   pluginListOutput = null,
   pluginListStderr = '',
+  observerEvents = null,
 }) {
   const fixtureRoot = fs.mkdtempSync(
     path.join(os.tmpdir(), 'fake-claude-command-'),
@@ -119,6 +120,15 @@ if (isPluginListCommand) {
     skills,
     stdin,
   });
+  if (process.env.SUITE_CLAUDE_SKILL_OBSERVER_LOG) {
+    const observerEvents = ${JSON.stringify(observerEvents)};
+    if (observerEvents) {
+      fs.writeFileSync(
+        process.env.SUITE_CLAUDE_SKILL_OBSERVER_LOG,
+        observerEvents.map((event) => JSON.stringify(event)).join('\\n') + '\\n',
+      );
+    }
+  }
   for (const event of ${JSON.stringify(events)}) {
     process.stdout.write(JSON.stringify(event) + '\\n');
   }
@@ -195,9 +205,46 @@ function successEvents() {
   ];
 }
 
+function hookSkillEvent(hookEventName, skill, callId, extra = {}) {
+  return {
+    session_id: 'claude-session-1',
+    hook_event_name: hookEventName,
+    tool_name: 'Skill',
+    tool_input: { skill },
+    tool_use_id: callId,
+    ...extra,
+  };
+}
+
+function successfulObserverEvents() {
+  return [
+    {
+      session_id: 'claude-session-1',
+      hook_event_name: 'UserPromptExpansion',
+      expansion_type: 'slash_command',
+      command_name: 'agent-writing',
+      command_source: 'skill',
+      prompt: '/agent-writing',
+    },
+    hookSkillEvent(
+      'PreToolUse',
+      'writing-foundation',
+      'writing-foundation-use',
+    ),
+    hookSkillEvent(
+      'PostToolUse',
+      'writing-foundation',
+      'writing-foundation-use',
+    ),
+  ];
+}
+
 test('Claude Code Adapter executes the host-local Agent Writing tracer', async (t) => {
   const fixtureRoot = createPackageFixture(t);
-  const fakeClaude = createFakeClaude(t, { events: successEvents() });
+  const fakeClaude = createFakeClaude(t, {
+    events: successEvents(),
+    observerEvents: successfulObserverEvents(),
+  });
   const adapter = createClaudeCodeAdapter({
     skillsRoot: path.join(fixtureRoot, 'skills'),
     command: fakeClaude.commandPath,
@@ -216,14 +263,36 @@ test('Claude Code Adapter executes the host-local Agent Writing tracer', async (
     requested: REQUESTED_MODEL,
     resolved: RESOLVED_MODEL,
   });
-  assert.deepEqual(result.observations.discoveredSkills, [
+  assert.deepEqual(result.observations.packageSkills, [
     'agent-writing',
     'writing-foundation',
   ]);
   assert.deepEqual(result.observations.routing, {
     requestedSkill: 'agent-writing',
-    invokedSkills: ['writing-foundation', 'agent-writing'],
+    resolvedSkills: ['writing-foundation', 'agent-writing'],
   });
+  assert.deepEqual(result.observations.hostAvailableSkills.names, [
+    'agent-writing',
+    'writing-foundation',
+  ]);
+  assert.deepEqual(
+    result.observations.skillEvents.map((event) => (
+      [event.name, event.operation, event.status, event.trigger]
+    )),
+    [
+      ['agent-writing', 'select', 'succeeded', 'user'],
+      ['agent-writing', 'load', 'succeeded', 'user'],
+      ['writing-foundation', 'select', 'started', 'model'],
+      ['writing-foundation', 'load', 'started', 'model'],
+      ['writing-foundation', 'load', 'succeeded', 'model'],
+    ],
+  );
+  assert.equal(
+    result.observations.skillEvents.every(({ provenance }) => (
+      provenance.observerVersion === 'claude-code-hooks-v1'
+    )),
+    true,
+  );
   assert.deepEqual(result.observations.toolUses, [
     { name: 'SlashCommand', outcome: 'submitted /agent-writing' },
     { name: 'Skill', outcome: 'invoked writing-foundation' },
@@ -296,6 +365,7 @@ test('Claude Code Adapter suppresses controllable ambient host state', async (t)
   const hostilePluginId = 'hostile@"},"hooks":{"PreToolUse":true';
   const fakeClaude = createFakeClaude(t, {
     events: successEvents(),
+    observerEvents: successfulObserverEvents(),
     pluginList: [
       { id: 'formatter@company-tools' },
       { id: hostilePluginId },
@@ -335,15 +405,31 @@ test('Claude Code Adapter suppresses controllable ambient host state', async (t)
 
   const settingsIndex = execution.args.indexOf('--settings');
   const settings = JSON.parse(execution.args[settingsIndex + 1]);
-  assert.deepEqual(settings, {
+  const observerScript = settings.hooks.PreToolUse[0].hooks[0].args[0];
+  assert.equal(path.basename(observerScript), 'skill-observer.js');
+  assert.deepEqual(Object.keys(settings.hooks).sort(), [
+    'PermissionDenied',
+    'PostToolUse',
+    'PostToolUseFailure',
+    'PreToolUse',
+    'UserPromptExpansion',
+  ]);
+  for (const registrations of Object.values(settings.hooks)) {
+    assert.equal(registrations[0].hooks[0].command, process.execPath);
+    assert.equal(registrations[0].hooks[0].args[0], observerScript);
+  }
+  assert.deepEqual({
+    ...settings,
+    hooks: 'validated-above',
+  }, {
     autoMemoryEnabled: false,
-    disableAllHooks: true,
     disableClaudeAiConnectors: true,
     enabledPlugins: {
       'formatter@company-tools': false,
       [hostilePluginId]: false,
       'reviewer@company-tools': false,
     },
+    hooks: 'validated-above',
   });
   assert.equal(execution.args.includes(hostilePluginId), false);
 });
@@ -486,7 +572,10 @@ test('Claude Code Adapter normalizes tool, mutation, and file artifact evidence'
       },
     },
   );
-  const fakeClaude = createFakeClaude(t, { events });
+  const fakeClaude = createFakeClaude(t, {
+    events,
+    observerEvents: successfulObserverEvents(),
+  });
   const adapter = createClaudeCodeAdapter({
     skillsRoot: path.join(fixtureRoot, 'skills'),
     command: fakeClaude.commandPath,
@@ -547,7 +636,10 @@ test('Claude Code Adapter does not report a failed write as an artifact', async 
       },
     },
   );
-  const fakeClaude = createFakeClaude(t, { events });
+  const fakeClaude = createFakeClaude(t, {
+    events,
+    observerEvents: successfulObserverEvents(),
+  });
   const adapter = createClaudeCodeAdapter({
     skillsRoot: path.join(fixtureRoot, 'skills'),
     command: fakeClaude.commandPath,
@@ -671,6 +763,7 @@ test('Claude Code Adapter preserves partial evidence after execution starts', as
     name: 'SlashCommand',
     outcome: 'submitted /agent-writing',
   }]);
+  assert.deepEqual(result.observations.skillEvents, []);
   assert.deepEqual(result.model, {
     requested: REQUESTED_MODEL,
     resolved: RESOLVED_MODEL,
@@ -736,6 +829,126 @@ test('Claude production execution remains fail-closed on the exact missing depen
     missingSkill: 'writing-foundation',
   });
   assert.equal(fs.existsSync(fakeClaude.logPath), false);
+});
+
+function successEventsWithoutSkillTool() {
+  return successEvents().filter((event) => !event.message?.content?.some((content) => (
+    content.type === 'tool_use' && content.name === 'Skill'
+  )));
+}
+
+async function executeObserverFixture(t, observerEvents, events = successEventsWithoutSkillTool()) {
+  const fixtureRoot = createPackageFixture(t);
+  const fakeClaude = createFakeClaude(t, { events, observerEvents });
+  const adapter = createClaudeCodeAdapter({
+    skillsRoot: path.join(fixtureRoot, 'skills'),
+    command: fakeClaude.commandPath,
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+  return executeProduction({
+    repositoryRoot: fixtureRoot,
+    adapter,
+    invocation: invocation(),
+  });
+}
+
+test('Claude Code Adapter distinguishes slash selection from model selection', async (t) => {
+  const slash = await executeObserverFixture(t, [{
+    session_id: 'slash-session',
+    hook_event_name: 'UserPromptExpansion',
+    expansion_type: 'slash_command',
+    command_name: 'agent-writing',
+    command_source: 'skill',
+    prompt: '/agent-writing',
+  }]);
+  assert.deepEqual(
+    slash.observations.skillEvents.map(({ name, operation, status, trigger }) => (
+      [name, operation, status, trigger]
+    )),
+    [
+      ['agent-writing', 'select', 'succeeded', 'user'],
+      ['agent-writing', 'load', 'succeeded', 'user'],
+    ],
+  );
+
+  const model = await executeObserverFixture(t, [
+    hookSkillEvent('PreToolUse', 'agent-writing', 'model-call'),
+    hookSkillEvent('PostToolUse', 'agent-writing', 'model-call'),
+  ]);
+  assert.deepEqual(
+    model.observations.skillEvents.map(({ operation, status, trigger }) => (
+      [operation, status, trigger]
+    )),
+    [
+      ['select', 'started', 'model'],
+      ['load', 'started', 'model'],
+      ['load', 'succeeded', 'model'],
+    ],
+  );
+});
+
+test('Claude Code Adapter preserves exact failure lifecycle without cross-Skill inference', async (t) => {
+  const result = await executeObserverFixture(t, [
+    hookSkillEvent('PermissionDenied', 'agent-writing', 'rejected-call'),
+    hookSkillEvent('PreToolUse', 'writing-foundation', 'failed-call'),
+    hookSkillEvent('PostToolUseFailure', 'writing-foundation', 'failed-call'),
+    hookSkillEvent('PreToolUse', 'agent-writing', 'cancelled-call'),
+    hookSkillEvent(
+      'PostToolUseFailure',
+      'agent-writing',
+      'cancelled-call',
+      { is_interrupt: true },
+    ),
+    {
+      session_id: 'claude-session-1',
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Skill',
+      tool_input: { prompt: 'agent-writing appears only as prose' },
+      tool_use_id: 'generic-call',
+    },
+  ]);
+
+  assert.deepEqual(
+    result.observations.skillEvents.map(({ name, operation, status, callId }) => (
+      [name, operation, status, callId]
+    )),
+    [
+      ['agent-writing', 'select', 'rejected', 'rejected-call'],
+      ['writing-foundation', 'select', 'started', 'failed-call'],
+      ['writing-foundation', 'load', 'started', 'failed-call'],
+      ['writing-foundation', 'load', 'failed', 'failed-call'],
+      ['agent-writing', 'select', 'started', 'cancelled-call'],
+      ['agent-writing', 'load', 'started', 'cancelled-call'],
+      ['agent-writing', 'load', 'cancelled', 'cancelled-call'],
+    ],
+  );
+});
+
+test('Claude Code Adapter deduplicates transport delivery but preserves repeated calls', async (t) => {
+  const firstStart = hookSkillEvent('PreToolUse', 'agent-writing', 'call-1');
+  const firstEnd = hookSkillEvent('PostToolUse', 'agent-writing', 'call-1');
+  const result = await executeObserverFixture(t, [
+    firstStart,
+    firstStart,
+    firstEnd,
+    firstEnd,
+    hookSkillEvent('PreToolUse', 'agent-writing', 'call-2'),
+    hookSkillEvent('PostToolUse', 'agent-writing', 'call-2'),
+  ]);
+
+  assert.deepEqual(
+    result.observations.skillEvents.map(({ operation, status, callId }) => (
+      [operation, status, callId]
+    )),
+    [
+      ['select', 'started', 'call-1'],
+      ['load', 'started', 'call-1'],
+      ['load', 'succeeded', 'call-1'],
+      ['select', 'started', 'call-2'],
+      ['load', 'started', 'call-2'],
+      ['load', 'succeeded', 'call-2'],
+    ],
+  );
 });
 
 test('live Claude Code executes the host-local Agent Writing tracer', {
