@@ -395,7 +395,7 @@ test('owner-local routing grading requires exact Skill membership', () => {
     ).passed,
     false,
   );
-  assert.equal(grade('human-summary', ['to-humans']).passed, false);
+  assert.equal(grade('human-summary', ['to-humans']).passed, true);
   assert.equal(grade('human-summary', ['another-skill']).passed, true);
   assert.equal(grade('human-summary', ['take-it-offline']).passed, false);
   assert.equal(
@@ -416,12 +416,20 @@ test('routing boundaries execute unchanged through both host cells', async (t) =
   for (const cell of manifest.cells) {
     for (const caseDefinition of definition.evals) {
       const observed = routingObservations[caseDefinition.id];
+      const invokedSkills = [];
+      if (caseDefinition.id === 'human-summary') {
+        invokedSkills.push('to-humans');
+      } else if (observed) {
+        invokedSkills.push(
+          'writing-foundation',
+          'agent-writing',
+          'take-it-offline',
+        );
+      }
       const normalized = normalizedResult({
         model: cell.model,
         output: observed ? 'Continuation route selected.' : 'No continuation route.',
-        invokedSkills: observed
-          ? ['writing-foundation', 'agent-writing', 'take-it-offline']
-          : [],
+        invokedSkills,
         toolUses: observed
           ? [{ name: 'Skill', outcome: 'invoked take-it-offline' }]
           : [],

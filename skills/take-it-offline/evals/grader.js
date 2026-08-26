@@ -41,6 +41,7 @@ function gradeTakeItOfflineRouting({ caseDefinition, result }) {
   validateResult(result);
   const invokedSkills = result.observations.routing.invokedSkills;
   const primaryInvoked = invokedSkills.includes('take-it-offline');
+  const toHumansInvoked = invokedSkills.includes('to-humans');
   const shouldTrigger = caseDefinition.should_trigger === true;
   const details = invokedSkillsDetails(invokedSkills);
   const checks = [
@@ -50,8 +51,8 @@ function gradeTakeItOfflineRouting({ caseDefinition, result }) {
       `expected=${shouldTrigger} ${details}`,
     ),
     check(
-      'to-humans remains inactive',
-      !invokedSkills.includes('to-humans'),
+      'to-humans remains inactive for continuation',
+      !shouldTrigger || !toHumansInvoked,
       details,
     ),
   ];
