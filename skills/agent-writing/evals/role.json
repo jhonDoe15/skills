@@ -15,27 +15,31 @@
     "randomization_seed": "agent-writing-role-v1"
   },
   "signals": {
-    "aw-accepted-context": ["^Accepted context:"],
-    "aw-activation": ["^Activation:"],
-    "aw-intended-outcomes": ["^Intended outcome:"],
-    "aw-branches": ["^Branch:"],
-    "aw-completion": ["^Completion:"],
-    "aw-steps-reference": ["^Steps versus reference:"],
-    "aw-branch-disclosure": ["^Branch disclosure:"],
-    "aw-co-located-authority": ["^Co-located authority:"],
-    "aw-instruction-form": ["^Instruction form:"],
-    "aw-context-load": ["^Context load:"],
-    "aw-behavioral-pruning": ["^Behavioral pruning:"],
-    "aw-terminology": ["^Terminology:"],
-    "aw-execution-semantics": ["^Execution semantics:"],
-    "aw-environment-source": ["^Environment source:"],
-    "aw-failure-behavior": ["^Failure behavior:"]
+    "aw-accepted-context": ["deploy-status\\.json.*(?:read-only|without changing|must not be changed)", "(?:read-only|without changing).*deploy-status\\.json"],
+    "aw-activation": ["(?:after|when|once).*deploy-status\\.json.*(?:appears|available|supplied)"],
+    "aw-intended-outcomes": ["report.*(?:observed )?status.*(?:success|failure|branch|path).*DAG frontier"],
+    "aw-branches": ["(?:success|succeed).*(?:failure|fail)|(?:failure|fail).*(?:success|succeed)"],
+    "aw-success-branch": ["\\bif\\b.*\\b(?:success|succeeded|successful)\\b.*\\b(?:report|record)\\b.*(?:frontier|status)"],
+    "aw-failure-branch": ["\\bif\\b.*\\b(?:failure|failed|fails)\\b.*\\b(?:report|record)\\b.*(?:troubleshooting|reference)"],
+    "aw-completion": ["(?:finish|complete|done).*(?:only after|only when).*(?:observed )?status.*(?:branch|path)"],
+    "aw-steps-reference": ["\\bif\\b.*\\b(?:failure|failed|fails)\\b.*(?:only then|only after).*(?:troubleshooting|reference)"],
+    "aw-branch-disclosure": ["\\bif\\b.*\\b(?:failure|failed|fails)\\b.*(?:only then|only after).*(?:troubleshooting|reference)"],
+    "aw-co-located-authority": ["\\bif\\b.*\\b(?:success|succeeded|successful|failure|failed|fails)\\b.*\\b(?:report|record)\\b"],
+    "aw-instruction-form": ["^\\s*(?:[-*]\\s*)?\\bif\\b.*\\b(?:report|record)\\b"],
+    "aw-context-load": ["(?:only then|only after).*(?:troubleshooting|reference)"],
+    "aw-behavioral-pruning": ["(?:only then|only after).*(?:troubleshooting|reference)"],
+    "aw-terminology": ["`?DAG frontier`?"],
+    "aw-execution-semantics": ["deploy-status\\.json.*(?:read-only|without changing)", "(?:read-only|without changing).*deploy-status\\.json"],
+    "aw-environment-source": ["retry limit.*environment|environment.*retry limit"],
+    "aw-failure-behavior": ["unavailable.*(?:missing|name).*(?:stop).*(?:without inventing|do not invent)", "(?:missing|name).*unavailable.*(?:stop).*(?:without inventing|do not invent)"]
   },
   "global_required_signals": [
     "aw-accepted-context",
     "aw-activation",
     "aw-intended-outcomes",
     "aw-branches",
+    "aw-success-branch",
+    "aw-failure-branch",
     "aw-steps-reference",
     "aw-branch-disclosure",
     "aw-co-located-authority",
@@ -51,11 +55,15 @@
   "global_order": [
     ["aw-activation"],
     ["aw-intended-outcomes"],
-    ["aw-branches"],
-    ["aw-steps-reference"],
+    ["aw-success-branch"],
+    ["aw-failure-branch"],
     ["aw-completion"]
   ],
-  "forbidden_patterns": [],
+  "forbidden_patterns": [
+    "\\b(?:success|succeeded|successful)\\b.*\\b(?:remediation|troubleshooting)\\b",
+    "^(?!.*\\b(?:never|not|without|read-only)\\b).*\\b(?:modify|write|edit|replace|delete)\\b.*deploy-status\\.json",
+    "retry limit\\s+(?:is|=)\\s*\\d+"
+  ],
   "judge": {
     "score_range": [0, 2],
     "minimum_dimension_score": 1,
@@ -74,9 +82,9 @@
     {
       "id": "agent-writing-owned-contract",
       "name": "isolated-agent-writing-behavior",
-      "prompt": "Create instructions for a deployment-status agent. It activates after deploy-status.json appears, reports the canonical `DAG frontier` state, follows a success or failure branch without changing the file, reads retry limits from the environment, and finishes only after reporting the observed status. Keep branch-only troubleshooting reference off the success path. Return a contract record that makes Agent Writing's owned behavior observable.",
+      "prompt": "Create instructions for a deployment-status agent from the supplied `evals/fixtures/deploy-status-source.json`. It activates after deploy-status.json appears, reports the canonical `DAG frontier` state, follows a success or failure branch without changing the file, reads retry limits from the environment, and finishes only after reporting the observed status. Keep branch-only troubleshooting reference off the success path. Return an executable procedure; headings and labels are optional.",
       "expected_output": "An executable agent-facing contract with an observable trigger and outcome, explicit branches, ordered steps separate from reference, conditional disclosure, co-located authority, exact terminology and read-only semantics, environment lookups, failure behavior, pruning, and terminal checks.",
-      "files": [],
+      "files": ["evals/fixtures/deploy-status-source.json"],
       "expectations": [
         "Activation, intended outcome, branch predicates, ordered actions, failure behavior, and completion are checkable.",
         "Steps are distinct from reference and failure-only reference is disclosed only on failure.",

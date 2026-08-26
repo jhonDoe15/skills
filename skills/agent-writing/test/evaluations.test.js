@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
@@ -10,8 +11,11 @@ const {
   createCampaignManifest,
   createRunEvidence,
   gradeDeterministicOutput,
+  gradeTriggerResult,
+  runComponentEvaluation,
   validateEvaluationDefinition,
 } = require('../../../suite/evaluation');
+const { defineTestAdapter } = require('../../../suite/testing');
 
 const repositoryRoot = path.resolve(__dirname, '../../..');
 const skillRoot = path.resolve(__dirname, '..');
@@ -78,6 +82,62 @@ function caseKey(scope, id) {
   return `${scope}:${id}`;
 }
 
+function skillEvent(name, {
+  operation = 'load',
+  status = 'succeeded',
+  trigger = 'model',
+  callId = `${name}-${operation}-${status}`,
+} = {}) {
+  return {
+    name,
+    operation,
+    status,
+    trigger,
+    callId,
+    provenance: {
+      host: 'fixture',
+      mechanism: 'owner-local-lifecycle-fixture',
+      observerVersion: '1',
+      eventType: 'fixture.skill-lifecycle',
+      runId: 'trigger-regression',
+      statusSource: 'observed',
+    },
+  };
+}
+
+function triggerResult(skillEvents) {
+  return {
+    status: 'succeeded',
+    observations: {
+      packageSkills: ['agent-writing', 'writing-foundation'],
+      hostAvailableSkills: null,
+      preExecutionInventory: {
+        skillDefinitions: [],
+        plugins: [],
+        ruleSources: [],
+        packageDigest: '0'.repeat(64),
+        truncated: false,
+      },
+      skillEvents,
+      routing: {
+        requestedSkill: 'agent-writing',
+        resolvedSkills: ['writing-foundation', 'agent-writing'],
+      },
+      responses: [{ text: 'Activation is not inferred from this response.' }],
+      artifacts: [],
+      toolUses: [{ name: 'Skill', outcome: 'succeeded' }],
+      attemptedMutations: [],
+    },
+    failure: null,
+    durationMs: 1,
+    costUsd: 0,
+    model: {
+      requested: 'test-model',
+      resolved: 'resolved-test-model',
+    },
+  };
+}
+
 function loadPackageClosureCases() {
   const definition = readJson(path.join(
     skillRoot,
@@ -108,14 +168,31 @@ function loadPackageClosureCases() {
   return definition;
 }
 
-function normalizedResult({ output, invokedSkills }) {
+function normalizedResult({
+  output,
+  invokedSkills,
+  packageSkills = invokedSkills,
+}) {
   return {
     status: 'succeeded',
     observations: {
-      discoveredSkills: invokedSkills,
+      packageSkills,
+      hostAvailableSkills: null,
+      preExecutionInventory: {
+        skillDefinitions: packageSkills.map((name) => ({
+          name,
+          path: `.fixture/skills/${name}/SKILL.md`,
+          digest: '0'.repeat(64),
+        })),
+        plugins: [],
+        ruleSources: [],
+        packageDigest: '0'.repeat(64),
+        truncated: false,
+      },
+      skillEvents: invokedSkills.map((name) => skillEvent(name)),
       routing: {
         requestedSkill: 'agent-writing',
-        invokedSkills,
+        resolvedSkills: invokedSkills,
       },
       responses: [{ text: output }],
       artifacts: [{
@@ -133,6 +210,25 @@ function normalizedResult({ output, invokedSkills }) {
       resolved: 'resolved-test-model',
     },
   };
+}
+
+function createPackageFixture(t) {
+  const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'issue-16-evals-'));
+  t.after(() => fs.rmSync(packageRoot, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(packageRoot, 'suite'), { recursive: true });
+  fs.copyFileSync(
+    path.join(repositoryRoot, 'suite', 'canonical-suite.json'),
+    path.join(packageRoot, 'suite', 'canonical-suite.json'),
+  );
+  for (const name of ['agent-writing', 'writing-foundation']) {
+    const destination = path.join(packageRoot, 'skills', name, 'SKILL.md');
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    fs.copyFileSync(
+      path.join(repositoryRoot, 'skills', name, 'SKILL.md'),
+      destination,
+    );
+  }
+  return packageRoot;
 }
 
 test('owner-local definitions isolate roles, the dependency edge, and the public outcome', () => {
@@ -158,6 +254,80 @@ test('owner-local definitions isolate roles, the dependency edge, and the public
   }
 });
 
+test('component orchestration sends one neutral task and owns Foundation ablation', async (t) => {
+  const definition = loadDefinition('agent-writing', 'component.json');
+  const caseDefinition = definition.evals[0];
+  assert.doesNotMatch(
+    caseDefinition.prompt,
+    /\b(?:ablat(?:e|ed|ion)|control|both arms|same host-neutral scenario)\b/i,
+  );
+
+  const manifest = createCampaignManifest({
+    definition,
+    packageRevision: 'issue-16-component-regression',
+    cells: [{ host: 'claude-code', model: 'test-model' }],
+    repetitions: 1,
+    executionConfiguration: { timeout_ms: 1000, tools: [] },
+    limitations: ['Owner-local orchestration regression; no model execution.'],
+  });
+  const executions = [];
+  const adapter = defineTestAdapter({
+    name: 'issue-16-component-ablation',
+    async execute(invocation, context) {
+      executions.push({
+        prompt: invocation.prompt,
+        resolvedSkills: [...context.resolvedSkills],
+        dependencyAblation: context.dependencyAblation,
+      });
+      return normalizedResult({
+        output: 'Static component fixture.',
+        invokedSkills: [...context.resolvedSkills],
+        packageSkills: [...context.packageSkills],
+      });
+    },
+  });
+
+  const records = await runComponentEvaluation({
+    repositoryRoot: createPackageFixture(t),
+    manifest,
+    definition,
+    caseDefinition,
+    cell: manifest.cells[0],
+    repetition: 1,
+    adapter,
+    gradeOutput({ arm }) {
+      return {
+        passed: true,
+        checks: [],
+        status: arm === 'treatment' ? 'passed' : 'baseline',
+      };
+    },
+  });
+
+  assert.equal(executions.length, 2);
+  assert.deepEqual(
+    executions.map(({ prompt }) => prompt),
+    [caseDefinition.prompt, caseDefinition.prompt],
+  );
+  assert.deepEqual(executions[0], {
+    prompt: caseDefinition.prompt,
+    resolvedSkills: ['writing-foundation', 'agent-writing'],
+    dependencyAblation: null,
+  });
+  assert.deepEqual(executions[1], {
+    prompt: caseDefinition.prompt,
+    resolvedSkills: ['agent-writing'],
+    dependencyAblation: {
+      consumer: 'agent-writing',
+      dependency: 'writing-foundation',
+    },
+  });
+  assert.deepEqual(
+    records.map(({ arm }) => arm.kind),
+    ['treatment', 'component-ablation'],
+  );
+});
+
 test('Agent Writing trigger cases cover every positive and exclusion boundary', () => {
   const definition = loadDefinition('agent-writing', 'trigger.json');
 
@@ -174,6 +344,65 @@ test('Agent Writing trigger cases cover every positive and exclusion boundary', 
     ],
   );
   assert.match(definition.evals.at(-1).prompt, /^\/agent-writing\b/);
+  assert.deepEqual(definition.evals[0].required_skill_loads, [
+    'writing-foundation',
+  ]);
+  assert.equal(definition.evals.at(-1).canonical_invocation, true);
+  assert.deepEqual(definition.evals.at(-1).required_skill_loads, [
+    'writing-foundation',
+  ]);
+});
+
+test('Agent Writing trigger grading consumes exact ordered lifecycle evidence', () => {
+  const definition = loadDefinition('agent-writing', 'trigger.json');
+  const positive = definition.evals[0];
+  const canonical = definition.evals.at(-1);
+  const grade = (caseDefinition, skillEvents) => gradeTriggerResult({
+    definition,
+    caseDefinition,
+    result: triggerResult(skillEvents),
+  });
+  const completeLifecycle = [
+    skillEvent('agent-writing', { status: 'started' }),
+    skillEvent('agent-writing'),
+    skillEvent('writing-foundation'),
+  ];
+
+  assert.equal(grade(positive, completeLifecycle).passed, true);
+  assert.equal(
+    grade(positive, [skillEvent('writing-foundation')]).passed,
+    false,
+    'dependency-only activation must not satisfy Agent Writing',
+  );
+  assert.equal(
+    grade(positive, [skillEvent('skill-writing')]).passed,
+    false,
+    'a wrong Skill must not satisfy Agent Writing',
+  );
+  assert.equal(
+    grade(positive, [skillEvent('agent-writing')]).passed,
+    false,
+    'the declared Foundation edge must be observed',
+  );
+  assert.equal(grade(canonical, completeLifecycle).passed, true);
+
+  for (const negative of definition.evals.filter(({ should_trigger }) => (
+    !should_trigger
+  ))) {
+    assert.equal(
+      grade(negative, [skillEvent('skill-writing')]).passed,
+      true,
+      negative.id,
+    );
+    assert.equal(
+      grade(negative, [skillEvent('agent-writing', {
+        operation: 'select',
+        status: 'rejected',
+      })]).passed,
+      false,
+      `${negative.id} must reject any exact target attempt`,
+    );
+  }
 });
 
 test('Contract coverage maps every clause to a case owned by the highest Skill', () => {
@@ -212,6 +441,94 @@ test('Contract coverage maps every clause to a case owned by the highest Skill',
   }
 });
 
+test('Agent Writing role grading accepts alternate structure and rejects semantic corruption', () => {
+  const definition = loadDefinition('agent-writing', 'role.json');
+  const caseDefinition = definition.evals[0];
+  const fixtureOutput = fs.readFileSync(
+    path.join(skillRoot, 'evals', 'fixtures', 'role-output.md'),
+    'utf8',
+  );
+  const alternateWording = [
+    '# Deployment status runbook',
+    'After `deploy-status.json` appears, treat the file as read-only.',
+    'Report the observed status, selected success or failure path, and exact `DAG frontier`.',
+    '1. Read the retry limit from the environment.',
+    '2. Inspect the status file without changing it.',
+    'If deployment succeeded, report the frontier and observed status.',
+    'If deployment failed, report the failure and only then consult the troubleshooting reference.',
+    'If the file, retry limit, or result is unavailable, name the missing input and stop without inventing a result.',
+    'Finish only after the observed status and selected branch have been reported.',
+  ].join('\n');
+
+  assert.equal(gradeDeterministicOutput({
+    definition,
+    caseDefinition,
+    output: fixtureOutput,
+  }).passed, true);
+  assert.equal(gradeDeterministicOutput({
+    definition,
+    caseDefinition,
+    output: alternateWording,
+  }).passed, true);
+
+  for (const [corrupted, failedCheck] of [
+    [
+      alternateWording.replace('DAG frontier', 'deployment frontier'),
+      'signal aw-terminology',
+    ],
+    [
+      alternateWording.replace(/^If deployment failed,.*\n/m, ''),
+      'signal aw-failure-branch',
+    ],
+  ]) {
+    const grade = gradeDeterministicOutput({
+      definition,
+      caseDefinition,
+      output: corrupted,
+    });
+    assert.equal(grade.passed, false, failedCheck);
+    assert.equal(
+      grade.checks.find(({ name }) => name === failedCheck).passed,
+      false,
+      failedCheck,
+    );
+  }
+  const leakedReference = gradeDeterministicOutput({
+    definition,
+    caseDefinition,
+    output: alternateWording.replace(
+      'If deployment succeeded, report the frontier and observed status.',
+      'If deployment succeeded, consult the troubleshooting reference and report the frontier and observed status.',
+    ),
+  });
+  assert.equal(leakedReference.passed, false);
+  assert.equal(
+    leakedReference.checks.some(({ name, passed }) => (
+      name.startsWith('forbidden ') && !passed
+    )),
+    true,
+  );
+
+  const sourceFixture = readJson(path.join(
+    skillRoot,
+    'evals',
+    'fixtures',
+    'deploy-status-source.json',
+  ));
+  assert.equal(sourceFixture.frontierLabel, 'DAG frontier');
+  assert.equal(sourceFixture.retryLimitSource, 'environment');
+  assert.equal(sourceFixture.inputMode, 'read-only');
+  assert.deepEqual(caseDefinition.files, [
+    'evals/fixtures/deploy-status-source.json',
+  ]);
+  assert.equal(
+    Object.values(definition.signals).flat().some((pattern) => (
+      /^\^[A-Z][^:]+:/.test(pattern)
+    )),
+    false,
+  );
+});
+
 test('deterministic grading reports clause evidence and blocks blind judgment', () => {
   const definition = loadDefinition('agent-writing', 'outcome.json');
   const caseDefinition = definition.evals[0];
@@ -224,24 +541,101 @@ test('deterministic grading reports clause evidence and blocks blind judgment', 
     caseDefinition,
     output: fixtureOutput,
   });
+  const alternateWording = [
+    '# Validation runbook',
+    'Once a path to `deploy-plan.json` is supplied, keep that input read-only.',
+    'The goal is to report the observed validation result, chosen valid or invalid path, and exact `DAG frontier`.',
+    '1. Obtain the current schema command from the environment.',
+    '2. Validate the supplied file without changing it.',
+    'If validation is valid, report the `DAG frontier` with `{"maxAttempts":3}`.',
+    'If validation is invalid, report the failure and only then consult the remediation reference.',
+    'If the command, file, or result is unavailable, name the missing input and stop without inventing a result.',
+    'Finish only after the observed result and selected branch have been reported.',
+  ].join('\n');
+  const alternate = gradeDeterministicOutput({
+    definition,
+    caseDefinition,
+    output: alternateWording,
+  });
 
   assert.equal(passing.passed, true);
+  assert.equal(alternate.passed, true);
   assert.ok(passing.checks.length > 0);
-  for (const check of passing.checks) {
-    assert.match(check.name, /^(?:signal aw-|order )/);
+  for (const check of passing.checks.filter(({ name }) => (
+    name.startsWith('signal ')
+  ))) {
+    assert.match(check.name, /^signal aw-/);
     assert.match(check.details, /line \d+/);
   }
 
-  const incompleteOutput = fixtureOutput.replace(/^Branch:.*\n/m, '');
+  const missingFailureBranch = alternateWording
+    .replace(/^If validation is invalid,.*\n/m, '');
   const failing = gradeDeterministicOutput({
     definition,
     caseDefinition,
-    output: incompleteOutput,
+    output: missingFailureBranch,
   });
   assert.equal(failing.passed, false);
   assert.equal(
-    failing.checks.find(({ name }) => name === 'signal aw-branches').passed,
+    failing.checks.find(({ name }) => name === 'signal aw-failure-branch').passed,
     false,
+  );
+  for (const [corrupted, failedCheck] of [
+    [
+      alternateWording.replaceAll('DAG frontier', 'dependency frontier'),
+      'signal aw-terminology',
+    ],
+    [
+      alternateWording.replace('{"maxAttempts":3}', '{"maxAttempts":4}'),
+      'signal aw-execution-semantics',
+    ],
+  ]) {
+    const corruptedGrade = gradeDeterministicOutput({
+      definition,
+      caseDefinition,
+      output: corrupted,
+    });
+    assert.equal(corruptedGrade.passed, false, failedCheck);
+    assert.equal(
+      corruptedGrade.checks.find(({ name }) => name === failedCheck).passed,
+      false,
+      failedCheck,
+    );
+  }
+  const leakedReference = gradeDeterministicOutput({
+    definition,
+    caseDefinition,
+    output: alternateWording.replace(
+      'If validation is valid, report the `DAG frontier` with `{"maxAttempts":3}`.',
+      'If validation is valid, load the remediation reference, then report the `DAG frontier` with `{"maxAttempts":3}`.',
+    ),
+  });
+  assert.equal(leakedReference.passed, false);
+  assert.equal(
+    leakedReference.checks.some(({ name, passed: checkPassed }) => (
+      name.startsWith('forbidden ') && !checkPassed
+    )),
+    true,
+  );
+
+  const sourceFixture = readJson(path.join(
+    skillRoot,
+    'evals',
+    'fixtures',
+    'deploy-plan-source.json',
+  ));
+  assert.equal(sourceFixture.frontierLabel, 'DAG frontier');
+  assert.deepEqual(sourceFixture.retryPolicy, { maxAttempts: 3 });
+  assert.equal(sourceFixture.inputMode, 'read-only');
+  assert.deepEqual(caseDefinition.files, [
+    'evals/fixtures/deploy-plan-source.json',
+  ]);
+  assert.equal(
+    Object.values(definition.signals).flat().some((pattern) => (
+      /^\^[A-Z][^:]+:/.test(pattern)
+    )),
+    false,
+    'semantic grading must not require canned labels',
   );
 
   const manifest = createCampaignManifest({
@@ -251,6 +645,12 @@ test('deterministic grading reports clause evidence and blocks blind judgment', 
     repetitions: 1,
     executionConfiguration: { timeout_ms: 1000, tools: [] },
     limitations: ['Static fixture only; no model behavior claim.'],
+    controlPolicy: {
+      target: 'agent-writing',
+      dependencies: ['writing-foundation'],
+      aliases: [],
+      conflictingOwners: [],
+    },
   });
   const cell = manifest.cells[0];
   const control = createRunEvidence({
@@ -269,7 +669,7 @@ test('deterministic grading reports clause evidence and blocks blind judgment', 
     repetition: 1,
     arm: 'treatment',
     result: normalizedResult({
-      output: incompleteOutput,
+      output: missingFailureBranch,
       invokedSkills: ['writing-foundation', 'agent-writing'],
     }),
     deterministicGrade: failing,

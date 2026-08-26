@@ -36,7 +36,7 @@
       ],
       "covered_clauses": ["aw-routing-positive"],
       "should_trigger": true,
-      "expected_output_patterns": []
+      "required_skill_loads": ["writing-foundation"]
     },
     {
       "id": "agent-writing-skill-exclusion",
@@ -48,8 +48,7 @@
         "The host does not record Agent Writing activation."
       ],
       "covered_clauses": ["aw-routing-agent-skill-exclusion"],
-      "should_trigger": false,
-      "expected_output_patterns": []
+      "should_trigger": false
     },
     {
       "id": "agent-writing-handoff-exclusion",
@@ -61,8 +60,7 @@
         "The host does not record Agent Writing activation."
       ],
       "covered_clauses": ["aw-routing-handoff-exclusion"],
-      "should_trigger": false,
-      "expected_output_patterns": []
+      "should_trigger": false
     },
     {
       "id": "agent-writing-human-exclusion",
@@ -74,8 +72,7 @@
         "The host does not record Agent Writing activation."
       ],
       "covered_clauses": ["aw-routing-human-exclusion"],
-      "should_trigger": false,
-      "expected_output_patterns": []
+      "should_trigger": false
     },
     {
       "id": "agent-writing-ambiguous",
@@ -87,8 +84,7 @@
         "The host does not record Agent Writing activation from an unresolved reader."
       ],
       "covered_clauses": ["aw-routing-ambiguous"],
-      "should_trigger": false,
-      "expected_output_patterns": []
+      "should_trigger": false
     },
     {
       "id": "agent-writing-canonical",
@@ -101,7 +97,8 @@
       ],
       "covered_clauses": ["aw-routing-canonical"],
       "should_trigger": true,
-      "expected_output_patterns": []
+      "required_skill_loads": ["writing-foundation"],
+      "canonical_invocation": true
     }
   ]
 }

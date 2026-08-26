@@ -38,7 +38,7 @@
         "wf-canonical-private-reach"
       ],
       "should_trigger": true,
-      "expected_output_patterns": []
+      "canonical_invocation": true
     },
     {
       "id": "foundation-private-false-activation",
@@ -52,8 +52,7 @@
       "covered_clauses": [
         "wf-private-routing-exclusion"
       ],
-      "should_trigger": false,
-      "expected_output_patterns": []
+      "should_trigger": false
     }
   ]
 }

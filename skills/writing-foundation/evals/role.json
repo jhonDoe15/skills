@@ -15,18 +15,18 @@
     "randomization_seed": "writing-foundation-role-v1"
   },
   "signals": {
-    "wf-accepted-context": ["^Accepted context:"],
-    "wf-coverage": ["^Coverage:"],
-    "wf-grounding": ["^Grounding:"],
-    "wf-uncertainty": ["^Uncertainty:"],
-    "wf-structure": ["^Structure:"],
-    "wf-terminology": ["^Terminology:"],
-    "wf-relevance": ["^Relevance:"],
-    "wf-work-product-fidelity": ["^Work-product fidelity:"],
-    "wf-behavioral-pruning": ["^Behavioral pruning:"],
-    "wf-exclusions": ["^Exclusions:"],
-    "wf-failure-behavior": ["^Failure behavior:"],
-    "wf-completion": ["^Completion:"]
+    "wf-accepted-context": ["deploy only.*(?:tickets.*unblocked|unblocked tickets)"],
+    "wf-coverage": ["deploy only.*(?:tickets.*unblocked|unblocked tickets)"],
+    "wf-grounding": ["(?:supplied|source) note.*(?:requires|required)|(?:requires|required).*?(?:supplied|source) note"],
+    "wf-uncertainty": ["concurrency limit.*(?:unresolved|unknown).*owner"],
+    "wf-structure": ["(?:keep|retain) only.*(?:requirements|constraints).*(?:unresolved|unknown)"],
+    "wf-terminology": ["`?DAG frontier`?"],
+    "wf-relevance": ["(?:keep|retain) only.*(?:requirements|constraints).*(?:unresolved|unknown)"],
+    "wf-work-product-fidelity": ["\\{\"maxAttempts\":3\\}"],
+    "wf-behavioral-pruning": ["(?:keep|retain) only.*(?:requirements|constraints).*(?:unresolved|unknown)"],
+    "wf-exclusions": ["(?:add no|without adding|no).*audience-specific"],
+    "wf-failure-behavior": ["concurrency limit.*(?:unresolved|unknown).*(?:do not|without).*invent"],
+    "wf-completion": ["(?:publish|complete|ready).*(?:only after|only when).*(?:requirement|constraint).*(?:exact|unknown|unresolved)"]
   },
   "global_required_signals": [
     "wf-accepted-context",
@@ -43,7 +43,11 @@
     "wf-completion"
   ],
   "global_order": [],
-  "forbidden_patterns": [],
+  "forbidden_patterns": [
+    "Historical background: the legacy deployer used a weekly batch window that does not control this deployment\\.",
+    "concurrency limit\\s+(?:is|=)\\s*\\d+",
+    "\\b(?:customer-friendly|executive voice|Skill routing|fresh-context handoff)\\b"
+  ],
   "judge": {
     "score_range": [0, 2],
     "minimum_dimension_score": 1,
@@ -62,9 +66,9 @@
     {
       "id": "foundation-complete-contract",
       "name": "audience-independent-writing-contract",
-      "prompt": "Revise the supplied deployment note without choosing an audience-specific voice. Preserve the exact domain term `DAG frontier`, the JSON value `{\"maxAttempts\":3}`, and all three requirements: deploy only unblocked tickets, retain the unresolved concurrency limit, and remove the duplicated background paragraph. Return a concise contract record that makes coverage, grounding, uncertainty, structure, terminology, relevance, work-product fidelity, behavioral pruning, and completion observable.",
+      "prompt": "Revise the supplied `evals/fixtures/deployment-note-source.md` without choosing an audience-specific voice. Preserve the exact domain term `DAG frontier`, the JSON value `{\"maxAttempts\":3}`, and all three requirements: deploy only unblocked tickets, retain the unresolved concurrency limit, and remove the duplicated background paragraph. Return the revised note; headings and labels are optional.",
       "expected_output": "A purpose-shaped record that accounts for every requirement, grounds claims, keeps the concurrency limit unresolved, preserves the exact term and JSON value, removes only the duplicate, and exposes a checkable completion result.",
-      "files": [],
+      "files": ["evals/fixtures/deployment-note-source.md"],
       "expectations": [
         "Every requested requirement and exclusion has an explicit disposition.",
         "Factual claims distinguish supplied evidence from inference or unknown information.",

@@ -1,0 +1,8 @@
+{
+  "artifact": "deploy-plan.json",
+  "frontierLabel": "DAG frontier",
+  "retryPolicy": {"maxAttempts":3},
+  "schemaCommandSource": "environment",
+  "branches": ["valid", "invalid"],
+  "inputMode": "read-only"
+}

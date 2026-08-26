@@ -15,29 +15,32 @@
     "randomization_seed": "agent-writing-outcome-v1"
   },
   "signals": {
-    "aw-accepted-context": ["^Accepted context:"],
-    "aw-foundation-edge": ["^Dependency invocation: writing-foundation$"],
-    "aw-activation": ["^Activation:"],
-    "aw-intended-outcomes": ["^Intended outcome:"],
-    "aw-branches": ["^Branch:"],
-    "aw-steps-reference": ["^Steps versus reference:"],
-    "aw-branch-disclosure": ["^Branch disclosure:"],
-    "aw-co-located-authority": ["^Co-located authority:"],
-    "aw-instruction-form": ["^Instruction form:"],
-    "aw-context-load": ["^Context load:"],
-    "aw-behavioral-pruning": ["^Behavioral pruning:"],
-    "aw-terminology": ["^Terminology:"],
-    "aw-execution-semantics": ["^Execution semantics:"],
-    "aw-environment-source": ["^Environment source:"],
-    "aw-failure-behavior": ["^Failure behavior:"],
-    "aw-completion": ["^Completion:"]
+    "aw-accepted-context": ["deploy-plan\\.json.*(?:read-only|without changing|never modify)", "(?:read-only|without changing|never modify).*deploy-plan\\.json"],
+    "aw-activation": ["(?:after|when|once).*deploy-plan\\.json.*(?:path|supplied|available)"],
+    "aw-intended-outcomes": ["report.*(?:observed )?validation result.*(?:valid|invalid|branch|path).*DAG frontier"],
+    "aw-branches": ["(?:valid|success).*(?:invalid|failure)|(?:invalid|failure).*(?:valid|success)"],
+    "aw-success-branch": ["\\bif\\b.*\\b(?:valid|success|succeeds)\\b.*\\breport\\b.*DAG frontier"],
+    "aw-failure-branch": ["\\bif\\b.*\\b(?:invalid|failure|fails)\\b.*\\breport\\b.*(?:remediation|reference)"],
+    "aw-steps-reference": ["\\bif\\b.*\\b(?:invalid|failure|fails)\\b.*(?:only then|only after).*(?:remediation|reference)"],
+    "aw-branch-disclosure": ["\\bif\\b.*\\b(?:invalid|failure|fails)\\b.*(?:only then|only after).*(?:remediation|reference)"],
+    "aw-co-located-authority": ["\\bif\\b.*\\b(?:valid|invalid|success|failure|fails)\\b.*\\breport\\b"],
+    "aw-instruction-form": ["^\\s*(?:[-*]\\s*)?\\bif\\b.*\\breport\\b"],
+    "aw-context-load": ["(?:only then|only after).*(?:remediation|reference)"],
+    "aw-behavioral-pruning": ["(?:only then|only after).*(?:remediation|reference)"],
+    "aw-terminology": ["`?DAG frontier`?"],
+    "aw-execution-semantics": ["\\{\"maxAttempts\":3\\}"],
+    "aw-read-only-semantics": ["deploy-plan\\.json.*(?:read-only|without changing|never modify)", "(?:read-only|without changing|never modify).*deploy-plan\\.json"],
+    "aw-environment-source": ["schema command.*environment|environment.*schema command"],
+    "aw-failure-behavior": ["unavailable.*(?:missing|name).*(?:stop).*(?:without inventing|do not invent)", "(?:missing|name).*unavailable.*(?:stop).*(?:without inventing|do not invent)"],
+    "aw-completion": ["(?:finish|complete|done).*(?:only after|only when).*(?:observed )?result.*(?:branch|path)"]
   },
   "global_required_signals": [
     "aw-accepted-context",
-    "aw-foundation-edge",
     "aw-activation",
     "aw-intended-outcomes",
     "aw-branches",
+    "aw-success-branch",
+    "aw-failure-branch",
     "aw-steps-reference",
     "aw-branch-disclosure",
     "aw-co-located-authority",
@@ -46,19 +49,23 @@
     "aw-behavioral-pruning",
     "aw-terminology",
     "aw-execution-semantics",
+    "aw-read-only-semantics",
     "aw-environment-source",
     "aw-failure-behavior",
     "aw-completion"
   ],
   "global_order": [
-    ["aw-foundation-edge"],
     ["aw-activation"],
     ["aw-intended-outcomes"],
-    ["aw-branches"],
-    ["aw-steps-reference"],
+    ["aw-success-branch"],
+    ["aw-failure-branch"],
     ["aw-completion"]
   ],
-  "forbidden_patterns": [],
+  "forbidden_patterns": [
+    "\\b(?:valid|success|succeeds)\\b.*\\b(?:remediation|troubleshooting)\\b",
+    "^(?!.*\\b(?:never|not|without|read-only)\\b).*\\b(?:modify|write|edit|replace|delete)\\b.*deploy-plan\\.json",
+    "schema command\\s*(?:is|=|:)\\s*`?[^`\\s]+"
+  ],
   "judge": {
     "score_range": [0, 2],
     "minimum_dimension_score": 1,
@@ -77,9 +84,9 @@
     {
       "id": "host-neutral-agent-instructions",
       "name": "complete-host-neutral-agent-writing-outcome",
-      "prompt": "Create an agent-facing procedure for validating `deploy-plan.json`. Activate when the file path is supplied. Preserve the canonical `DAG frontier` term and the JSON literal `{\"maxAttempts\":3}`. Read the current schema command from the environment. On valid input, report the frontier; on invalid input, disclose failure-only remediation reference. Never modify the input. Complete after reporting the observed validation result and branch. Return the procedure and a compact contract record.",
+      "prompt": "Create an agent-facing procedure from the supplied `evals/fixtures/deploy-plan-source.json` for validating `deploy-plan.json`. Activate when the file path is supplied. Preserve the canonical `DAG frontier` term and the JSON literal `{\"maxAttempts\":3}`. Read the current schema command from the environment. On valid input, report the frontier; on invalid input, disclose failure-only remediation reference. Never modify the input. Complete after reporting the observed validation result and branch. Return the procedure; headings and labels are optional.",
       "expected_output": "A complete host-neutral Agent Writing outcome that invokes Writing Foundation and exposes the accepted context, activation, outcome, branches, ordered steps, conditional reference, co-located authority, instruction form, context choices, exact semantics, failure path, pruning, and completion.",
-      "files": [],
+      "files": ["evals/fixtures/deploy-plan-source.json"],
       "expectations": [
         "The same scenario and expected contract can run through either host Adapter.",
         "The treatment invokes writing-foundation and agent-writing by canonical name.",
@@ -104,8 +111,7 @@
         "aw-terminology",
         "aw-execution-semantics",
         "aw-environment-source",
-        "aw-failure-behavior",
-        "aw-foundation-edge"
+        "aw-failure-behavior"
       ],
       "required_signals": []
     }

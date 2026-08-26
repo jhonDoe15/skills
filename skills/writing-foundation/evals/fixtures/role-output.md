@@ -1,14 +1,7 @@
-# Deployment note contract
+# Deployment constraints
 
-Accepted context: the requested requirements, source note, exact term, JSON value, unresolved decision, and exclusion are recorded.
-Coverage: deploy only unblocked tickets is present; the concurrency limit is unresolved; the duplicated background paragraph is excluded.
-Grounding: the deployment rule and JSON value come from the supplied note; no external deployment fact is asserted.
-Uncertainty: the concurrency limit remains unknown pending an owner decision.
-Structure: requirements, unresolved state, preserved values, and pruning decisions are grouped by purpose.
-Terminology: `DAG frontier` is preserved as the authoritative domain term.
-Relevance: every retained line supports a requirement, unresolved decision, or verification result.
-Work-product fidelity: `{"maxAttempts":3}` is preserved exactly.
-Behavioral pruning: only the duplicated background paragraph is removed.
-Exclusions: no audience-specific voice, routing, Skill mechanics, or handoff behavior is introduced.
-Failure behavior: if the owner decision remains required for execution, the affected item stays unresolved rather than being invented.
-Completion: complete because every requirement has a disposition and every retained claim, term, and work product is accounted for.
+The supplied note requires: deploy only tickets that are unblocked.
+Preserve the exact `DAG frontier` term and `{"maxAttempts":3}` retry policy.
+The concurrency limit remains unresolved until its owner decides; do not invent a numeric limit.
+Retain only operational constraints and the unresolved decision, without adding an audience-specific voice.
+The note is ready only when every requirement, exact value, and unknown has been accounted for.

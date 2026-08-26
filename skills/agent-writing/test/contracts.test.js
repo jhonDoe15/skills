@@ -47,10 +47,36 @@ function successfulResult(invocation, context) {
   return {
     status: 'succeeded',
     observations: {
-      discoveredSkills: context.discoveredSkills,
+      packageSkills: context.packageSkills,
+      hostAvailableSkills: null,
+      preExecutionInventory: {
+        skillDefinitions: context.packageSkills.map((name) => ({
+          name,
+          path: `.fixture/skills/${name}/SKILL.md`,
+          digest: '0'.repeat(64),
+        })),
+        plugins: [],
+        ruleSources: [],
+        packageDigest: '0'.repeat(64),
+        truncated: false,
+      },
+      skillEvents: context.resolvedSkills.map((name) => ({
+        name,
+        operation: 'load',
+        status: 'succeeded',
+        trigger: name === invocation.skill ? 'model' : 'host',
+        callId: `contract-${name}`,
+        provenance: {
+          host: 'fixture',
+          mechanism: 'owner-local-contract-fixture',
+          eventType: 'fixture.skill-lifecycle',
+          observerVersion: '1',
+          statusSource: 'observed',
+        },
+      })),
       routing: {
         requestedSkill: invocation.skill,
-        invokedSkills: context.resolvedSkills,
+        resolvedSkills: context.resolvedSkills,
       },
       responses: [{ text: 'Agent-facing artifact contract completed.' }],
       artifacts: [{
@@ -126,10 +152,14 @@ test('agent-writing resolves writing-foundation by canonical name without fallba
     invocation: invocation(),
   });
 
-  assert.deepEqual(result.observations.routing.invokedSkills, [
+  assert.deepEqual(result.observations.routing.resolvedSkills, [
     'writing-foundation',
     'agent-writing',
   ]);
+  assert.deepEqual(
+    result.observations.skillEvents.map(({ name }) => name),
+    ['writing-foundation', 'agent-writing'],
+  );
 
   const agentSkill = readSkill(skillRoot).markdown;
   const foundationParagraphs = new Set(

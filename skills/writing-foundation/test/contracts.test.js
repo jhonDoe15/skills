@@ -9,6 +9,7 @@ const test = require('node:test');
 const { discoverCanonicalPackage } = require('../../../suite');
 const {
   gradeDeterministicOutput,
+  gradeTriggerResult,
   validateEvaluationDefinition,
 } = require('../../../suite/evaluation');
 
@@ -43,6 +44,60 @@ function readSkill() {
   assert.ok(frontmatter, 'writing-foundation requires YAML frontmatter');
   const field = (name) => frontmatter[1].match(new RegExp(`^${name}:\\s*(.+)$`, 'm'))?.[1];
   return { markdown, name: field('name'), description: field('description') };
+}
+
+function skillEvent(name, {
+  operation = 'load',
+  status = 'succeeded',
+  trigger = 'model',
+} = {}) {
+  return {
+    name,
+    operation,
+    status,
+    trigger,
+    callId: `${name}-${operation}-${status}`,
+    provenance: {
+      host: 'fixture',
+      mechanism: 'owner-local-lifecycle-fixture',
+      eventType: 'fixture.skill-lifecycle',
+      observerVersion: '1',
+      statusSource: 'observed',
+    },
+  };
+}
+
+function triggerResult(skillEvents) {
+  return {
+    status: 'succeeded',
+    observations: {
+      packageSkills: ['agent-writing', 'writing-foundation'],
+      hostAvailableSkills: null,
+      preExecutionInventory: {
+        skillDefinitions: [],
+        plugins: [],
+        ruleSources: [],
+        packageDigest: '0'.repeat(64),
+        truncated: false,
+      },
+      skillEvents,
+      routing: {
+        requestedSkill: 'writing-foundation',
+        resolvedSkills: ['writing-foundation'],
+      },
+      responses: [{ text: 'No activation sentinel.' }],
+      artifacts: [],
+      toolUses: [{ name: 'Skill', outcome: 'succeeded' }],
+      attemptedMutations: [],
+    },
+    failure: null,
+    durationMs: 1,
+    costUsd: 0,
+    model: {
+      requested: 'test-model',
+      resolved: 'resolved-test-model',
+    },
+  };
 }
 
 test('writing-foundation exposes its private audience-independent Interface', (t) => {
@@ -102,15 +157,94 @@ test('writing-foundation role evaluation grades every owned clause with line evi
     caseDefinition,
     output: fixtureOutput,
   });
+  const alternateWording = [
+    '# Release requirements',
+    'Deploy only tickets that are unblocked, as required by the supplied note.',
+    'Preserve the exact `DAG frontier` term and `{"maxAttempts":3}` retry policy.',
+    'The concurrency limit remains unresolved until its owner decides; do not invent a numeric limit.',
+    'Keep only these operational requirements and the unresolved decision; add no audience-specific voice.',
+    'Publish only after every supplied requirement, exact value, and unknown has been accounted for.',
+  ].join('\n');
+  const alternateGrade = gradeDeterministicOutput({
+    definition,
+    caseDefinition,
+    output: alternateWording,
+  });
 
   assert.equal(grade.passed, true);
-  assert.deepEqual(
-    grade.checks.map(({ name }) => name),
-    foundationClauses.map((clause) => `signal ${clause}`),
-  );
-  for (const check of grade.checks) {
+  assert.equal(alternateGrade.passed, true);
+  for (const clause of foundationClauses) {
+    assert.equal(
+      grade.checks.some(({ name }) => name === `signal ${clause}`),
+      true,
+      clause,
+    );
+  }
+  for (const check of grade.checks.filter(({ name }) => (
+    name.startsWith('signal ')
+  ))) {
     assert.match(check.details, /^line \d+$/);
   }
+
+  for (const [corrupted, failedCheck] of [
+    [
+      alternateWording.replace('DAG frontier', 'queue frontier'),
+      'signal wf-terminology',
+    ],
+    [
+      alternateWording.replace('{"maxAttempts":3}', '{"maxAttempts":4}'),
+      'signal wf-work-product-fidelity',
+    ],
+    [
+      alternateWording.replace(
+        'The concurrency limit remains unresolved until its owner decides; do not invent a numeric limit.',
+        'The concurrency limit is 8.',
+      ),
+      'signal wf-uncertainty',
+    ],
+  ]) {
+    const corruptedGrade = gradeDeterministicOutput({
+      definition,
+      caseDefinition,
+      output: corrupted,
+    });
+    assert.equal(corruptedGrade.passed, false, failedCheck);
+    assert.equal(
+      corruptedGrade.checks.find(({ name }) => name === failedCheck).passed,
+      false,
+      failedCheck,
+    );
+  }
+
+  const source = fs.readFileSync(
+    path.join(skillRoot, 'evals', 'fixtures', 'deployment-note-source.md'),
+    'utf8',
+  );
+  const duplicatedParagraph = 'Historical background: the legacy deployer used a weekly batch window that does not control this deployment.';
+  assert.equal(source.split(duplicatedParagraph).length - 1, 2);
+  assert.equal(fixtureOutput.includes(duplicatedParagraph), false);
+  const unprunedGrade = gradeDeterministicOutput({
+    definition,
+    caseDefinition,
+    output: `${alternateWording}\n${duplicatedParagraph}`,
+  });
+  assert.equal(unprunedGrade.passed, false);
+  assert.equal(
+    unprunedGrade.checks.some(({ name, passed }) => (
+      name.startsWith('forbidden ') && !passed
+    )),
+    true,
+  );
+  assert.deepEqual(caseDefinition.files, [
+    'evals/fixtures/deployment-note-source.md',
+  ]);
+  assert.equal(
+    Object.values(definition.signals).flat().some((pattern) => (
+      /^\^[A-Z][^:]+:/.test(pattern)
+    )),
+    false,
+    'semantic grading must not require canned labels',
+  );
 });
 
 test('writing-foundation trigger cases cover canonical reach and private false activation', () => {
@@ -126,8 +260,47 @@ test('writing-foundation trigger cases cover canonical reach and private false a
     ],
   );
   assert.match(definition.evals[0].prompt, /^\/writing-foundation\b/);
+  assert.equal(definition.evals[0].canonical_invocation, true);
   assert.equal(
     definition.evals[1].covered_clauses.includes('wf-private-routing-exclusion'),
     true,
+  );
+});
+
+test('writing-foundation trigger grading rejects consumer-only and wrong-Skill evidence', () => {
+  const definition = readJson('evals/trigger.json');
+  const canonical = definition.evals[0];
+  const privateFalseActivation = definition.evals[1];
+  const grade = (caseDefinition, skillEvents) => gradeTriggerResult({
+    definition,
+    caseDefinition,
+    result: triggerResult(skillEvents),
+  });
+
+  assert.equal(
+    grade(canonical, [skillEvent('writing-foundation')]).passed,
+    true,
+  );
+  assert.equal(
+    grade(canonical, [skillEvent('agent-writing')]).passed,
+    false,
+    'consumer-only activation must not satisfy its private dependency',
+  );
+  assert.equal(
+    grade(canonical, [skillEvent('to-humans')]).passed,
+    false,
+    'a wrong public Skill must not satisfy Foundation',
+  );
+  assert.equal(
+    grade(privateFalseActivation, [skillEvent('to-humans')]).passed,
+    true,
+  );
+  assert.equal(
+    grade(privateFalseActivation, [skillEvent('writing-foundation', {
+      operation: 'select',
+      status: 'rejected',
+    })]).passed,
+    false,
+    'private false activation rejects any exact Foundation attempt',
   );
 });
