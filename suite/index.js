@@ -2,6 +2,9 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const {
+  emptyPreExecutionInventory,
+} = require('./pre-execution-inventory');
 
 const CONTRACT_FILE = path.join('suite', 'canonical-suite.json');
 const VALID_CLASSIFICATIONS = new Set(['audience', 'primary', 'private']);
@@ -54,6 +57,17 @@ const EXPECTED_EXTERNALS = [
   ['split-to-prs', ['pr-carver']],
   ['tdd', ['implement']],
 ];
+const VALID_SKILL_OPERATIONS = new Set(['select', 'load']);
+const VALID_SKILL_STATUSES = new Set([
+  'started',
+  'succeeded',
+  'failed',
+  'rejected',
+  'cancelled',
+  'unknown',
+]);
+const VALID_SKILL_TRIGGERS = new Set(['user', 'model', 'host', 'unknown']);
+const VALID_STATUS_SOURCES = new Set(['observed', 'inferred']);
 const productionAdapters = new WeakSet();
 
 class SuiteContractError extends Error {
@@ -393,16 +407,19 @@ function resolveDependencies(suite, packageDefinition, requestedSkill) {
   return failure || { resolved };
 }
 
-function missingDependencyResult(invocation, discoveredSkills, failure) {
+function missingDependencyResult(invocation, packageSkills, failure) {
   const internalDependency = failure.code === 'missing-internal-dependency';
   const noun = internalDependency ? 'internal dependency' : 'requested Skill';
   return {
     status: 'failed',
     observations: {
-      discoveredSkills,
+      packageSkills,
+      hostAvailableSkills: null,
+      preExecutionInventory: emptyPreExecutionInventory(),
+      skillEvents: [],
       routing: {
         requestedSkill: invocation.skill,
-        invokedSkills: [],
+        resolvedSkills: [],
       },
       responses: [],
       artifacts: [],
@@ -473,6 +490,121 @@ function validateObservationItems(items, fields, itemName) {
   }
 }
 
+function validateProvenance(value, field) {
+  assertFields(
+    value,
+    [
+      'host',
+      'mechanism',
+      'eventType',
+      'observerVersion',
+      'statusSource',
+    ],
+    ['runId'],
+    field,
+  );
+  for (const name of ['host', 'mechanism', 'eventType', 'observerVersion']) {
+    requireString(value[name], `${field}.${name}`);
+  }
+  if (!VALID_STATUS_SOURCES.has(value.statusSource)) {
+    throw new SuiteContractError(
+      `${field}.statusSource must be "observed" or "inferred"`,
+    );
+  }
+  if (Object.hasOwn(value, 'runId')) {
+    requireString(value.runId, `${field}.runId`);
+  }
+}
+
+function validatePreExecutionInventory(value) {
+  assertFields(
+    value,
+    [
+      'skillDefinitions',
+      'plugins',
+      'ruleSources',
+      'packageDigest',
+      'truncated',
+    ],
+    [],
+    'result.observations.preExecutionInventory',
+  );
+  requireArray(
+    value.skillDefinitions,
+    'result.observations.preExecutionInventory.skillDefinitions',
+  );
+  const identities = [];
+  for (const [index, definition] of value.skillDefinitions.entries()) {
+    const field = `result.observations.preExecutionInventory.skillDefinitions[${index}]`;
+    assertFields(definition, ['name', 'path', 'digest'], [], field);
+    for (const name of ['name', 'path', 'digest']) {
+      requireString(definition[name], `${field}.${name}`);
+    }
+    if (!/^[a-z0-9-]+$/.test(definition.name)) {
+      throw new SuiteContractError(`${field}.name must be a canonical Skill name`);
+    }
+    if (!/^[a-f0-9]{64}$/.test(definition.digest)) {
+      throw new SuiteContractError(`${field}.digest must be a SHA-256 fingerprint`);
+    }
+    identities.push(`${definition.name}\0${definition.path}`);
+  }
+  assertUnique(
+    identities,
+    'result.observations.preExecutionInventory.skillDefinitions',
+  );
+  validateUniqueStringArray(
+    value.plugins,
+    'result.observations.preExecutionInventory.plugins',
+  );
+  validateUniqueStringArray(
+    value.ruleSources,
+    'result.observations.preExecutionInventory.ruleSources',
+  );
+  if (!/^[a-f0-9]{64}$/.test(value.packageDigest)) {
+    throw new SuiteContractError(
+      'result.observations.preExecutionInventory.packageDigest '
+        + 'must be a SHA-256 fingerprint',
+    );
+  }
+  if (typeof value.truncated !== 'boolean') {
+    throw new SuiteContractError(
+      'result.observations.preExecutionInventory.truncated must be a boolean',
+    );
+  }
+}
+
+function validateSkillEvents(events) {
+  requireArray(events, 'result.observations.skillEvents');
+  for (const [index, event] of events.entries()) {
+    const field = `result.observations.skillEvents[${index}]`;
+    assertFields(
+      event,
+      ['name', 'operation', 'status', 'provenance'],
+      ['trigger', 'callId'],
+      field,
+    );
+    requireString(event.name, `${field}.name`);
+    if (!/^[a-z0-9-]+$/.test(event.name)) {
+      throw new SuiteContractError(`${field}.name must be a canonical Skill name`);
+    }
+    if (!VALID_SKILL_OPERATIONS.has(event.operation)) {
+      throw new SuiteContractError(`${field}.operation must be "select" or "load"`);
+    }
+    if (!VALID_SKILL_STATUSES.has(event.status)) {
+      throw new SuiteContractError(`${field}.status is invalid`);
+    }
+    if (Object.hasOwn(event, 'trigger')) {
+      if (!VALID_SKILL_TRIGGERS.has(event.trigger)) {
+        throw new SuiteContractError(`${field}.trigger is invalid`);
+      }
+    }
+    if (Object.hasOwn(event, 'callId')) {
+      requireString(event.callId, `${field}.callId`);
+    }
+    validateProvenance(event.provenance, `${field}.provenance`);
+  }
+}
+
 function validateResult(result) {
   assertFields(
     result,
@@ -487,7 +619,10 @@ function validateResult(result) {
   assertFields(
     result.observations,
     [
-      'discoveredSkills',
+      'packageSkills',
+      'hostAvailableSkills',
+      'preExecutionInventory',
+      'skillEvents',
       'routing',
       'responses',
       'artifacts',
@@ -498,13 +633,31 @@ function validateResult(result) {
     'result.observations',
   );
   validateUniqueStringArray(
-    result.observations.discoveredSkills,
-    'result.observations.discoveredSkills',
+    result.observations.packageSkills,
+    'result.observations.packageSkills',
   );
+  if (result.observations.hostAvailableSkills !== null) {
+    assertFields(
+      result.observations.hostAvailableSkills,
+      ['names', 'provenance'],
+      [],
+      'result.observations.hostAvailableSkills',
+    );
+    validateUniqueStringArray(
+      result.observations.hostAvailableSkills.names,
+      'result.observations.hostAvailableSkills.names',
+    );
+    validateProvenance(
+      result.observations.hostAvailableSkills.provenance,
+      'result.observations.hostAvailableSkills.provenance',
+    );
+  }
+  validatePreExecutionInventory(result.observations.preExecutionInventory);
+  validateSkillEvents(result.observations.skillEvents);
 
   assertFields(
     result.observations.routing,
-    ['requestedSkill', 'invokedSkills'],
+    ['requestedSkill', 'resolvedSkills'],
     [],
     'result.observations.routing',
   );
@@ -513,8 +666,8 @@ function validateResult(result) {
     'result.observations.routing.requestedSkill',
   );
   validateUniqueStringArray(
-    result.observations.routing.invokedSkills,
-    'result.observations.routing.invokedSkills',
+    result.observations.routing.resolvedSkills,
+    'result.observations.routing.resolvedSkills',
   );
 
   validateObservationItems(
@@ -588,18 +741,18 @@ function validateAdapterResult(result, invocation, context) {
       'result.observations.routing.requestedSkill must match invocation.skill',
     );
   }
-  if (JSON.stringify(result.observations.discoveredSkills)
-    !== JSON.stringify(context.discoveredSkills)) {
+  if (JSON.stringify(result.observations.packageSkills)
+    !== JSON.stringify(context.packageSkills)) {
     throw new SuiteContractError(
-      'result.observations.discoveredSkills must match canonical discovery',
+      'result.observations.packageSkills must match canonical package inventory',
     );
   }
   if (!containsExactly(
-    result.observations.routing.invokedSkills,
+    result.observations.routing.resolvedSkills,
     context.resolvedSkills,
   )) {
     throw new SuiteContractError(
-      'result.observations.routing.invokedSkills must match resolved Skills',
+      'result.observations.routing.resolvedSkills must match resolved Skills',
     );
   }
   return result;
@@ -613,7 +766,7 @@ async function executeProduction({ repositoryRoot, adapter, invocation }) {
 
   const suite = loadCanonicalSuite(repositoryRoot);
   const packageDefinition = discoverCanonicalPackage(repositoryRoot);
-  const discoveredSkills = Object.freeze(
+  const packageSkills = Object.freeze(
     packageDefinition.skills.map(({ name }) => name),
   );
   const resolution = resolveDependencies(
@@ -623,11 +776,11 @@ async function executeProduction({ repositoryRoot, adapter, invocation }) {
   );
   if (resolution.missingSkill) {
     return validateResult(
-      missingDependencyResult(contractInvocation, discoveredSkills, resolution),
+      missingDependencyResult(contractInvocation, packageSkills, resolution),
     );
   }
   const context = Object.freeze({
-    discoveredSkills,
+    packageSkills,
     resolvedSkills: Object.freeze([...resolution.resolved]),
   });
   return validateAdapterResult(

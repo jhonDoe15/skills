@@ -5,9 +5,14 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { defineProductionAdapter } = require('..');
+const {
+  buildPreExecutionInventory,
+  emptyPreExecutionInventory,
+} = require('../pre-execution-inventory');
 
 const MAX_ARTIFACT_BYTES = 64 * 1024;
 const MAX_ARTIFACT_FILES = 64;
+const CURSOR_OBSERVER_VERSION = '@cursor/sdk@1.0.28';
 
 function loadCursorSdk() {
   return require('@cursor/sdk');
@@ -66,6 +71,11 @@ function normalizeTarget(args, projectRoot, toolName) {
 
 function canonicalSkillRead(args, projectRoot) {
   if (!args || typeof args !== 'object') return null;
+  const candidate = args.path || args.filePath || args.file_path || args.target;
+  if (typeof candidate !== 'string'
+    || candidate.split(/[\\/]/).includes('..')) {
+    return null;
+  }
   const target = normalizeTarget(args, projectRoot, 'read');
   const match = /^(?:\.cursor|\.agents)\/skills\/([^/]+)\/SKILL\.md$/.exec(target);
   return match && /^[a-z0-9-]+$/.test(match[1])
@@ -79,36 +89,70 @@ function sameSkillReadIdentity(left, right) {
     && left.target === right.target;
 }
 
-function updateSkillReadState(event, callId, projectRoot, skillReads) {
+function updateSkillReadState(
+  event,
+  callId,
+  runId,
+  order,
+  projectRoot,
+  skillReads,
+) {
   const eventToolName = normalizeToolName(event.name);
-  if (eventToolName !== 'read') {
-    skillReads.delete(callId);
-    return;
-  }
-
   if (event.status === 'running') {
-    const identity = canonicalSkillRead(event.args, projectRoot);
-    if (identity) {
-      skillReads.set(callId, { ...identity, status: 'running' });
-    } else {
-      skillReads.delete(callId);
+    const previous = skillReads.get(callId);
+    if (eventToolName !== 'read' || event.truncated?.args) {
+      if (previous) previous.invalid = true;
+      return;
     }
+    const identity = canonicalSkillRead(event.args, projectRoot);
+    if (!identity) {
+      if (previous) previous.invalid = true;
+      return;
+    }
+    const rawName = String(event.name);
+    if (previous) {
+      if (previous.rawName !== rawName
+        || !sameSkillReadIdentity(previous, identity)) {
+        previous.invalid = true;
+      }
+      return;
+    }
+    skillReads.set(callId, {
+      ...identity,
+      rawName,
+      runId: event.run_id || runId,
+      invalid: false,
+      startOrder: order,
+      terminalStatus: null,
+      terminalOrder: null,
+    });
     return;
   }
 
   const activeRead = skillReads.get(callId);
-  if (event.status !== 'completed' || !activeRead) {
-    skillReads.delete(callId);
+  if (!activeRead) return;
+  if (eventToolName !== 'read' || String(event.name) !== activeRead.rawName) {
+    activeRead.invalid = true;
     return;
   }
-  const terminalIdentity = event.args === undefined
+  const terminalIdentity = event.args === undefined || event.truncated?.args
     ? activeRead
     : canonicalSkillRead(event.args, projectRoot);
   if (!sameSkillReadIdentity(activeRead, terminalIdentity)) {
-    skillReads.delete(callId);
+    activeRead.invalid = true;
     return;
   }
-  skillReads.set(callId, { ...activeRead, status: 'completed' });
+  const terminalStatus = event.status === 'completed'
+    ? 'succeeded'
+    : event.status === 'error'
+      ? 'failed'
+      : null;
+  if (terminalStatus && activeRead.terminalStatus === null) {
+    activeRead.terminalStatus = terminalStatus;
+    activeRead.terminalOrder = order;
+  } else if (terminalStatus && activeRead.terminalStatus !== terminalStatus) {
+    activeRead.invalid = true;
+  }
 }
 
 function collectStreamEvidence(
@@ -117,6 +161,8 @@ function collectStreamEvidence(
   calls,
   responseTexts,
   skillReads,
+  runId,
+  order,
 ) {
   if (event?.type === 'assistant') {
     for (const block of event.message?.content || []) {
@@ -128,12 +174,24 @@ function collectStreamEvidence(
   }
   if (event?.type !== 'tool_call') return;
 
-  const callId = typeof event.call_id === 'string'
+  const nativeCallId = typeof event.call_id === 'string' && event.call_id.length > 0
     ? event.call_id
+    : null;
+  const callId = nativeCallId
+    ? nativeCallId
     : `unidentified-${calls.size}`;
   const previous = calls.get(callId);
   const name = normalizeToolName(event.name || previous?.rawName);
-  updateSkillReadState(event, callId, projectRoot, skillReads);
+  if (nativeCallId) {
+    updateSkillReadState(
+      event,
+      callId,
+      runId,
+      order,
+      projectRoot,
+      skillReads,
+    );
+  }
   calls.set(callId, {
     rawName: event.name || previous?.rawName,
     name,
@@ -143,12 +201,55 @@ function collectStreamEvidence(
   });
 }
 
-function successfulObservedSkills(skillReads) {
-  const observedSkills = new Set();
-  for (const { name, status } of skillReads.values()) {
-    if (status === 'completed') observedSkills.add(name);
+function cursorSkillProvenance(runId, statusSource = 'observed') {
+  return {
+    host: 'cursor',
+    mechanism: 'sdk-canonical-skill-read',
+    eventType: 'tool_call',
+    observerVersion: CURSOR_OBSERVER_VERSION,
+    ...(runId ? { runId } : {}),
+    statusSource,
+  };
+}
+
+function skillEventsFromReads(skillReads, cancelled) {
+  const orderedEvents = [];
+  let inferredOrder = Number.MAX_SAFE_INTEGER;
+  for (const [callId, read] of skillReads) {
+    orderedEvents.push({
+      order: read.startOrder,
+      event: {
+        name: read.name,
+        operation: 'load',
+        status: 'started',
+        trigger: 'unknown',
+        callId,
+        provenance: cursorSkillProvenance(read.runId),
+      },
+    });
+    const terminalStatus = read.invalid
+      ? 'unknown'
+      : read.terminalStatus || (cancelled ? 'cancelled' : 'unknown');
+    orderedEvents.push({
+      order: read.invalid || read.terminalOrder === null
+        ? inferredOrder++
+        : read.terminalOrder,
+      event: {
+        name: read.name,
+        operation: 'load',
+        status: terminalStatus,
+        trigger: 'unknown',
+        callId,
+        provenance: cursorSkillProvenance(
+          read.runId,
+          read.invalid || !read.terminalStatus ? 'inferred' : 'observed',
+        ),
+      },
+    });
   }
-  return [...observedSkills];
+  return orderedEvents
+    .sort((left, right) => left.order - right.order)
+    .map(({ event }) => event);
 }
 
 function mediaTypeFor(filePath) {
@@ -280,7 +381,8 @@ function normalizedObservations(
   calls,
   artifacts,
   responseTexts,
-  observedSkills,
+  skillEvents,
+  inventory,
   artifactScanTruncated,
 ) {
   const toolUses = [...calls.values()].map(({ name, outcome }) => ({
@@ -305,17 +407,6 @@ function normalizedObservations(
       .map((text) => ({ text })),
     ({ text }) => text,
   );
-  const observedInvocations = observedSkills.filter((name) => (
-    context.resolvedSkills.includes(name)
-  ));
-  if (observedInvocations.length > 0) {
-    responses.push({
-      text: JSON.stringify({
-        kind: 'cursor-observed-skill-invocations',
-        invokedSkills: observedInvocations,
-      }),
-    });
-  }
   if (artifactScanTruncated) {
     responses.push({
       text: JSON.stringify({
@@ -335,10 +426,13 @@ function normalizedObservations(
   });
 
   return {
-    discoveredSkills: [...context.discoveredSkills],
+    packageSkills: [...context.packageSkills],
+    hostAvailableSkills: null,
+    preExecutionInventory: inventory,
+    skillEvents,
     routing: {
       requestedSkill: invocation.skill,
-      invokedSkills: [...context.resolvedSkills],
+      resolvedSkills: [...context.resolvedSkills],
     },
     responses,
     artifacts: normalizedArtifacts,
@@ -360,7 +454,8 @@ function successfulResult(
   costUsd,
   calls,
   artifacts,
-  observedSkills,
+  skillEvents,
+  inventory,
   artifactScanTruncated,
 ) {
   return {
@@ -371,7 +466,8 @@ function successfulResult(
       calls,
       artifacts,
       [runResult.result],
-      observedSkills,
+      skillEvents,
+      inventory,
       artifactScanTruncated,
     ),
     failure: null,
@@ -408,7 +504,8 @@ function failedResult({
   calls = new Map(),
   artifacts = [],
   responseTexts = [],
-  observedSkills = [],
+  skillEvents = [],
+  inventory = emptyPreExecutionInventory(),
   artifactScanTruncated = false,
 }) {
   const failure = errorDetails(error, fallbackCode, executionRoot);
@@ -420,7 +517,8 @@ function failedResult({
       calls,
       artifacts,
       responseTexts,
-      observedSkills,
+      skillEvents,
+      inventory,
       artifactScanTruncated,
     ),
     failure: {
@@ -508,10 +606,12 @@ async function executeCursor({
   let cleanupFailure = null;
   let artifacts = [];
   let artifactScanTruncated = false;
+  let inventory = emptyPreExecutionInventory();
   const calls = new Map();
   const responseTexts = [];
   const skillReads = new Map();
-  let observedSkills = [];
+  let skillEvents = [];
+  let streamEventOrder = 0;
 
   try {
     try {
@@ -522,6 +622,11 @@ async function executeCursor({
       storeRoot = path.join(executionRoot, 'store');
       fs.mkdirSync(projectRoot);
       copyResolvedSkills(repositoryRoot, projectRoot, context.resolvedSkills);
+      inventory = buildPreExecutionInventory({
+        projectRoot,
+        skillNames: context.resolvedSkills,
+        relativePathFor: (name) => `.cursor/skills/${name}/SKILL.md`,
+      });
       const store = new cursorSdk.JsonlLocalAgentStore(storeRoot);
 
       failureStage = 'startup';
@@ -557,7 +662,10 @@ async function executeCursor({
           calls,
           responseTexts,
           skillReads,
+          run.id,
+          streamEventOrder,
         );
+        streamEventOrder += 1;
       }
       runResult = await run.wait();
     } catch (error) {
@@ -589,8 +697,6 @@ async function executeCursor({
       ));
       artifactScanTruncated = generatedFiles.truncated;
     }
-    observedSkills = successfulObservedSkills(skillReads);
-
     if (!failureError && runResult?.status !== 'finished') {
       failureError = Object.assign(
         new Error(
@@ -629,6 +735,10 @@ async function executeCursor({
     durationMs = Number.isFinite(runResult?.durationMs)
       ? runResult.durationMs
       : Date.now() - startedAt;
+    skillEvents = skillEventsFromReads(
+      skillReads,
+      runResult?.status === 'cancelled',
+    );
     normalized = failureError
       ? failedResult({
         invocation,
@@ -646,7 +756,8 @@ async function executeCursor({
           ...responseTexts,
           ...(typeof runResult?.result === 'string' ? [runResult.result] : []),
         ],
-        observedSkills,
+        skillEvents,
+        inventory,
         artifactScanTruncated,
       })
       : successfulResult(
@@ -656,7 +767,8 @@ async function executeCursor({
         costUsd,
         calls,
         artifacts,
-        observedSkills,
+        skillEvents,
+        inventory,
         artifactScanTruncated,
       );
   } catch (error) {
@@ -699,6 +811,10 @@ async function executeCursor({
   }
 
   durationMs ??= Date.now() - startedAt;
+  skillEvents = skillEventsFromReads(
+    skillReads,
+    runResult?.status === 'cancelled',
+  );
   if (!normalized || (cleanupFailure && !failureError)) {
     const activeFailure = failureError || cleanupFailure.error;
     normalized = failedResult({
@@ -714,7 +830,8 @@ async function executeCursor({
       calls,
       artifacts,
       responseTexts,
-      observedSkills,
+      skillEvents,
+      inventory,
       artifactScanTruncated,
     });
   }
