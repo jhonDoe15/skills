@@ -2,6 +2,7 @@
 
 const {
   gradeDeterministicOutput,
+  gradeTriggerResult,
 } = require('../../../suite/evaluation');
 const { validateResult } = require('../../../suite');
 
@@ -33,29 +34,38 @@ function verifiedReferences(markdown) {
     .map((match) => match[1]);
 }
 
-function invokedSkillsDetails(invokedSkills) {
-  return `invoked=${invokedSkills.join(',') || 'none'}`;
+function skillWasAttempted(skillEvents, name) {
+  return skillEvents.some((event) => (
+    event.name === name && ['select', 'load'].includes(event.operation)
+  ));
 }
 
-function gradeTakeItOfflineRouting({ caseDefinition, result }) {
-  validateResult(result);
-  const invokedSkills = result.observations.routing.invokedSkills;
-  const primaryInvoked = invokedSkills.includes('take-it-offline');
-  const toHumansInvoked = invokedSkills.includes('to-humans');
-  const shouldTrigger = caseDefinition.should_trigger === true;
-  const details = invokedSkillsDetails(invokedSkills);
-  const checks = [
-    check(
-      'exact take-it-offline membership',
-      primaryInvoked === shouldTrigger,
-      `expected=${shouldTrigger} ${details}`,
-    ),
-    check(
+function skillWasLoaded(skillEvents, name) {
+  return skillEvents.some((event) => (
+    event.name === name
+      && event.operation === 'load'
+      && event.status === 'succeeded'
+  ));
+}
+
+function skillEventDetails(skillEvents) {
+  const eventDetails = skillEvents.map(({ name, operation, status }) => (
+    `${name}:${operation}:${status}`
+  ));
+  return `events=${eventDetails.join(',') || 'none'}`;
+}
+
+function gradeTakeItOfflineRouting({ definition, caseDefinition, result }) {
+  const triggerGrade = gradeTriggerResult({ definition, caseDefinition, result });
+  const skillEvents = result.observations.skillEvents;
+  const checks = [...triggerGrade.checks];
+  if (caseDefinition.should_trigger) {
+    checks.push(check(
       'to-humans remains inactive for continuation',
-      !shouldTrigger || !toHumansInvoked,
-      details,
-    ),
-  ];
+      !skillWasAttempted(skillEvents, 'to-humans'),
+      skillEventDetails(skillEvents),
+    ));
+  }
   return {
     passed: checks.every(({ passed }) => passed),
     checks,
@@ -89,14 +99,14 @@ function gradeTakeItOfflineResult({
     output: artifactIsReadable ? continuationMarkdown : '',
   });
   const checks = [...deterministic.checks];
-  const invokedSkills = result.observations.routing.invokedSkills;
+  const skillEvents = result.observations.skillEvents;
 
   checks.push(check(
     'canonical primary and dependency routing',
-    invokedSkills.includes('take-it-offline')
-      && invokedSkills.includes('agent-writing')
-      && !invokedSkills.includes('to-humans'),
-    invokedSkillsDetails(invokedSkills),
+    skillWasLoaded(skillEvents, 'take-it-offline')
+      && skillWasLoaded(skillEvents, 'agent-writing')
+      && !skillWasAttempted(skillEvents, 'to-humans'),
+    skillEventDetails(skillEvents),
   ));
 
   checks.push(check(

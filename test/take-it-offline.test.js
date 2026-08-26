@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -108,22 +109,61 @@ function createCompletePackage(t) {
   return root;
 }
 
+function hash(value) {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+function fixtureSkillEvent(name, index) {
+  return {
+    name,
+    operation: 'load',
+    status: 'succeeded',
+    trigger: 'model',
+    callId: `take-it-offline-fixture-${index}`,
+    provenance: {
+      host: 'fixture',
+      mechanism: 'deterministic-fixture',
+      eventType: 'fixture.skill-load',
+      observerVersion: 'fixture-v2',
+      runId: 'take-it-offline-fixture-run',
+      statusSource: 'observed',
+    },
+  };
+}
+
 function normalizedResult({
   skill = 'take-it-offline',
   model,
   output,
-  invokedSkills,
-  discoveredSkills = ['agent-writing', 'take-it-offline', 'writing-foundation'],
+  packageSkills = ['agent-writing', 'take-it-offline', 'writing-foundation'],
+  resolvedSkills = ['writing-foundation', 'agent-writing', 'take-it-offline'],
+  loadedSkills = resolvedSkills,
+  hostAvailableSkills = null,
+  preExecutionSkills = packageSkills,
+  skillEvents = loadedSkills.map(fixtureSkillEvent),
   artifacts = [],
   toolUses = [],
 }) {
   return {
     status: 'succeeded',
     observations: {
-      discoveredSkills,
+      packageSkills,
+      hostAvailableSkills,
+      preExecutionInventory: {
+        skillDefinitions: preExecutionSkills.map((name) => ({
+          name,
+          path: `.fixture/skills/${name}/SKILL.md`,
+          digest: hash(`fixture:${name}`),
+        })),
+        plugins: [],
+        ruleSources: [],
+        packageDigest: hash(preExecutionSkills),
+        truncated: false,
+      },
+      skillEvents,
       routing: {
         requestedSkill: skill,
-        invokedSkills,
+        resolvedSkills,
       },
       responses: [{ text: output }],
       artifacts,
@@ -239,7 +279,6 @@ test('grader reads one referenced Markdown continuation artifact', (t) => {
       result: normalizedResult({
         model: 'test-model',
         output: response,
-        invokedSkills: ['writing-foundation', 'agent-writing', 'take-it-offline'],
         artifacts,
       }),
       resolveArtifact: continuationArtifactResolver,
@@ -363,17 +402,18 @@ test('owner-local definitions cover every required evaluation layer', () => {
   );
 });
 
-test('owner-local routing grading requires exact Skill membership', () => {
+test('routing grading composes shared lifecycle predicates with audience boundary', () => {
   const definition = readJson(path.join(evaluationRoot, 'trigger.json'));
   const { gradeTakeItOfflineRouting } = loadGrader();
   const caseById = new Map(definition.evals.map((entry) => [entry.id, entry]));
-  function grade(caseId, invokedSkills, toolUses = []) {
+  function grade(caseId, loadedSkills, toolUses = []) {
     return gradeTakeItOfflineRouting({
+      definition,
       caseDefinition: caseById.get(caseId),
       result: normalizedResult({
         model: 'test-model',
         output: 'Routing observation.',
-        invokedSkills,
+        loadedSkills,
         artifacts: [],
         toolUses,
       }),
@@ -383,7 +423,7 @@ test('owner-local routing grading requires exact Skill membership', () => {
   assert.equal(
     grade(
       'fresh-context-continuation',
-      ['agent-writing', 'take-it-offline'],
+      ['take-it-offline'],
     ).passed,
     true,
   );
@@ -391,7 +431,7 @@ test('owner-local routing grading requires exact Skill membership', () => {
     grade(
       'fresh-context-continuation',
       ['agent-writing'],
-      [{ name: 'Skill', outcome: 'invoked another-skill' }],
+      [{ name: 'Skill', outcome: 'generic call cannot prove activation' }],
     ).passed,
     false,
   );
@@ -416,23 +456,16 @@ test('routing boundaries execute unchanged through both host cells', async (t) =
   for (const cell of manifest.cells) {
     for (const caseDefinition of definition.evals) {
       const observed = routingObservations[caseDefinition.id];
-      const invokedSkills = [];
+      const loadedSkills = [];
       if (caseDefinition.id === 'human-summary') {
-        invokedSkills.push('to-humans');
+        loadedSkills.push('to-humans');
       } else if (observed) {
-        invokedSkills.push(
-          'writing-foundation',
-          'agent-writing',
-          'take-it-offline',
-        );
+        loadedSkills.push('take-it-offline');
       }
       const normalized = normalizedResult({
         model: cell.model,
         output: observed ? 'Continuation route selected.' : 'No continuation route.',
-        invokedSkills,
-        toolUses: observed
-          ? [{ name: 'Skill', outcome: 'invoked take-it-offline' }]
-          : [],
+        loadedSkills,
         artifacts: [],
       });
       const record = await runTriggerEvaluation({
@@ -449,8 +482,14 @@ test('routing boundaries execute unchanged through both host cells', async (t) =
 
       assert.equal(record.host, cell.host);
       assert.equal(record.deterministic.passed, true);
+      assert.equal(record.execution.host_available_skills, null);
+      assert.deepEqual(
+        record.execution.skill_events.map(({ name }) => name),
+        loadedSkills,
+      );
       assert.equal(
         gradeTakeItOfflineRouting({
+          definition,
           caseDefinition,
           result: normalized,
         }).passed,
@@ -476,8 +515,9 @@ test('component evaluation observes Agent Writing and its test-only ablation', a
       return normalizedResult({
         model: invocation.model,
         output: context.dependencyAblation ? ablatedOutput : complete.response,
-        invokedSkills: context.resolvedSkills,
-        discoveredSkills: context.discoveredSkills,
+        packageSkills: context.packageSkills,
+        resolvedSkills: context.resolvedSkills,
+        loadedSkills: context.resolvedSkills,
         artifacts: context.dependencyAblation ? [] : [complete.artifact],
       });
     },
@@ -508,12 +548,20 @@ test('component evaluation observes Agent Writing and its test-only ablation', a
     ['treatment', 'component-ablation'],
   );
   assert.equal(
-    records[0].execution.routing.invoked_skills.includes('agent-writing'),
+    records[0].execution.routing.resolved_skills.includes('agent-writing'),
     true,
   );
   assert.equal(
-    records[1].execution.routing.invoked_skills.includes('agent-writing'),
+    records[1].execution.routing.resolved_skills.includes('agent-writing'),
     false,
+  );
+  assert.deepEqual(
+    records[0].execution.skill_events.map(({ name }) => name),
+    ['writing-foundation', 'agent-writing', 'take-it-offline'],
+  );
+  assert.deepEqual(
+    records[1].execution.skill_events.map(({ name }) => name),
+    ['take-it-offline'],
   );
   assert.equal(records[0].deterministic.passed, true);
   assert.equal(records[1].arm.ablated_dependency, 'agent-writing');
@@ -535,19 +583,19 @@ test('complete outcome beats its matched No-Skill control on both hosts', async 
       caseDefinition: definition.evals[0],
       cell,
       repetition: 1,
-      async executeArm({ arm }) {
+      async executeArm({ arm, provisioning }) {
+        const treatment = arm === 'treatment';
+        const packageSkills = provisioning.packageDefinition.skills
+          .map(({ name }) => name);
+        const { installedSkills } = provisioning;
         return normalizedResult({
           model: cell.model,
-          output: arm === 'treatment' ? complete.response : controlOutput,
-          invokedSkills: arm === 'treatment'
-            ? ['writing-foundation', 'agent-writing', 'take-it-offline']
-            : [],
-          discoveredSkills: arm === 'treatment'
-            ? ['agent-writing', 'take-it-offline', 'writing-foundation']
-            : [],
-          artifacts: arm === 'treatment'
-            ? [complete.artifact]
-            : [],
+          output: treatment ? complete.response : controlOutput,
+          packageSkills,
+          resolvedSkills: installedSkills,
+          loadedSkills: installedSkills,
+          preExecutionSkills: packageSkills,
+          artifacts: treatment ? [complete.artifact] : [],
         });
       },
       gradeOutput({ arm, result }) {
@@ -569,9 +617,12 @@ test('complete outcome beats its matched No-Skill control on both hosts', async 
     const control = records.find(({ arm }) => arm.kind === 'no-skill');
     const treatment = records.find(({ arm }) => arm.kind === 'treatment');
     assert.equal(control.deterministic.checks.some(({ passed }) => !passed), true);
+    assert.equal(control.execution.control_contamination.clean, true);
+    assert.deepEqual(control.execution.package_skills, []);
+    assert.deepEqual(control.execution.skill_events, []);
     assert.equal(treatment.deterministic.passed, true);
     assert.equal(
-      treatment.execution.routing.invoked_skills.includes('to-humans'),
+      treatment.execution.skill_events.some(({ name }) => name === 'to-humans'),
       false,
     );
   }
@@ -589,7 +640,6 @@ test('role fixtures cover verified, missing-context, and pressure behavior', (t)
     const result = normalizedResult({
       model: 'test-model',
       output: continuation.response,
-      invokedSkills: ['writing-foundation', 'agent-writing', 'take-it-offline'],
       artifacts: [continuation.artifact],
     });
     const grade = gradeTakeItOfflineResult({
@@ -620,7 +670,6 @@ test('deterministic grading rejects unsafe, unverifiable, and unresumable artifa
       result: normalizedResult({
         model: 'test-model',
         output: continuation.response,
-        invokedSkills: ['writing-foundation', 'agent-writing', 'take-it-offline'],
         artifacts: [continuation.artifact],
       }),
       resolveArtifact: continuationArtifactResolver,

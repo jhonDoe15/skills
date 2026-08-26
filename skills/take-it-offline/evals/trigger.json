@@ -49,7 +49,8 @@
       "expectations": [
         "Direct invocation by canonical name wins."
       ],
-      "should_trigger": true
+      "should_trigger": true,
+      "canonical_invocation": true
     },
     {
       "id": "human-summary",
