@@ -1,11 +1,14 @@
 'use strict';
 
-const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
 const { defineProductionAdapter } = require('..');
+const {
+  buildPreExecutionInventory,
+  emptyPreExecutionInventory,
+} = require('../pre-execution-inventory');
 
 const MAX_ARTIFACT_BYTES = 64 * 1024;
 const MAX_ARTIFACT_FILES = 64;
@@ -22,40 +25,6 @@ function copyResolvedSkills(repositoryRoot, projectRoot, resolvedSkills) {
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.cpSync(source, destination, { recursive: true });
   }
-}
-
-function fingerprint(value) {
-  return createHash('sha256').update(value).digest('hex');
-}
-
-function emptyPreExecutionInventory() {
-  return {
-    skillDefinitions: [],
-    plugins: [],
-    ruleSources: [],
-    packageDigest: fingerprint(''),
-    truncated: false,
-  };
-}
-
-function preExecutionInventory(projectRoot, resolvedSkills) {
-  const skillDefinitions = resolvedSkills.map((name) => {
-    const relativePath = `.cursor/skills/${name}/SKILL.md`;
-    return {
-      name,
-      path: relativePath,
-      digest: fingerprint(fs.readFileSync(path.join(projectRoot, relativePath))),
-    };
-  });
-  return {
-    skillDefinitions,
-    plugins: [],
-    ruleSources: [],
-    packageDigest: fingerprint(JSON.stringify(
-      skillDefinitions.map(({ name, digest }) => ({ name, digest })),
-    )),
-    truncated: false,
-  };
 }
 
 function normalizeToolName(name) {
@@ -653,7 +622,11 @@ async function executeCursor({
       storeRoot = path.join(executionRoot, 'store');
       fs.mkdirSync(projectRoot);
       copyResolvedSkills(repositoryRoot, projectRoot, context.resolvedSkills);
-      inventory = preExecutionInventory(projectRoot, context.resolvedSkills);
+      inventory = buildPreExecutionInventory({
+        projectRoot,
+        skillNames: context.resolvedSkills,
+        relativePathFor: (name) => `.cursor/skills/${name}/SKILL.md`,
+      });
       const store = new cursorSdk.JsonlLocalAgentStore(storeRoot);
 
       failureStage = 'startup';
@@ -838,6 +811,10 @@ async function executeCursor({
   }
 
   durationMs ??= Date.now() - startedAt;
+  skillEvents = skillEventsFromReads(
+    skillReads,
+    runResult?.status === 'cancelled',
+  );
   if (!normalized || (cleanupFailure && !failureError)) {
     const activeFailure = failureError || cleanupFailure.error;
     normalized = failedResult({

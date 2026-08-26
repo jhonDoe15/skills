@@ -1035,9 +1035,59 @@ test('Cursor Adapter normalizes post-run exceptions and still disposes resources
     code: 'cursor-result-normalization-failed',
     message: 'normalization exploded',
   });
+  assert.deepEqual(
+    result.observations.skillEvents.map(({ name, status }) => [name, status]),
+    [
+      ['agent-writing', 'started'],
+      ['agent-writing', 'succeeded'],
+      ['writing-foundation', 'started'],
+      ['writing-foundation', 'succeeded'],
+    ],
+  );
   assert.equal(observation.disposed, true);
   assert.equal(fs.existsSync(observation.createOptions.local.cwd), false);
   assert.equal(fs.existsSync(observation.storeDirectory), false);
+});
+
+test('Cursor Adapter preserves Skill reads when post-run collection fails', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const observation = {};
+  const originalReaddirSync = fs.readdirSync;
+  fs.readdirSync = function failProjectScan(target, options) {
+    if (observation.waited && target === observation.createOptions?.local.cwd) {
+      throw new Error('artifact scan exploded');
+    }
+    return originalReaddirSync(target, options);
+  };
+  t.after(() => {
+    fs.readdirSync = originalReaddirSync;
+  });
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk(observation),
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  });
+
+  assert.equal(result.status, 'failed');
+  assert.deepEqual(result.failure, {
+    stage: 'result-normalization',
+    code: 'cursor-result-normalization-failed',
+    message: 'artifact scan exploded',
+  });
+  assert.deepEqual(
+    result.observations.skillEvents.map(({ name, status }) => [name, status]),
+    [
+      ['agent-writing', 'started'],
+      ['agent-writing', 'succeeded'],
+      ['writing-foundation', 'started'],
+      ['writing-foundation', 'succeeded'],
+    ],
+  );
 });
 
 test('Cursor Adapter normalizes cleanup failure after disposing resources', async (t) => {

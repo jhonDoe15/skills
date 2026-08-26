@@ -334,12 +334,16 @@
       "type": "object",
       "required": [
         "clean",
+        "inventory_verifiable",
         "prohibited_skills",
         "provisioning_matches",
         "runtime_matches"
       ],
       "properties": {
         "clean": {
+          "type": "boolean"
+        },
+        "inventory_verifiable": {
           "type": "boolean"
         },
         "prohibited_skills": {

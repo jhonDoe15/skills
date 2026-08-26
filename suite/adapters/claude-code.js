@@ -1,7 +1,6 @@
 'use strict';
 
 const { spawnSync } = require('node:child_process');
-const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -10,6 +9,10 @@ const {
   SuiteContractError,
   defineProductionAdapter,
 } = require('..');
+const {
+  buildPreExecutionInventory,
+  emptyPreExecutionInventory,
+} = require('../pre-execution-inventory');
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1_000;
 const MAX_OUTPUT_BYTES = 20 * 1024 * 1024;
@@ -124,42 +127,6 @@ function createSanitizedEnvironment(observerLog = null) {
   return environment;
 }
 
-function fingerprint(value) {
-  return createHash('sha256').update(value).digest('hex');
-}
-
-function emptyPreExecutionInventory() {
-  return {
-    skillDefinitions: [],
-    plugins: [],
-    ruleSources: [],
-    packageDigest: fingerprint(''),
-    truncated: false,
-  };
-}
-
-function preExecutionInventory(project, resolvedSkills) {
-  const skillDefinitions = resolvedSkills.map((name) => {
-    const relativePath = path.join('.claude', 'skills', name, 'SKILL.md')
-      .split(path.sep)
-      .join('/');
-    return {
-      name,
-      path: relativePath,
-      digest: fingerprint(fs.readFileSync(path.join(project, relativePath))),
-    };
-  });
-  return {
-    skillDefinitions,
-    plugins: [],
-    ruleSources: [],
-    packageDigest: fingerprint(JSON.stringify(
-      skillDefinitions.map(({ name, digest }) => ({ name, digest })),
-    )),
-    truncated: false,
-  };
-}
-
 function createSkillObserver(project) {
   const observerDirectory = path.join(project, '.claude', 'hooks');
   const scriptPath = path.join(observerDirectory, 'skill-observer.js');
@@ -168,16 +135,79 @@ function createSkillObserver(project) {
   fs.writeFileSync(scriptPath, `#!/usr/bin/env node
 'use strict';
 const fs = require('node:fs');
-const input = fs.readFileSync(0, 'utf8');
-const event = JSON.parse(input);
-const target = process.env.${OBSERVER_LOG_ENV};
-if (target) {
+const MAX_INPUT_BYTES = 64 * 1024;
+const chunks = [];
+let inputBytes = 0;
+let oversized = false;
+
+function boundedString(value, pattern, maxLength = 256) {
+  return typeof value === 'string'
+    && value.length <= maxLength
+    && pattern.test(value)
+    ? value
+    : null;
+}
+
+function projectLifecycleEvent(event) {
+  if (!event || typeof event !== 'object' || Array.isArray(event)) return null;
+  const hookEvent = boundedString(
+    event.hook_event_name,
+    /^(?:PermissionDenied|PostToolUse|PostToolUseFailure|PreToolUse|UserPromptExpansion)$/,
+  );
+  const sessionId = boundedString(event.session_id, /^[^\\u0000-\\u001f]+$/);
+  if (!hookEvent || !sessionId) return null;
+
+  if (hookEvent === 'UserPromptExpansion') {
+    const commandName = boundedString(event.command_name, /^[a-z0-9-]+$/, 64);
+    if (event.expansion_type !== 'slash_command' || !commandName) return null;
+    return {
+      session_id: sessionId,
+      hook_event_name: hookEvent,
+      expansion_type: 'slash_command',
+      command_name: commandName,
+    };
+  }
+
+  const skill = boundedString(event.tool_input?.skill, /^[a-z0-9-]+$/, 64);
+  if (event.tool_name !== 'Skill' || !skill) return null;
+  const callId = boundedString(event.tool_use_id, /^[^\\u0000-\\u001f]+$/);
+  const projected = {
+    session_id: sessionId,
+    hook_event_name: hookEvent,
+    tool_name: 'Skill',
+    tool_input: { skill },
+  };
+  if (callId) projected.tool_use_id = callId;
+  if (event.is_interrupt === true) projected.is_interrupt = true;
+  return projected;
+}
+
+process.stdin.on('data', (chunk) => {
+  inputBytes += chunk.length;
+  if (inputBytes > MAX_INPUT_BYTES) {
+    oversized = true;
+    chunks.length = 0;
+  } else if (!oversized) {
+    chunks.push(chunk);
+  }
+});
+process.stdin.on('end', () => {
+  if (oversized) return;
+  let event;
+  try {
+    event = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch {
+    return;
+  }
+  const projected = projectLifecycleEvent(event);
+  const target = process.env.${OBSERVER_LOG_ENV};
+  if (!projected || !target) return;
   const size = fs.existsSync(target) ? fs.statSync(target).size : 0;
-  const payload = Buffer.from(JSON.stringify(event) + '\\n');
+  const payload = Buffer.from(JSON.stringify(projected) + '\\n');
   if (payload.length <= ${MAX_OBSERVER_LOG_BYTES} - size) {
     fs.appendFileSync(target, payload);
   }
-}
+});
 `);
   return { logPath, scriptPath };
 }
@@ -270,6 +300,13 @@ function readSkillInvocation(input) {
     : null;
 }
 
+function isValidSkillCatalog(catalog) {
+  return Array.isArray(catalog)
+    && catalog.every((name) => (
+      typeof name === 'string' && /^\/?[a-z0-9-]+$/.test(name)
+    ));
+}
+
 function mutationFromTool(content, project) {
   const operation = MUTATION_OPERATIONS.get(content.name);
   if (!operation) return null;
@@ -335,6 +372,7 @@ function lifecycleEventIdentity(event) {
 function deduplicateLifecycleEvents(events) {
   const seen = new Set();
   return events.filter((event) => {
+    if (!event.callId) return true;
     const identity = lifecycleEventIdentity(event);
     if (seen.has(identity)) return false;
     seen.add(identity);
@@ -515,6 +553,7 @@ function observerSkillEvents(events, requestId) {
 function parseClaudeStream(stdout, requestedSkill, project, requestId) {
   const evidence = {
     initialized: false,
+    catalogObserved: false,
     resultEventSeen: false,
     resultIsError: false,
     resultText: '',
@@ -548,11 +587,12 @@ function parseClaudeStream(stdout, requestedSkill, project, requestId) {
         name: 'SlashCommand',
         outcome: `submitted /${requestedSkill}`,
       });
-      for (const skillName of [
-        ...(Array.isArray(event.skills) ? event.skills : []),
-        ...(Array.isArray(event.slash_commands) ? event.slash_commands : []),
-      ]) {
-        evidence.availableSkills.add(String(skillName).replace(/^\//, ''));
+      for (const catalog of [event.skills, event.slash_commands]) {
+        if (!isValidSkillCatalog(catalog)) continue;
+        evidence.catalogObserved = true;
+        for (const skillName of catalog) {
+          evidence.availableSkills.add(skillName.replace(/^\//, ''));
+        }
       }
     }
 
@@ -678,16 +718,27 @@ function parseClaudeStream(stdout, requestedSkill, project, requestId) {
   return evidence;
 }
 
+function correlatedSkillPhase(event) {
+  return [
+    event.callId,
+    event.name,
+    event.operation,
+    event.status,
+  ].join('\0');
+}
+
 function mergeSkillEvents(streamEvents, observedEvents) {
-  const observedCallIds = new Set(
-    observedEvents.map(({ callId }) => callId).filter(Boolean),
-  );
-  return deduplicateLifecycleEvents([
-    ...observedEvents,
-    ...streamEvents.filter(({ callId }) => (
-      !callId || !observedCallIds.has(callId)
-    )),
-  ]);
+  const correlatedPhases = new Set();
+  const merged = [];
+  for (const event of [...observedEvents, ...streamEvents]) {
+    if (event.callId) {
+      const phase = correlatedSkillPhase(event);
+      if (correlatedPhases.has(phase)) continue;
+      correlatedPhases.add(phase);
+    }
+    merged.push(event);
+  }
+  return deduplicateLifecycleEvents(merged);
 }
 
 function finalizeOpenSkillLoads(events, cancelled) {
@@ -726,13 +777,45 @@ function finalizeOpenSkillLoads(events, cancelled) {
   return deduplicateLifecycleEvents([...events, ...inferred]);
 }
 
+function installClaudeSkillObserver(project) {
+  const observer = createSkillObserver(project);
+  return {
+    ...observer,
+    hooks: observerHooks(observer.scriptPath),
+  };
+}
+
+function normalizeClaudeExecutionEvidence({
+  stdout,
+  requestedSkill,
+  project,
+  requestId,
+  observerLogPath = null,
+  cancelled = false,
+}) {
+  const evidence = parseClaudeStream(
+    stdout || '',
+    requestedSkill,
+    project,
+    requestId,
+  );
+  const observedEvents = observerLogPath
+    ? observerSkillEvents(readObserverEvents(observerLogPath), requestId)
+    : [];
+  evidence.skillEvents = finalizeOpenSkillLoads(
+    mergeSkillEvents(evidence.skillEvents, observedEvents),
+    cancelled,
+  );
+  return evidence;
+}
+
 function observations(context, invocation, evidence = {}) {
   const responses = evidence.resultText
     ? [{ text: evidence.resultText }]
     : [];
   return {
     packageSkills: context.packageSkills,
-    hostAvailableSkills: evidence.initialized
+    hostAvailableSkills: evidence.catalogObserved
       ? {
         names: [...(evidence.availableSkills || [])],
         provenance: eventProvenance({
@@ -872,8 +955,12 @@ function createClaudeCodeAdapter({
           });
         }
 
-        const observer = createSkillObserver(project);
-        const inventory = preExecutionInventory(project, context.resolvedSkills);
+        const observer = installClaudeSkillObserver(project);
+        const inventory = buildPreExecutionInventory({
+          projectRoot: project,
+          skillNames: context.resolvedSkills,
+          relativePathFor: (name) => `.claude/skills/${name}/SKILL.md`,
+        });
         const environment = createSanitizedEnvironment(observer.logPath);
         let pluginIds;
         try {
@@ -916,24 +1003,15 @@ function createClaudeCodeAdapter({
           },
         );
         const elapsedMs = Date.now() - startedAt;
-        const evidence = parseClaudeStream(
-          processResult.stdout || '',
-          invocation.skill,
+        const evidence = normalizeClaudeExecutionEvidence({
+          stdout: processResult.stdout,
+          requestedSkill: invocation.skill,
           project,
-          invocation.requestId,
-        );
+          requestId: invocation.requestId,
+          observerLogPath: observer.logPath,
+          cancelled: processResult.error?.code === 'ETIMEDOUT',
+        });
         evidence.preExecutionInventory = inventory;
-        evidence.skillEvents = mergeSkillEvents(
-          evidence.skillEvents,
-          observerSkillEvents(
-            readObserverEvents(observer.logPath),
-            invocation.requestId,
-          ),
-        );
-        evidence.skillEvents = finalizeOpenSkillLoads(
-          evidence.skillEvents,
-          processResult.error?.code === 'ETIMEDOUT',
-        );
         function fail(stage, code, message) {
           return failedResult({
             invocation,
@@ -993,9 +1071,11 @@ function createClaudeCodeAdapter({
           );
         }
 
-        const unavailableSkill = context.resolvedSkills.find((skillName) => (
-          !evidence.availableSkills.has(skillName)
-        ));
+        const unavailableSkill = evidence.catalogObserved
+          ? context.resolvedSkills.find((skillName) => (
+            !evidence.availableSkills.has(skillName)
+          ))
+          : null;
         if (unavailableSkill) {
           return fail(
             'execution',
@@ -1023,4 +1103,6 @@ function createClaudeCodeAdapter({
 
 module.exports = {
   createClaudeCodeAdapter,
+  installClaudeSkillObserver,
+  normalizeClaudeExecutionEvidence,
 };

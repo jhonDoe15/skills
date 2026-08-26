@@ -10,6 +10,10 @@ const {
   resolvePackageDependencies,
   validateResult,
 } = require('..');
+const {
+  normalizeRetainedPreExecutionInventory,
+  retainPreExecutionInventory,
+} = require('../pre-execution-inventory');
 const { executeTest } = require('../testing');
 
 const SCHEMA_VERSION = 2;
@@ -140,12 +144,14 @@ function inspectNoSkillContamination(observations, policy) {
     policy?.target,
   );
   const prohibited = new Set(prohibitedSkills);
+  const provisionedSkills = [
+    ...observations.preExecutionInventory.skillDefinitions
+      .map(({ name }) => name),
+    ...observations.packageSkills,
+    ...observations.routing.resolvedSkills,
+  ];
   const provisioningMatches = [
-    ...new Set(
-      observations.preExecutionInventory.skillDefinitions
-        .map(({ name }) => name)
-        .filter((name) => prohibited.has(name)),
-    ),
+    ...new Set(provisionedSkills.filter((name) => prohibited.has(name))),
   ];
   const runtimeMatches = [
     ...new Set(
@@ -154,8 +160,12 @@ function inspectNoSkillContamination(observations, policy) {
         .filter((name) => prohibited.has(name)),
     ),
   ];
+  const inventoryVerifiable = observations.preExecutionInventory.truncated === false;
   return {
-    clean: provisioningMatches.length === 0 && runtimeMatches.length === 0,
+    clean: inventoryVerifiable
+      && provisioningMatches.length === 0
+      && runtimeMatches.length === 0,
+    inventoryVerifiable,
     prohibitedSkills,
     provisioningMatches,
     runtimeMatches,
@@ -410,6 +420,17 @@ function validateEvaluationDefinition(definition) {
         validateStringArray(
           evaluation.required_skill_loads,
           `definition.evals[${index}].required_skill_loads`,
+        );
+      }
+      if (evaluation.canonical_invocation !== undefined
+        && typeof evaluation.canonical_invocation !== 'boolean') {
+        throw new EvaluationContractError(
+          `definition.evals[${index}].canonical_invocation must be a boolean`,
+        );
+      }
+      if (evaluation.canonical_invocation && !evaluation.should_trigger) {
+        throw new EvaluationContractError(
+          `definition.evals[${index}].canonical_invocation requires should_trigger`,
         );
       }
     } else if (evaluation.ablated_dependency !== undefined) {
@@ -806,30 +827,11 @@ function sealRunRecord(record) {
   return deepFreeze(record);
 }
 
-function retainedPreExecutionInventory(inventory) {
-  return {
-    skill_definitions: structuredClone(inventory.skillDefinitions),
-    plugins: [...inventory.plugins],
-    rule_sources: [...inventory.ruleSources],
-    package_digest: inventory.packageDigest,
-    truncated: inventory.truncated,
-  };
-}
-
-function normalizedPreExecutionInventory(inventory) {
-  return {
-    skillDefinitions: structuredClone(inventory.skill_definitions),
-    plugins: [...inventory.plugins],
-    ruleSources: [...inventory.rule_sources],
-    packageDigest: inventory.package_digest,
-    truncated: inventory.truncated,
-  };
-}
-
 function retainedControlContamination(observations, policy) {
   const contamination = inspectNoSkillContamination(observations, policy);
   return {
     clean: contamination.clean,
+    inventory_verifiable: contamination.inventoryVerifiable,
     prohibited_skills: contamination.prohibitedSkills,
     provisioning_matches: contamination.provisioningMatches,
     runtime_matches: contamination.runtimeMatches,
@@ -897,7 +899,7 @@ function createRunEvidence({
       host_available_skills: structuredClone(
         result.observations.hostAvailableSkills,
       ),
-      pre_execution_inventory: retainedPreExecutionInventory(
+      pre_execution_inventory: retainPreExecutionInventory(
         result.observations.preExecutionInventory,
       ),
       skill_events: structuredClone(result.observations.skillEvents),
@@ -1063,7 +1065,7 @@ function validateRunEvidence({
     observations: {
       packageSkills: record.execution.package_skills,
       hostAvailableSkills: record.execution.host_available_skills,
-      preExecutionInventory: normalizedPreExecutionInventory(
+      preExecutionInventory: normalizeRetainedPreExecutionInventory(
         record.execution.pre_execution_inventory,
       ),
       skillEvents: record.execution.skill_events,
@@ -1096,6 +1098,12 @@ function validateRunEvidence({
         'run evidence execution.control_contamination.clean must be a boolean',
       );
     }
+    if (typeof record.execution.control_contamination.inventory_verifiable
+      !== 'boolean') {
+      throw new EvaluationContractError(
+        'run evidence execution.control_contamination.inventory_verifiable must be a boolean',
+      );
+    }
     for (const field of [
       'prohibited_skills',
       'provisioning_matches',
@@ -1123,6 +1131,7 @@ function validateRunEvidence({
     );
     if (!fingerprintsMatch(record.execution.control_contamination, {
       clean: recomputed.clean,
+      inventory_verifiable: recomputed.inventoryVerifiable,
       prohibited_skills: recomputed.prohibitedSkills,
       provisioning_matches: recomputed.provisioningMatches,
       runtime_matches: recomputed.runtimeMatches,
@@ -1211,12 +1220,10 @@ function assessReusableEvidence({
       if (!record.execution.control_contamination.clean) {
         return { reusable: false, reason: 'No-Skill control contaminated' };
       }
-    } else if (record.arm.kind === 'treatment') {
+    } else if (record.arm.kind === 'treatment' && manifest.layer !== 'trigger') {
       const requiredLoads = manifest.layer === 'component'
         ? [manifest.skill, componentAblationFor(manifest, caseDefinition).dependency]
-        : manifest.layer === 'trigger'
-          ? caseDefinition.required_skill_loads || [manifest.skill]
-          : [manifest.skill];
+        : [manifest.skill];
       if (!requiredLoads.every((name) => recordLoadedSkill(record, name))) {
         return {
           reusable: false,
@@ -1401,25 +1408,29 @@ function triggerGradeFromObservation({
   status,
   skillEvents,
 }) {
-  const requiredLoads = caseDefinition.required_skill_loads || [skill];
-  validateStringArray(requiredLoads, 'caseDefinition.required_skill_loads');
+  const declaredLoads = caseDefinition.required_skill_loads || [];
+  validateStringArray(declaredLoads, 'caseDefinition.required_skill_loads');
+  const requiredLoads = [...new Set([skill, ...declaredLoads])];
   const attempted = skillEvents.some((event) => (
     event.name === skill
       && ['select', 'load'].includes(event.operation)
   ));
-  const loaded = (name) => skillEvents.some((event) => (
-    event.name === name
-      && event.operation === 'load'
-      && event.status === 'succeeded'
-  ));
+  function loaded(name) {
+    return skillEvents.some((event) => (
+      event.name === name
+        && event.operation === 'load'
+        && event.status === 'succeeded'
+    ));
+  }
   const shouldTrigger = caseDefinition.should_trigger;
   const activationMatches = shouldTrigger
     ? requiredLoads.every(loaded)
     : !attempted;
-  const slashRequest = caseDefinition.prompt.trimStart().startsWith('/');
+  const escapedSkill = skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const canonicalRequest = new RegExp(
-    `^/${skill.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$)`,
+    `^/${escapedSkill}(?:\\s|$)`,
   ).test(caseDefinition.prompt.trimStart());
+  const requiresCanonicalRequest = caseDefinition.canonical_invocation === true;
   const checks = [
     deterministicCheck(
       'trigger execution',
@@ -1437,8 +1448,8 @@ function triggerGradeFromObservation({
     ),
     deterministicCheck(
       'canonical trigger request',
-      !slashRequest || canonicalRequest,
-      `slash=${slashRequest} exact=${canonicalRequest}`,
+      !requiresCanonicalRequest || canonicalRequest,
+      `required=${requiresCanonicalRequest} exact=${canonicalRequest}`,
     ),
   ];
   return {
@@ -1533,7 +1544,7 @@ function observationsFromExecution(execution) {
   return {
     packageSkills: execution.package_skills,
     hostAvailableSkills: execution.host_available_skills,
-    preExecutionInventory: normalizedPreExecutionInventory(
+    preExecutionInventory: normalizeRetainedPreExecutionInventory(
       execution.pre_execution_inventory,
     ),
     skillEvents: execution.skill_events,
@@ -1564,6 +1575,7 @@ function assertPairLifecycleGates(manifest, caseDefinition, control, treatment) 
     const retained = control.execution.control_contamination;
     if (!fingerprintsMatch(retained, {
       clean: contamination.clean,
+      inventory_verifiable: contamination.inventoryVerifiable,
       prohibited_skills: contamination.prohibitedSkills,
       provisioning_matches: contamination.provisioningMatches,
       runtime_matches: contamination.runtimeMatches,

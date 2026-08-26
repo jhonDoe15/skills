@@ -2,6 +2,9 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const {
+  emptyPreExecutionInventory,
+} = require('./pre-execution-inventory');
 
 const CONTRACT_FILE = path.join('suite', 'canonical-suite.json');
 const VALID_CLASSIFICATIONS = new Set(['audience', 'primary', 'private']);
@@ -402,17 +405,6 @@ function resolveDependencies(suite, packageDefinition, requestedSkill) {
 
   const failure = resolve(requestedSkill, true);
   return failure || { resolved };
-}
-
-function emptyPreExecutionInventory() {
-  return {
-    skillDefinitions: [],
-    plugins: [],
-    ruleSources: [],
-    packageDigest:
-      'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-    truncated: false,
-  };
 }
 
 function missingDependencyResult(invocation, packageSkills, failure) {

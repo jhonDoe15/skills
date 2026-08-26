@@ -33,6 +33,30 @@ const { defineTestAdapter } = require('../suite/testing');
 const repositoryRoot = path.resolve(__dirname, '..');
 const baseRevision = '65860269897fb826fed8b66009f293ad28bb4731';
 
+function fixtureSkillEvent(name, {
+  operation = 'load',
+  status = 'succeeded',
+  trigger = 'unknown',
+  callId,
+  eventType = 'fixture.skill-load',
+} = {}) {
+  return {
+    name,
+    operation,
+    status,
+    trigger,
+    callId,
+    provenance: {
+      host: 'fixture',
+      mechanism: 'deterministic-fixture',
+      eventType,
+      observerVersion: 'fixture-v1',
+      runId: 'fixture-run',
+      statusSource: 'observed',
+    },
+  };
+}
+
 function testDefinition({
   skill = 'incident-investigation',
   scope = skill,
@@ -101,20 +125,9 @@ function normalizedResult({
   durationMs = 10,
   costUsd = 0.01,
   preExecutionSkills = resolvedSkills,
-  skillEvents = loadedSkills.map((name, index) => ({
-    name,
-    operation: 'load',
-    status: 'succeeded',
-    trigger: 'unknown',
+  preExecutionTruncated = false,
+  skillEvents = loadedSkills.map((name, index) => fixtureSkillEvent(name, {
     callId: `fixture-load-${index}`,
-    provenance: {
-      host: 'fixture',
-      mechanism: 'deterministic-fixture',
-      eventType: 'fixture.skill-load',
-      observerVersion: 'fixture-v1',
-      runId: 'fixture-run',
-      statusSource: 'observed',
-    },
   })),
 }) {
   return {
@@ -131,7 +144,7 @@ function normalizedResult({
         plugins: [],
         ruleSources: [],
         packageDigest: hash(preExecutionSkills),
-        truncated: false,
+        truncated: preExecutionTruncated,
       },
       skillEvents,
       routing: {
@@ -278,6 +291,41 @@ test('trigger grading requires exact target lifecycle evidence', () => {
   }
 });
 
+test('positive trigger grading always requires the exact target load', () => {
+  for (const requiredSkillLoads of [[], ['writing-foundation']]) {
+    const definition = triggerDefinition({
+      required_skill_loads: requiredSkillLoads,
+    });
+    const grade = gradeTriggerResult({
+      definition,
+      caseDefinition: definition.evals[0],
+      result: normalizedResult({
+        skill: 'agent-writing',
+        model: 'test-model',
+        output: 'Only a dependency loaded.',
+        resolvedSkills: ['writing-foundation', 'agent-writing'],
+        loadedSkills: ['writing-foundation'],
+      }),
+    });
+    assert.equal(grade.passed, false, JSON.stringify(requiredSkillLoads));
+  }
+
+  const definition = triggerDefinition({
+    required_skill_loads: ['writing-foundation'],
+  });
+  assert.equal(gradeTriggerResult({
+    definition,
+    caseDefinition: definition.evals[0],
+    result: normalizedResult({
+      skill: 'agent-writing',
+      model: 'test-model',
+      output: 'Target and dependency loaded.',
+      resolvedSkills: ['writing-foundation', 'agent-writing'],
+      loadedSkills: ['writing-foundation', 'agent-writing'],
+    }),
+  }).passed, true);
+});
+
 test('trigger definitions require explicit exact-lifecycle expectations', () => {
   const missingExpectation = triggerDefinition();
   delete missingExpectation.evals[0].should_trigger;
@@ -313,6 +361,8 @@ test('negative, canonical, and private trigger grades use exact predicates', () 
     loadedSkills: ['to-humans'],
   });
   assert.equal(negativeGrade(siblingOnly).passed, true);
+  negative.evals[0].prompt = '/to-humans write ordinary prose.';
+  assert.equal(negativeGrade(siblingOnly).passed, true);
 
   for (const status of ['rejected', 'failed', 'cancelled']) {
     const attemptedTarget = normalizedResult({
@@ -320,27 +370,20 @@ test('negative, canonical, and private trigger grades use exact predicates', () 
       model: 'test-model',
       output: 'Target did not complete.',
       resolvedSkills: ['writing-foundation', 'agent-writing'],
-      skillEvents: [{
-        name: 'agent-writing',
+      skillEvents: [fixtureSkillEvent('agent-writing', {
         operation: status === 'rejected' ? 'select' : 'load',
         status,
         trigger: 'model',
         callId: `target-${status}`,
-        provenance: {
-          host: 'fixture',
-          mechanism: 'deterministic-fixture',
-          eventType: 'fixture.skill-lifecycle',
-          observerVersion: 'fixture-v1',
-          runId: 'fixture-run',
-          statusSource: 'observed',
-        },
-      }],
+        eventType: 'fixture.skill-lifecycle',
+      })],
     });
     assert.equal(negativeGrade(attemptedTarget).passed, false, status);
   }
 
   const canonical = triggerDefinition({
     prompt: '/agent-writing create instructions.',
+    canonical_invocation: true,
   });
   assert.equal(gradeTriggerResult({
     definition: canonical,
@@ -411,6 +454,64 @@ test('No-Skill contamination checks provisioning and runtime independently', () 
     inspectNoSkillContamination(clean.observations, policy),
     {
       clean: true,
+      inventoryVerifiable: true,
+      prohibitedSkills: [
+        'agent-writing',
+        'writing-foundation',
+        'legacy-writing',
+        'other-writer',
+      ],
+      provisioningMatches: [],
+      runtimeMatches: [],
+    },
+  );
+
+  const contradictoryPackage = normalizedResult({
+    skill: 'agent-writing',
+    model: 'test-model',
+    output: 'Contradictory control.',
+    packageSkills: ['agent-writing'],
+    resolvedSkills: [],
+    preExecutionSkills: [],
+  });
+  assert.equal(
+    inspectNoSkillContamination(
+      contradictoryPackage.observations,
+      policy,
+    ).clean,
+    false,
+  );
+
+  const contradictoryResolution = normalizedResult({
+    skill: 'agent-writing',
+    model: 'test-model',
+    output: 'Contradictory control.',
+    packageSkills: [],
+    resolvedSkills: ['writing-foundation'],
+    preExecutionSkills: [],
+  });
+  assert.equal(
+    inspectNoSkillContamination(
+      contradictoryResolution.observations,
+      policy,
+    ).clean,
+    false,
+  );
+
+  const truncated = normalizedResult({
+    skill: 'agent-writing',
+    model: 'test-model',
+    output: 'Unverifiable control.',
+    packageSkills: [],
+    resolvedSkills: [],
+    preExecutionSkills: [],
+    preExecutionTruncated: true,
+  });
+  assert.deepEqual(
+    inspectNoSkillContamination(truncated.observations, policy),
+    {
+      clean: false,
+      inventoryVerifiable: false,
       prohibitedSkills: [
         'agent-writing',
         'writing-foundation',
@@ -529,6 +630,90 @@ test('trigger replay rejects legacy evidence and lifecycle tampering', async (t)
       runs: [resealedTampering],
     }),
     /trigger grade mismatch/,
+  );
+});
+
+test('trigger reuse applies positive and negative exact lifecycle predicates', async (t) => {
+  const fixtureRoot = createPackageFixture(
+    t,
+    ['agent-writing', 'writing-foundation'],
+  );
+  async function retained(caseOverrides, skillEvents) {
+    const definition = triggerDefinition(caseOverrides);
+    const manifest = createManifest(definition);
+    const caseDefinition = definition.evals[0];
+    const record = await runTriggerEvaluation({
+      repositoryRoot: fixtureRoot,
+      manifest,
+      definition,
+      caseDefinition,
+      cell: manifest.cells[0],
+      repetition: 1,
+      execute() {
+        return normalizedResult({
+          skill: 'agent-writing',
+          model: 'test-model',
+          output: 'Retained exact lifecycle evidence.',
+          packageSkills: ['agent-writing', 'writing-foundation'],
+          resolvedSkills: ['writing-foundation', 'agent-writing'],
+          skillEvents,
+        });
+      },
+    });
+    return {
+      expected: {
+        manifest,
+        definition,
+        caseDefinition,
+        cell: manifest.cells[0],
+        repetition: 1,
+        arm: 'treatment',
+      },
+      record,
+    };
+  }
+
+  const positive = await retained({}, [fixtureSkillEvent('agent-writing', {
+    trigger: 'model',
+    callId: 'positive-target',
+  })]);
+  assert.equal(
+    assessReusableEvidence({ ...positive.expected, record: positive.record }).reusable,
+    true,
+  );
+
+  const negative = await retained({ should_trigger: false }, []);
+  assert.equal(
+    assessReusableEvidence({ ...negative.expected, record: negative.record }).reusable,
+    true,
+  );
+
+  const siblingOnly = await retained({ should_trigger: false }, [
+    fixtureSkillEvent('to-humans', {
+      trigger: 'model',
+      callId: 'sibling-only',
+    }),
+  ]);
+  assert.equal(
+    assessReusableEvidence({
+      ...siblingOnly.expected,
+      record: siblingOnly.record,
+    }).reusable,
+    true,
+  );
+
+  const rejected = await retained({ should_trigger: false }, [
+    fixtureSkillEvent('agent-writing', {
+      operation: 'select',
+      status: 'rejected',
+      trigger: 'model',
+      callId: 'rejected-target',
+      eventType: 'fixture.skill-selection',
+    }),
+  ]);
+  assert.deepEqual(
+    assessReusableEvidence({ ...rejected.expected, record: rejected.record }),
+    { reusable: false, reason: 'deterministic gate not successful' },
   );
 });
 
@@ -737,6 +922,7 @@ test('Incident behavior runner retains shared evidence and resumes without host 
 'use strict';
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 fs.appendFileSync(process.env.INCIDENT_EVAL_CALL_LOG, 'called\\n');
 const args = process.argv.slice(2);
 const schemaIndex = args.indexOf('--json-schema');
@@ -786,6 +972,21 @@ const prompt = args[args.indexOf('-p') + 1] || '';
 const explicitlyInvoked = available
   && prompt.trimStart().startsWith('/incident-investigation');
 const triggerProbe = prompt.includes('exact bracketed placeholder');
+const settingsIndex = args.indexOf('--settings');
+if (explicitlyInvoked && settingsIndex !== -1) {
+  const settings = JSON.parse(args[settingsIndex + 1]);
+  const observerScript = settings.hooks.UserPromptExpansion[0].hooks[0].args[0];
+  spawnSync(process.execPath, [observerScript], {
+    input: JSON.stringify({
+      session_id: 'incident-explicit-session',
+      hook_event_name: 'UserPromptExpansion',
+      expansion_type: 'slash_command',
+      command_name: 'incident-investigation',
+    }),
+    env: process.env,
+    encoding: 'utf8',
+  });
+}
 const behaviorOutput = [
   '# Phase 1 — Frame',
   'Impact and scope: eu-west checkout errors after deployment.',
@@ -820,22 +1021,27 @@ console.log(JSON.stringify({
   message: {
     content: [
       ...(explicitlyInvoked ? [{
+        type: 'text',
+        text: output,
+      }] : triggerProbe ? [{
         type: 'tool_use',
-        id: 'incident-skill-use',
+        id: 'wrong-sibling-use',
         name: 'Skill',
-        input: { skill: 'incident-investigation' },
-      }] : []),
-      { type: 'text', text: output },
+        input: { skill: 'to-humans' },
+      }, {
+        type: 'text',
+        text: output,
+      }] : [{ type: 'text', text: output }]),
     ],
   },
 }));
-if (explicitlyInvoked) {
+if (triggerProbe && !explicitlyInvoked) {
   console.log(JSON.stringify({
     type: 'user',
     message: {
       content: [{
         type: 'tool_result',
-        tool_use_id: 'incident-skill-use',
+        tool_use_id: 'wrong-sibling-use',
         content: 'Skill loaded',
       }],
     },
@@ -901,6 +1107,28 @@ console.log(JSON.stringify({
   });
   assert.equal(triggerReplay.passed, true);
   assert.equal(triggerReplay.summary.valid_runs, 2);
+  const explicitEvents = triggerRuns[0].execution.skill_events;
+  assert.deepEqual(
+    explicitEvents.map(({ name, operation, status, trigger }) => (
+      [name, operation, status, trigger]
+    )),
+    [
+      ['incident-investigation', 'select', 'succeeded', 'user'],
+      ['incident-investigation', 'load', 'succeeded', 'user'],
+    ],
+  );
+  assert.equal(
+    explicitEvents[0].provenance.mechanism,
+    'user-prompt-expansion',
+  );
+  assert.deepEqual(
+    triggerRuns[1].execution.skill_events.map(({ name, status }) => [name, status]),
+    [
+      ['to-humans', 'started'],
+      ['to-humans', 'started'],
+      ['to-humans', 'succeeded'],
+    ],
+  );
 
   const first = spawnSync(process.execPath, args, {
     cwd: repositoryRoot,
@@ -1083,6 +1311,115 @@ console.log(JSON.stringify({
     fs.readFileSync(callLog, 'utf8').trim().split(/\r?\n/).length,
     6,
   );
+});
+
+test('Incident runner retains wrong-Skill and timeout lifecycle evidence', (t) => {
+  const fixtureRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'incident-failure-evaluation-'),
+  );
+  t.after(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
+  const binDirectory = path.join(fixtureRoot, 'bin');
+  fs.mkdirSync(binDirectory, { recursive: true });
+  const fakeClaude = path.join(binDirectory, 'claude');
+  fs.writeFileSync(fakeClaude, `#!/usr/bin/env node
+'use strict';
+const { spawnSync } = require('node:child_process');
+const args = process.argv.slice(2);
+const mode = process.env.INCIDENT_LIFECYCLE_FIXTURE;
+const settings = JSON.parse(args[args.indexOf('--settings') + 1]);
+const observerScript = settings.hooks.PreToolUse[0].hooks[0].args[0];
+const target = mode === 'timeout' ? 'incident-investigation' : 'to-humans';
+spawnSync(process.execPath, [observerScript], {
+  input: JSON.stringify({
+    session_id: 'incident-failure-session',
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Skill',
+    tool_input: { skill: target },
+    tool_use_id: mode + '-call',
+  }),
+  env: process.env,
+  encoding: 'utf8',
+});
+console.log(JSON.stringify({
+  type: 'system',
+  subtype: 'init',
+  skills: ['incident-investigation'],
+  slash_commands: ['incident-investigation'],
+  model: 'resolved-test-model',
+}));
+if (mode === 'timeout') {
+  setTimeout(() => {}, 5000);
+} else {
+  console.error('fixture process failure');
+  process.exit(2);
+}
+`);
+  fs.chmodSync(fakeClaude, 0o755);
+
+  const definitionPath = path.join(
+    repositoryRoot,
+    'skills',
+    'incident-investigation',
+    'evals',
+    'evals.json',
+  );
+  const originalDefinition = fs.readFileSync(definitionPath, 'utf8');
+  const definition = JSON.parse(originalDefinition);
+  definition.config.timeout_ms = 2000;
+  definition.config.max_executor_attempts = 1;
+  fs.writeFileSync(definitionPath, `${JSON.stringify(definition, null, 2)}\n`);
+
+  try {
+    for (const mode of ['failure', 'timeout']) {
+      const resultsDirectory = path.join(fixtureRoot, mode);
+      const result = spawnSync(process.execPath, [
+        'skills/incident-investigation/scripts/run-evals.js',
+        '--mode',
+        'trigger',
+        '--model',
+        'test-model',
+        '--results-dir',
+        resultsDirectory,
+        '--json',
+      ], {
+        cwd: repositoryRoot,
+        env: {
+          ...process.env,
+          PATH: `${binDirectory}${path.delimiter}${process.env.PATH}`,
+          INCIDENT_LIFECYCLE_FIXTURE: mode,
+        },
+        encoding: 'utf8',
+      });
+      assert.equal(result.status, 1, result.stderr);
+      const evidence = readJson(path.join(
+        resultsDirectory,
+        'triggers',
+        'trigger-explicit',
+        'evidence.json',
+      ));
+      const statuses = evidence.execution.skill_events.map((event) => [
+        event.name,
+        event.operation,
+        event.status,
+      ]);
+      assert.deepEqual(
+        statuses,
+        mode === 'timeout'
+          ? [
+            ['incident-investigation', 'select', 'started'],
+            ['incident-investigation', 'load', 'started'],
+            ['incident-investigation', 'load', 'cancelled'],
+          ]
+          : [
+            ['to-humans', 'select', 'started'],
+            ['to-humans', 'load', 'started'],
+            ['to-humans', 'load', 'unknown'],
+          ],
+      );
+    }
+  } finally {
+    fs.writeFileSync(definitionPath, originalDefinition);
+  }
 });
 
 test('matched evaluation checks package closure before executing either arm', async (t) => {
