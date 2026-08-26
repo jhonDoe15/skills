@@ -79,15 +79,29 @@ function normalizedAdapterResult(invocation, context, {
   response,
   artifact,
   durationMs,
-  invokedSkills = context.resolvedSkills,
+  resolvedSkills = context.resolvedSkills,
+  skillEvents = [],
 }) {
   return {
     status: 'succeeded',
     observations: {
-      discoveredSkills: context.discoveredSkills,
+      packageSkills: context.packageSkills,
+      hostAvailableSkills: null,
+      preExecutionInventory: {
+        skillDefinitions: context.resolvedSkills.map((name) => ({
+          name,
+          path: `.host/skills/${name}/SKILL.md`,
+          digest: '0'.repeat(64),
+        })),
+        plugins: [],
+        ruleSources: [],
+        packageDigest: '1'.repeat(64),
+        truncated: false,
+      },
+      skillEvents,
       routing: {
         requestedSkill: invocation.skill,
-        invokedSkills,
+        resolvedSkills,
       },
       responses: [{ text: response }],
       artifacts: artifact ? [{
@@ -353,7 +367,7 @@ test('production and test execution reject Adapter-invented routing', async (t) 
       return normalizedAdapterResult(invocation, context, {
         response: 'Omitted dependency invocation.',
         durationMs: 1,
-        invokedSkills: ['agent-writing'],
+        resolvedSkills: ['agent-writing'],
       });
     },
   });
@@ -363,7 +377,7 @@ test('production and test execution reject Adapter-invented routing', async (t) 
       adapter: productionAdapter,
       invocation,
     }),
-    /invokedSkills must match resolved Skills/,
+    /resolvedSkills must match resolved Skills/,
   );
 
   const testAdapter = defineTestAdapter({
@@ -372,7 +386,7 @@ test('production and test execution reject Adapter-invented routing', async (t) 
       return normalizedAdapterResult(invocation, context, {
         response: 'Invented ablated dependency invocation.',
         durationMs: 1,
-        invokedSkills: ['writing-foundation', 'agent-writing'],
+        resolvedSkills: ['writing-foundation', 'agent-writing'],
       });
     },
   });
@@ -386,7 +400,7 @@ test('production and test execution reject Adapter-invented routing', async (t) 
         dependency: 'writing-foundation',
       },
     }),
-    /invokedSkills must match resolved Skills/,
+    /resolvedSkills must match resolved Skills/,
   );
 });
 
@@ -422,7 +436,7 @@ test('production Adapters cannot mutate normalized contract inputs', async (t) =
     },
   });
 
-  assert.deepEqual(result.observations.routing.invokedSkills, [
+  assert.deepEqual(result.observations.routing.resolvedSkills, [
     'writing-foundation',
     'agent-writing',
   ]);
@@ -464,7 +478,7 @@ test('test Adapters cannot mutate normalized contract inputs', async (t) => {
     },
   });
 
-  assert.deepEqual(result.observations.routing.invokedSkills, ['agent-writing']);
+  assert.deepEqual(result.observations.routing.resolvedSkills, ['agent-writing']);
 });
 
 test('Claude Code and Cursor fake Adapters share one normalized Interface', async (t) => {
@@ -495,7 +509,7 @@ test('Claude Code and Cursor fake Adapters share one normalized Interface', asyn
         response: 'Cursor normalized artifact.',
         artifact: 'artifact://cursor/output.md',
         durationMs: 14,
-        invokedSkills: [...context.resolvedSkills].reverse(),
+        resolvedSkills: [...context.resolvedSkills].reverse(),
       }));
     },
   });
@@ -515,7 +529,7 @@ test('Claude Code and Cursor fake Adapters share one normalized Interface', asyn
 
   for (const result of [claudeCodeResult, cursorResult]) {
     assert.deepEqual(validateResult(result), result);
-    assert.deepEqual(result.observations.discoveredSkills, [
+    assert.deepEqual(result.observations.packageSkills, [
       'agent-writing',
       'writing-foundation',
     ]);
@@ -524,11 +538,11 @@ test('Claude Code and Cursor fake Adapters share one normalized Interface', asyn
       resolved: 'resolved-test-model',
     });
   }
-  assert.deepEqual(claudeCodeResult.observations.routing.invokedSkills, [
+  assert.deepEqual(claudeCodeResult.observations.routing.resolvedSkills, [
     'writing-foundation',
     'agent-writing',
   ]);
-  assert.deepEqual(cursorResult.observations.routing.invokedSkills, [
+  assert.deepEqual(cursorResult.observations.routing.resolvedSkills, [
     'agent-writing',
     'writing-foundation',
   ]);
@@ -585,11 +599,11 @@ test('host Adapter result preserves normalized artifact observations', async (t)
   });
 
   assert.deepEqual(validateResult(result), result);
-  assert.deepEqual(result.observations.discoveredSkills, [
+  assert.deepEqual(result.observations.packageSkills, [
     'agent-writing',
     'writing-foundation',
   ]);
-  assert.deepEqual(result.observations.routing.invokedSkills, [
+  assert.deepEqual(result.observations.routing.resolvedSkills, [
     'writing-foundation',
     'agent-writing',
   ]);
@@ -619,10 +633,23 @@ test('dependency ablation is available only through the test Adapter boundary', 
       return {
         status: 'succeeded',
         observations: {
-          discoveredSkills: context.discoveredSkills,
+          packageSkills: context.packageSkills,
+          hostAvailableSkills: null,
+          preExecutionInventory: {
+            skillDefinitions: context.resolvedSkills.map((name) => ({
+              name,
+              path: `.host/skills/${name}/SKILL.md`,
+              digest: '0'.repeat(64),
+            })),
+            plugins: [],
+            ruleSources: [],
+            packageDigest: '1'.repeat(64),
+            truncated: false,
+          },
+          skillEvents: [],
           routing: {
             requestedSkill: invocation.skill,
-            invokedSkills: context.resolvedSkills,
+            resolvedSkills: context.resolvedSkills,
           },
           responses: [{ text: 'Test-only component observation.' }],
           artifacts: [],
@@ -684,5 +711,58 @@ test('dependency ablation is available only through the test Adapter boundary', 
     },
   });
 
-  assert.deepEqual(result.observations.routing.invokedSkills, ['agent-writing']);
+  assert.deepEqual(result.observations.routing.resolvedSkills, ['agent-writing']);
+});
+
+test('normalized result separates inventory, availability, lifecycle, and resolution', () => {
+  const result = normalizedAdapterResult(
+    { skill: 'agent-writing', model: 'test-model' },
+    {
+      packageSkills: ['agent-writing', 'writing-foundation'],
+      resolvedSkills: ['writing-foundation', 'agent-writing'],
+    },
+    {
+      response: 'Observed exact lifecycle evidence.',
+      durationMs: 1,
+      skillEvents: [{
+        name: 'agent-writing',
+        operation: 'load',
+        status: 'succeeded',
+        trigger: 'user',
+        callId: 'skill-call-1',
+        provenance: {
+          host: 'claude-code',
+          mechanism: 'user-prompt-expansion',
+          eventType: 'UserPromptExpansion',
+          observerVersion: 'claude-code-hooks-v1',
+          runId: 'session-1',
+          statusSource: 'observed',
+        },
+      }],
+    },
+  );
+
+  assert.strictEqual(validateResult(result), result);
+  assert.deepEqual(result.observations.packageSkills, [
+    'agent-writing',
+    'writing-foundation',
+  ]);
+  assert.equal(result.observations.hostAvailableSkills, null);
+  assert.deepEqual(result.observations.routing.resolvedSkills, [
+    'writing-foundation',
+    'agent-writing',
+  ]);
+  assert.equal(result.observations.skillEvents[0].name, 'agent-writing');
+
+  const legacy = structuredClone(result);
+  legacy.observations.discoveredSkills = legacy.observations.packageSkills;
+  delete legacy.observations.packageSkills;
+  assert.throws(() => validateResult(legacy), /unsupported field "discoveredSkills"/);
+
+  const invalidProvenance = structuredClone(result);
+  delete invalidProvenance.observations.skillEvents[0].provenance.observerVersion;
+  assert.throws(
+    () => validateResult(invalidProvenance),
+    /provenance is missing "observerVersion"/,
+  );
 });

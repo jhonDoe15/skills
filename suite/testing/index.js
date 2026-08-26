@@ -85,7 +85,7 @@ async function executeTest({
   }
 
   const context = Object.freeze({
-    discoveredSkills: Object.freeze(
+    packageSkills: Object.freeze(
       packageDefinition.skills.map(({ name }) => name),
     ),
     resolvedSkills: Object.freeze([...resolution.resolved]),
