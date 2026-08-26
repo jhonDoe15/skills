@@ -43,18 +43,6 @@ function compile(pattern, field) {
   }
 }
 
-function gradePatterns(output, groups = []) {
-  return groups.map(({ name, patterns }) => {
-    if (!Array.isArray(patterns) || patterns.length === 0) {
-      throw new TypeError(`deterministic pattern group "${name}" is empty`);
-    }
-    const passed = patterns.some((pattern, index) => (
-      compile(pattern, `${name}[${index}]`).test(output)
-    ));
-    return check(name, passed, passed ? 'matched' : 'not found');
-  });
-}
-
 function removeProtectedSegments(output, protectedSegments) {
   return protectedSegments.reduce(
     (prose, segment) => prose.split(segment).join(''),
@@ -62,9 +50,39 @@ function removeProtectedSegments(output, protectedSegments) {
   );
 }
 
-function routingChecks(result, expectation = {}) {
-  const invoked = result.observations.routing.invokedSkills;
-  const checks = [];
+function gradeRequiredTerms(output, requiredTerms = []) {
+  const normalizedOutput = output.toLocaleLowerCase('en');
+  return requiredTerms.map(({ name, term }) => {
+    if (typeof name !== 'string' || typeof term !== 'string' || term.length === 0) {
+      throw new TypeError('required terms need non-empty names and terms');
+    }
+    const present = normalizedOutput.includes(term.toLocaleLowerCase('en'));
+    return check(name, present, present ? 'present' : 'missing');
+  });
+}
+
+function protectedSegmentsFromPrompt(prompt) {
+  if (typeof prompt !== 'string') {
+    throw new TypeError('evaluation prompt must be a string');
+  }
+  return [...prompt.matchAll(
+    /BEGIN PROTECTED\n([\s\S]*?)\nEND PROTECTED/g,
+  )].map((match) => match[1]);
+}
+
+function routingChecks(invoked, expectation = {}) {
+  const expected = expectation.selected || [];
+  const exactMatch = JSON.stringify([...invoked].sort())
+    === JSON.stringify([...expected].sort());
+  const checks = [
+    check(
+      'selected routes exactly',
+      exactMatch,
+      exactMatch
+        ? 'matched'
+        : `expected=${JSON.stringify(expected)} observed=${JSON.stringify(invoked)}`,
+    ),
+  ];
   for (const skill of expectation.selected || []) {
     const selected = invoked.includes(skill);
     checks.push(check(
@@ -84,12 +102,16 @@ function routingChecks(result, expectation = {}) {
   return checks;
 }
 
-function gradeHumanWritingResult({ role, caseDefinition, result }) {
-  validateEvaluationDefinition(role);
+function gradeHumanWritingResult({
+  evaluationDefinition,
+  caseDefinition,
+  result,
+}) {
+  validateEvaluationDefinition(evaluationDefinition);
   validateResult(result);
   const output = outputFrom(result);
   const deterministic = caseDefinition.deterministic || {};
-  const protectedSegments = caseDefinition.protected_segments || [];
+  const protectedSegments = protectedSegmentsFromPrompt(caseDefinition.prompt);
   const prose = removeProtectedSegments(output, protectedSegments);
   const checks = [
     check(
@@ -97,8 +119,11 @@ function gradeHumanWritingResult({ role, caseDefinition, result }) {
       result.status === 'succeeded',
       `status=${result.status}`,
     ),
-    ...routingChecks(result, caseDefinition.routing_expectation),
-    ...gradePatterns(output, deterministic.required_pattern_groups),
+    ...routingChecks(
+      result.observations.routing.invokedSkills,
+      caseDefinition.routing_expectation,
+    ),
+    ...gradeRequiredTerms(output, deterministic.required_terms),
     ...protectedSegments.map((segment, index) => {
       const preserved = output.includes(segment);
       return check(
@@ -119,6 +144,15 @@ function gradeHumanWritingResult({ role, caseDefinition, result }) {
       );
     }),
   ];
+  if (deterministic.minimum_nonempty_lines) {
+    const lineCount = output.split('\n').filter((line) => line.trim()).length;
+    const enoughLines = lineCount >= deterministic.minimum_nonempty_lines;
+    checks.push(check(
+      'minimum nonempty lines',
+      enoughLines,
+      `minimum=${deterministic.minimum_nonempty_lines} observed=${lineCount}`,
+    ));
+  }
   if (deterministic.no_em_dash) {
     const hasEmDash = prose.includes('\u2014');
     checks.push(check(
@@ -133,14 +167,12 @@ function gradeHumanWritingResult({ role, caseDefinition, result }) {
   };
 }
 
-function routingObservation(result) {
-  for (const { text } of result.observations.responses) {
-    try {
-      const value = JSON.parse(text);
-      if (value?.kind === 'to-humans-routing-observation') return value;
-    } catch {
-      // Human-facing responses are not expected to be JSON.
-    }
+function routingObservation(output) {
+  try {
+    const value = JSON.parse(output);
+    if (value?.kind === 'to-humans-routing-observation') return value;
+  } catch {
+    // Human-facing responses are not expected to be JSON.
   }
   return null;
 }
@@ -168,18 +200,32 @@ function normalizeDeliverables(deliverables) {
 function gradeRoutingResult({ trigger, caseDefinition, result }) {
   validateEvaluationDefinition(trigger);
   validateResult(result);
+  return gradeRoutingObservation({
+    caseDefinition,
+    status: result.status,
+    invokedSkills: result.observations.routing.invokedSkills,
+    output: outputFrom(result),
+  });
+}
+
+function gradeRoutingObservation({
+  caseDefinition,
+  status,
+  invokedSkills,
+  output,
+}) {
   const expectation = caseDefinition.routing_expectation;
   const checks = [
     check(
       'execution succeeded',
-      result.status === 'succeeded',
-      `status=${result.status}`,
+      status === 'succeeded',
+      `status=${status}`,
     ),
-    ...routingChecks(result, expectation),
+    ...routingChecks(invokedSkills, expectation),
   ];
 
   if (expectation.deliverables) {
-    const observed = routingObservation(result);
+    const observed = routingObservation(output);
     const observedDeliverables = normalizeDeliverables(observed?.deliverables);
     const expectedDeliverables = normalizeDeliverables(expectation.deliverables);
     const deliverablesMatch = Boolean(observedDeliverables)
@@ -197,8 +243,27 @@ function gradeRoutingResult({ trigger, caseDefinition, result }) {
   };
 }
 
+function gradeRoutingEvidence({ trigger, caseDefinition, evidence }) {
+  validateEvaluationDefinition(trigger);
+  if (
+    !evidence?.execution
+    || !evidence.execution.routing
+    || evidence.case_id !== caseDefinition.id
+  ) {
+    throw new TypeError('routing evidence must match the evaluated case');
+  }
+  return gradeRoutingObservation({
+    caseDefinition,
+    status: evidence.execution.status,
+    invokedSkills: evidence.execution.routing.invoked_skills,
+    output: evidence.execution.output,
+  });
+}
+
 module.exports = {
   gradeHumanWritingResult,
+  gradeRoutingEvidence,
   gradeRoutingResult,
   loadDefinitions,
+  protectedSegmentsFromPrompt,
 };

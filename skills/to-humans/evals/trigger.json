@@ -221,7 +221,7 @@
         "to-humans is not selected.",
         "The JSON work product is not rewritten as prose."
       ],
-      "covers": ["agent-facing-exclusion", "non-prose-fidelity"],
+      "covers": ["non-prose-fidelity"],
       "should_trigger": false,
       "routing_expectation": {
         "selected": [],
@@ -238,7 +238,7 @@
         "writing-foundation is not selected as a public outcome.",
         "to-humans is not selected for the machine-readable string."
       ],
-      "covers": ["agent-facing-exclusion"],
+      "covers": ["private-dependency-false-activation"],
       "should_trigger": false,
       "routing_expectation": {
         "selected": [],

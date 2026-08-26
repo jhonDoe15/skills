@@ -62,24 +62,7 @@
         "excluded": []
       },
       "deterministic": {
-        "required_pattern_groups": [
-          {
-            "name": "recommendation",
-            "patterns": ["^Choose\\b", "^Use\\b", "^Recommend(?:ation)?:"]
-          },
-          {
-            "name": "basis",
-            "patterns": ["^Basis:"]
-          },
-          {
-            "name": "uncertainty",
-            "patterns": ["^Uncertainty:"]
-          },
-          {
-            "name": "change condition",
-            "patterns": ["^Change:", "^What could change"]
-          }
-        ],
+        "minimum_nonempty_lines": 4,
         "forbidden_patterns": [],
         "no_em_dash": true
       }

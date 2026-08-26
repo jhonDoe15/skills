@@ -16,15 +16,16 @@ Claude Code and Cursor. The same cases and graders apply to either Adapter.
 Host-specific setup, discovery events, execution, and cleanup stay in the
 shared Adapters.
 
-`evals/index.js` grades normalized observations. It checks routing, required
-observable signals, protected work products, forbidden prose signals, and the
-no-em-dash rule without requiring one exact response. Qualitative judge
-dimensions cover reader fit, completeness, decision quality, and contextual
-voice.
+`evals/index.js` grades normalized observations. It checks exact observed
+routing, requested-item preservation, structural minimums, protected work
+products, forbidden prose signals, and the no-em-dash rule. Semantic phrasing
+stays with blind judgment. Qualitative judge dimensions cover reader fit,
+completeness, decision quality, and contextual voice.
 
-The Writing Foundation fixture under `test/fixtures/` is a dependency tracer
-only. It contains no Foundation writing behavior, is not named `SKILL.md`, and
-never enters production package construction.
+The fixtures under `test/fixtures/` are dependency and Primary-selection
+tracers only. They contain no production behavior, are not named `SKILL.md`,
+and enter only temporary test packages. Trigger cases run through the shared
+trigger seam before owner-local grading of the retained routing evidence.
 
 Run the local contract tests with:
 

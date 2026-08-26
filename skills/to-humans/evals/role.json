@@ -65,32 +65,12 @@
         "excluded": []
       },
       "deterministic": {
-        "required_pattern_groups": [
-          {
-            "name": "answer first",
-            "patterns": ["^Approve the staged rollout today\\.$", "^Start the staged rollout today\\.$"]
-          },
-          {
-            "name": "action grouping",
-            "patterns": ["^Next actions\\s*$", "^Actions\\s*$"]
-          },
-          {
-            "name": "requested item release",
-            "patterns": ["Release owner:"]
-          },
-          {
-            "name": "requested item support",
-            "patterns": ["Support owner:"]
-          },
-          {
-            "name": "requested item security",
-            "patterns": ["Security owner:"]
-          },
-          {
-            "name": "decision basis",
-            "patterns": ["^Basis:"]
-          }
+        "required_terms": [
+          {"name": "requested item release", "term": "release"},
+          {"name": "requested item support", "term": "support"},
+          {"name": "requested item security", "term": "security"}
         ],
+        "minimum_nonempty_lines": 4,
         "forbidden_patterns": [],
         "no_em_dash": true
       }
@@ -113,24 +93,7 @@
         "excluded": []
       },
       "deterministic": {
-        "required_pattern_groups": [
-          {
-            "name": "recommendation",
-            "patterns": ["^Recommend(?:ation)?:", "^Choose\\b", "^Use\\b"]
-          },
-          {
-            "name": "basis",
-            "patterns": ["^Basis:"]
-          },
-          {
-            "name": "uncertainty",
-            "patterns": ["^Uncertainty:"]
-          },
-          {
-            "name": "change condition",
-            "patterns": ["^Change:", "^What could change"]
-          }
-        ],
+        "minimum_nonempty_lines": 4,
         "forbidden_patterns": [],
         "no_em_dash": true
       }
@@ -152,16 +115,6 @@
         "excluded": []
       },
       "deterministic": {
-        "required_pattern_groups": [
-          {
-            "name": "factual record",
-            "patterns": ["^Timeline\\s*$", "^Recorded facts\\s*$"]
-          },
-          {
-            "name": "accountable source",
-            "patterns": ["Owner:", "Source:"]
-          }
-        ],
         "forbidden_patterns": [
           "\\bI recommend\\b",
           "^Recommendation:",
@@ -188,12 +141,6 @@
         "excluded": []
       },
       "deterministic": {
-        "required_pattern_groups": [
-          {
-            "name": "first-person voice retained",
-            "patterns": ["\\bI\\b", "\\bmy\\b"]
-          }
-        ],
         "forbidden_patterns": [
           "\\bIt is important to note that\\b",
           "\\bIn order to\\b"
@@ -204,7 +151,7 @@
     {
       "id": "protected-content",
       "name": "non-prose and quoted source remain unchanged",
-      "prompt": "Explain the supplied payload to a person, but preserve the JSON and quoted source text exactly.",
+      "prompt": "Explain the supplied payload to a person. Preserve each segment between marker lines exactly in your response.\n\nBEGIN PROTECTED\n{\"retry-count\": 3, \"note\": \"keep—exact\"}\nEND PROTECTED\n\nBEGIN PROTECTED\n\"Quoted source — preserve this punctuation.\"\nEND PROTECTED",
       "expected_output": "The explanation is human-facing prose while protected code, schema, data, and quoted source material remain byte-for-byte unchanged.",
       "files": [],
       "expectations": [
@@ -213,25 +160,11 @@
         "Human-writing rules do not alter punctuation inside protected content."
       ],
       "covers": ["non-prose-fidelity", "answer-first", "no-em-dash"],
-      "protected_segments": [
-        "{\"retry-count\": 3, \"note\": \"keep—exact\"}",
-        "\"Quoted source — preserve this punctuation.\""
-      ],
       "routing_expectation": {
         "selected": ["writing-foundation", "to-humans"],
         "excluded": []
       },
       "deterministic": {
-        "required_pattern_groups": [
-          {
-            "name": "answer first",
-            "patterns": ["^Use the payload unchanged\\.$", "^Keep the payload unchanged\\.$"]
-          },
-          {
-            "name": "accountable verification",
-            "patterns": ["Owner:"]
-          }
-        ],
         "forbidden_patterns": [],
         "no_em_dash": true
       }

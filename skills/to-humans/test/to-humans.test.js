@@ -16,14 +16,23 @@ const {
   createCampaignManifest,
   runComponentEvaluation,
   runMatchedEvaluation,
+  runTriggerEvaluation,
   validateEvaluationDefinition,
 } = require('../../../suite/evaluation');
 const { defineTestAdapter } = require('../../../suite/testing');
 const {
   gradeHumanWritingResult,
+  gradeRoutingEvidence,
   gradeRoutingResult,
   loadDefinitions,
+  protectedSegmentsFromPrompt,
 } = require('../evals');
+const {
+  PRIMARY_TRACER_NAMES,
+  SUPPORT_TRACER_NAMES,
+  routingTraceFor,
+  tracerSkillDocument,
+} = require('./fixtures/routing-tracers');
 
 const repositoryRoot = path.resolve(__dirname, '..', '..', '..');
 const fixtureRoot = path.join(__dirname, 'fixtures');
@@ -37,6 +46,7 @@ function normalizedResult({
   invokedSkills,
   discoveredSkills = invokedSkills,
   model = 'test-model',
+  toolUses = [],
 }) {
   return {
     status: 'succeeded',
@@ -48,7 +58,7 @@ function normalizedResult({
       },
       responses: [{ text: output }],
       artifacts: [],
-      toolUses: [],
+      toolUses,
       attemptedMutations: [],
     },
     failure: null,
@@ -67,7 +77,16 @@ function copySkillIntoPackage(packageRoot, skillName, sourcePath) {
   fs.copyFileSync(sourcePath, path.join(skillDirectory, 'SKILL.md'));
 }
 
-function createPackageFixture(t, { includeFoundation = true } = {}) {
+function writeSkillIntoPackage(packageRoot, skillName, contents) {
+  const skillDirectory = path.join(packageRoot, 'skills', skillName);
+  fs.mkdirSync(skillDirectory, { recursive: true });
+  fs.writeFileSync(path.join(skillDirectory, 'SKILL.md'), contents);
+}
+
+function createPackageFixture(
+  t,
+  { includeFoundation = true, includeRoutingTracers = false } = {},
+) {
   const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'to-humans-package-'));
   t.after(() => fs.rmSync(packageRoot, { recursive: true, force: true }));
   fs.mkdirSync(path.join(packageRoot, 'suite'), { recursive: true });
@@ -88,6 +107,18 @@ function createPackageFixture(t, { includeFoundation = true } = {}) {
       'writing-foundation',
       foundationFixturePath,
     );
+  }
+  if (includeRoutingTracers) {
+    for (const skillName of [
+      ...PRIMARY_TRACER_NAMES,
+      ...SUPPORT_TRACER_NAMES,
+    ]) {
+      writeSkillIntoPackage(
+        packageRoot,
+        skillName,
+        tracerSkillDocument(skillName),
+      );
+    }
   }
   return packageRoot;
 }
@@ -113,6 +144,40 @@ function manifestFor(definition, host = 'claude-code') {
     limitations: [
       'Test fixtures prove contracts without making an adoption claim.',
     ],
+  });
+}
+
+function runRoutingCase({
+  packageRoot,
+  trigger,
+  caseDefinition,
+  host,
+  changeTrace = (trace) => trace,
+}) {
+  const manifest = manifestFor(trigger, host);
+  return runTriggerEvaluation({
+    repositoryRoot: packageRoot,
+    manifest,
+    definition: trigger,
+    caseDefinition,
+    cell: manifest.cells[0],
+    repetition: 1,
+    async execute({ cell, packageDefinition }) {
+      const trace = changeTrace(routingTraceFor(caseDefinition.id));
+      return normalizedResult({
+        invokedSkills: trace.invokedSkills,
+        discoveredSkills: packageDefinition.skills.map(({ name }) => name),
+        model: cell.model,
+        toolUses: trace.invokedSkills.includes('to-humans')
+          ? [{ name: 'Skill', outcome: 'invoked to-humans tracer' }]
+          : [],
+        output: JSON.stringify({
+          kind: 'to-humans-routing-observation',
+          selected: trace.invokedSkills,
+          deliverables: trace.deliverables,
+        }),
+      });
+    },
   });
 }
 
@@ -250,6 +315,22 @@ test('owner-local definitions cover every To Humans contract layer', () => {
     assert.deepEqual(definition.evaluation.hosts, ['claude-code', 'cursor']);
   });
 
+  const trigger = definitionFor(definitions, 'trigger');
+  const exactTriggerCoverage = {
+    'non-prose-false-activation': ['non-prose-fidelity'],
+    'private-dependency-false-activation': [
+      'private-dependency-false-activation',
+    ],
+  };
+  for (const [caseId, expectedClauses] of Object.entries(exactTriggerCoverage)) {
+    const caseDefinition = trigger.evals.find(({ id }) => id === caseId);
+    assert.deepEqual(
+      caseDefinition.covers,
+      expectedClauses,
+      `${caseId} must not satisfy an unrelated exclusion clause`,
+    );
+  }
+
   const covered = new Set(definitions.flatMap(({ evals }) => (
     evals.flatMap(({ covers = [] }) => covers)
   )));
@@ -266,6 +347,7 @@ test('owner-local definitions cover every To Humans contract layer', () => {
     'contextual-voice',
     'no-em-dash',
     'non-prose-fidelity',
+    'private-dependency-false-activation',
     'audience-routing',
     'primary-co-selection',
     'agent-facing-exclusion',
@@ -277,24 +359,27 @@ test('owner-local definitions cover every To Humans contract layer', () => {
   }
 });
 
-test('deterministic writing grader checks observable form without exact prose', () => {
+test('deterministic writing grader accepts alternate wording and keeps hard gates', () => {
   const role = definitionFor(loadDefinitions(), 'role');
   const caseDefinition = role.evals.find(({ id }) => id === 'human-status');
   const result = normalizedResult({
     invokedSkills: ['writing-foundation', 'to-humans'],
     output: [
-      'Approve the staged rollout today.',
+      'A limited rollout is the safest move today.',
       '',
-      'Next actions',
-      '- Release owner: start with the internal group.',
-      '- Support owner: confirm the customer notice.',
-      '- Security owner: verify the exception expires Friday.',
+      '- Release engineering starts with the internal group.',
+      '- Customer support confirms the customer notice.',
+      '- Security verifies that the exception expires Friday.',
       '',
-      'Basis: This keeps the rollback window open.',
+      'This keeps the rollback window open while peak demand remains untested.',
     ].join('\n'),
   });
 
-  const grade = gradeHumanWritingResult({ role, caseDefinition, result });
+  const grade = gradeHumanWritingResult({
+    evaluationDefinition: role,
+    caseDefinition,
+    result,
+  });
   assert.equal(grade.passed, true, JSON.stringify(grade, null, 2));
 
   const incomplete = structuredClone(result);
@@ -304,7 +389,7 @@ test('deterministic writing grader checks observable form without exact prose', 
     'Release owner: start with the internal group.',
   ].join('\n');
   const failed = gradeHumanWritingResult({
-    role,
+    evaluationDefinition: role,
     caseDefinition,
     result: incomplete,
   });
@@ -316,10 +401,16 @@ test('deterministic writing grader checks observable form without exact prose', 
 test('deterministic writing grader preserves protected non-prose exactly', () => {
   const role = definitionFor(loadDefinitions(), 'role');
   const caseDefinition = role.evals.find(({ id }) => id === 'protected-content');
+  const protectedSegments = protectedSegmentsFromPrompt(caseDefinition.prompt);
+  assert.equal(Object.hasOwn(caseDefinition, 'protected_segments'), false);
+  assert.equal(protectedSegments.length, 2);
+  protectedSegments.forEach((segment) => {
+    assert.equal(caseDefinition.prompt.includes(segment), true);
+  });
   const output = [
     'Use the payload unchanged.',
     '',
-    ...caseDefinition.protected_segments,
+    ...protectedSegments,
     '',
     'Owner: API maintainers verify the sample before publication.',
   ].join('\n');
@@ -328,7 +419,11 @@ test('deterministic writing grader preserves protected non-prose exactly', () =>
     output,
   });
 
-  const grade = gradeHumanWritingResult({ role, caseDefinition, result });
+  const grade = gradeHumanWritingResult({
+    evaluationDefinition: role,
+    caseDefinition,
+    result,
+  });
   assert.equal(grade.passed, true, JSON.stringify(grade, null, 2));
 
   const changed = structuredClone(result);
@@ -337,7 +432,7 @@ test('deterministic writing grader preserves protected non-prose exactly', () =>
     '"retryCount": 3',
   );
   const failed = gradeHumanWritingResult({
-    role,
+    evaluationDefinition: role,
     caseDefinition,
     result: changed,
   });
@@ -345,49 +440,92 @@ test('deterministic writing grader preserves protected non-prose exactly', () =>
   assertFailedCheck(failed, 'protected segment 1 unchanged');
 });
 
-test('routing grader covers positive, negative, ambiguous, and mixed readers', () => {
+test('routing cases use the trigger seam and grade exact observed routing', async (t) => {
   const trigger = definitionFor(loadDefinitions(), 'trigger');
+  const packageRoot = createPackageFixture(t, { includeRoutingTracers: true });
 
-  for (const caseDefinition of trigger.evals) {
-    const expectation = caseDefinition.routing_expectation;
-    const responses = [{ text: 'Host-neutral routing fixture.' }];
-    if (expectation.deliverables) {
-      responses.push({
-        text: JSON.stringify({
-          kind: 'to-humans-routing-observation',
-          deliverables: expectation.deliverables,
-        }),
+  for (const host of ['claude-code', 'cursor']) {
+    for (const caseDefinition of trigger.evals) {
+      const evidence = await runRoutingCase({
+        packageRoot,
+        trigger,
+        caseDefinition,
+        host,
       });
+      const grade = gradeRoutingEvidence({
+        trigger,
+        caseDefinition,
+        evidence,
+      });
+      assert.equal(
+        evidence.deterministic.passed,
+        true,
+        `${host}/${caseDefinition.id}: shared trigger seam failed`,
+      );
+      assert.equal(
+        grade.passed,
+        true,
+        `${host}/${caseDefinition.id}: ${JSON.stringify(grade, null, 2)}`,
+      );
     }
-    const result = normalizedResult({
-      invokedSkills: expectation.selected,
-      discoveredSkills: [
-        ...new Set([...expectation.selected, ...expectation.excluded]),
-      ],
-      output: responses[0].text,
-    });
-    result.observations.responses = responses;
-
-    const grade = gradeRoutingResult({ trigger, caseDefinition, result });
-    assert.equal(
-      grade.passed,
-      true,
-      `${caseDefinition.id}: ${JSON.stringify(grade, null, 2)}`,
-    );
   }
 
-  const negative = trigger.evals.find(({ id }) => id === 'agent-handoff');
-  const falseActivation = normalizedResult({
-    invokedSkills: ['take-it-offline', 'to-humans'],
-    output: 'Agent-facing handoff fixture.',
-  });
-  const failed = gradeRoutingResult({
+  const suite = loadCanonicalSuite(repositoryRoot);
+  assert.equal(
+    suite.runtimeEdges.some(({ consumer, dependency }) => (
+      (consumer === 'to-humans' && dependency === 'engineering-guidance')
+      || (consumer === 'engineering-guidance' && dependency === 'to-humans')
+    )),
+    false,
+  );
+});
+
+test('routing evidence rejects overactivation and missing Primary co-selection', async (t) => {
+  const trigger = definitionFor(loadDefinitions(), 'trigger');
+  const packageRoot = createPackageFixture(t, { includeRoutingTracers: true });
+  const positive = trigger.evals.find(({ id }) => id === 'ordinary-human-reply');
+  const overactivated = await runRoutingCase({
+    packageRoot,
     trigger,
-    caseDefinition: negative,
-    result: falseActivation,
+    caseDefinition: positive,
+    host: 'cursor',
+    changeTrace(trace) {
+      trace.invokedSkills.push('agent-writing');
+      return trace;
+    },
   });
-  assert.equal(failed.passed, false);
-  assertFailedCheck(failed, 'excluded route to-humans');
+  const overactivationGrade = gradeRoutingEvidence({
+    trigger,
+    caseDefinition: positive,
+    evidence: overactivated,
+  });
+  assert.equal(overactivationGrade.passed, false);
+  assertFailedCheck(overactivationGrade, 'selected routes exactly');
+
+  const coSelection = trigger.evals.find(({ id }) => (
+    id === 'human-engineering-guidance'
+  ));
+  const missingPrimary = await runRoutingCase({
+    packageRoot,
+    trigger,
+    caseDefinition: coSelection,
+    host: 'claude-code',
+    changeTrace(trace) {
+      trace.invokedSkills = trace.invokedSkills.filter(
+        (skill) => skill !== 'engineering-guidance',
+      );
+      trace.deliverables[0].outcomes = ['to-humans'];
+      return trace;
+    },
+  });
+  const coSelectionGrade = gradeRoutingEvidence({
+    trigger,
+    caseDefinition: coSelection,
+    evidence: missingPrimary,
+  });
+  assert.equal(coSelectionGrade.passed, false);
+  assertFailedCheck(coSelectionGrade, 'selected routes exactly');
+  assertFailedCheck(coSelectionGrade, 'deliverables routed independently');
 });
 
 test('routing grader fails malformed deliverable evidence without throwing', () => {
@@ -408,38 +546,6 @@ test('routing grader fails malformed deliverable evidence without throwing', () 
   });
   assert.equal(grade.passed, false);
   assertFailedCheck(grade, 'deliverables routed independently');
-});
-
-test('Audience and Primary outcomes co-select without a runtime edge', () => {
-  const suite = loadCanonicalSuite(repositoryRoot);
-  const trigger = definitionFor(loadDefinitions(), 'trigger');
-  const coSelection = trigger.evals.find(({ id }) => (
-    id === 'human-engineering-guidance'
-  ));
-  const result = normalizedResult({
-    invokedSkills: [
-      'engineering-guidance',
-      'writing-foundation',
-      'to-humans',
-    ],
-    output: JSON.stringify({
-      kind: 'to-humans-routing-observation',
-      deliverables: coSelection.routing_expectation.deliverables,
-    }),
-  });
-
-  assert.equal(gradeRoutingResult({
-    trigger,
-    caseDefinition: coSelection,
-    result,
-  }).passed, true);
-  assert.equal(
-    suite.runtimeEdges.some(({ consumer, dependency }) => (
-      (consumer === 'to-humans' && dependency === 'engineering-guidance')
-      || (consumer === 'engineering-guidance' && dependency === 'to-humans')
-    )),
-    false,
-  );
 });
 
 test('Foundation component ablation runs through either test Adapter', async (t) => {
@@ -518,10 +624,10 @@ test('complete outcome retains a matched No-Skill control', async (t) => {
           : [],
         output: arm === 'treatment'
           ? [
-            'Choose the staged rollout.',
-            'Basis: It limits exposure.',
-            'Uncertainty: Peak traffic is untested.',
-            'Change: A failed load test changes the recommendation.',
+            'A staged rollout is the safer approach.',
+            'Limiting the first cohort caps exposure.',
+            'Peak traffic remains untested.',
+            'Pause the rollout if load testing fails.',
           ].join('\n')
           : 'There are several options to consider.',
       });
@@ -535,7 +641,7 @@ test('complete outcome retains a matched No-Skill control', async (t) => {
         };
       }
       return gradeHumanWritingResult({
-        role: outcome,
+        evaluationDefinition: outcome,
         caseDefinition,
         result,
       });
@@ -545,6 +651,11 @@ test('complete outcome retains a matched No-Skill control', async (t) => {
   assert.deepEqual(
     evidence.map(({ arm }) => arm.kind),
     ['no-skill', 'treatment'],
+  );
+  assert.equal(
+    evidence[1].deterministic.passed,
+    true,
+    JSON.stringify(evidence[1].deterministic, null, 2),
   );
   assert.equal(evidence[0].arm.pairing_id, evidence[1].arm.pairing_id);
 });
