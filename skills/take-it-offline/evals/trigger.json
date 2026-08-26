@@ -1,0 +1,110 @@
+{
+  "skill_name": "take-it-offline",
+  "version": 1,
+  "evaluation": {
+    "scope": "take-it-offline-routing",
+    "layer": "trigger",
+    "skill": "take-it-offline",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment"]
+  },
+  "config": {
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0,
+    "randomization_seed": "take-it-offline-routing-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "selection",
+        "description": "Selects Take It Offline only for a fresh-agent continuation deliverable."
+      },
+      {
+        "id": "exclusion",
+        "description": "Keeps neighboring human, archival, general agent-writing, Skill authoring, and private dependency requests out."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "fresh-context-continuation",
+      "name": "fresh-context-continuation",
+      "prompt": "Carry the current implementation into a fresh agent context so another agent can resume without this transcript.",
+      "expected_output": "Take It Offline is selected for the continuation deliverable.",
+      "files": [],
+      "expectations": [
+        "The fresh-context continuation route selects take-it-offline.",
+        "To Humans remains inactive for the agent-facing deliverable."
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": "canonical-direct-invocation",
+      "name": "canonical-direct-invocation",
+      "prompt": "/take-it-offline\n\nPreserve the current task for a fresh agent.",
+      "expected_output": "The canonical direct invocation selects Take It Offline regardless of ambient routing ambiguity.",
+      "files": [],
+      "expectations": [
+        "Direct invocation by canonical name wins."
+      ],
+      "should_trigger": true
+    },
+    {
+      "id": "human-summary",
+      "name": "human-summary-exclusion",
+      "prompt": "Summarize what we accomplished today for the engineering manager.",
+      "expected_output": "Take It Offline remains inactive because the deliverable is a human summary.",
+      "files": [],
+      "expectations": [
+        "A human-facing summary does not activate take-it-offline."
+      ],
+      "should_trigger": false
+    },
+    {
+      "id": "archival-specification",
+      "name": "archival-specification-exclusion",
+      "prompt": "Write a durable historical specification documenting the final behavior for future maintainers.",
+      "expected_output": "Take It Offline remains inactive because the deliverable is an archival specification.",
+      "files": [],
+      "expectations": [
+        "A durable archival specification does not activate take-it-offline."
+      ],
+      "should_trigger": false
+    },
+    {
+      "id": "general-agent-artifact",
+      "name": "general-agent-artifact-exclusion",
+      "prompt": "Write reusable instructions for an agent that validates JSON files.",
+      "expected_output": "Take It Offline remains inactive because Agent Writing owns this general agent-facing artifact.",
+      "files": [],
+      "expectations": [
+        "A general agent-facing artifact routes outside take-it-offline."
+      ],
+      "should_trigger": false
+    },
+    {
+      "id": "agent-skill-authoring",
+      "name": "agent-skill-authoring-exclusion",
+      "prompt": "Create a new Agent Skill for validating deployment manifests.",
+      "expected_output": "Take It Offline remains inactive because Skill Writing owns Agent Skill authoring.",
+      "files": [],
+      "expectations": [
+        "Agent Skill creation does not activate take-it-offline."
+      ],
+      "should_trigger": false
+    },
+    {
+      "id": "private-dependency-request",
+      "name": "private-dependency-false-activation",
+      "prompt": "Apply writing-foundation to this paragraph and return the rewrite.",
+      "expected_output": "Take It Offline remains inactive for a request naming a different private dependency.",
+      "files": [],
+      "expectations": [
+        "A private dependency request does not false-activate take-it-offline."
+      ],
+      "should_trigger": false
+    }
+  ]
+}
