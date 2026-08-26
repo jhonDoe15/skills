@@ -307,6 +307,14 @@ function isValidSkillCatalog(catalog) {
     ));
 }
 
+function skillCatalogFromInit(event) {
+  const catalogs = ['skills', 'slash_commands']
+    .filter((field) => Object.hasOwn(event, field))
+    .map((field) => event[field]);
+  if (catalogs.length === 0 || !catalogs.every(isValidSkillCatalog)) return null;
+  return catalogs.flat().map((name) => name.replace(/^\//, ''));
+}
+
 function mutationFromTool(content, project) {
   const operation = MUTATION_OPERATIONS.get(content.name);
   if (!operation) return null;
@@ -587,12 +595,11 @@ function parseClaudeStream(stdout, requestedSkill, project, requestId) {
         name: 'SlashCommand',
         outcome: `submitted /${requestedSkill}`,
       });
-      for (const catalog of [event.skills, event.slash_commands]) {
-        if (!isValidSkillCatalog(catalog)) continue;
-        evidence.catalogObserved = true;
-        for (const skillName of catalog) {
-          evidence.availableSkills.add(skillName.replace(/^\//, ''));
-        }
+      const catalog = skillCatalogFromInit(event);
+      evidence.availableSkills.clear();
+      evidence.catalogObserved = catalog !== null;
+      for (const skillName of catalog || []) {
+        evidence.availableSkills.add(skillName);
       }
     }
 
@@ -728,17 +735,28 @@ function correlatedSkillPhase(event) {
 }
 
 function mergeSkillEvents(streamEvents, observedEvents) {
-  const correlatedPhases = new Set();
-  const merged = [];
-  for (const event of [...observedEvents, ...streamEvents]) {
-    if (event.callId) {
-      const phase = correlatedSkillPhase(event);
-      if (correlatedPhases.has(phase)) continue;
-      correlatedPhases.add(phase);
-    }
-    merged.push(event);
+  const explicitEvents = observedEvents.filter((event) => !event.callId);
+  const correlatedEvents = observedEvents.filter((event) => event.callId);
+  const observedByPhase = new Map();
+  for (const event of correlatedEvents) {
+    const phase = correlatedSkillPhase(event);
+    if (!observedByPhase.has(phase)) observedByPhase.set(phase, event);
   }
-  return deduplicateLifecycleEvents(merged);
+  const streamPhases = new Set();
+  const chronologicalStream = streamEvents.map((event) => {
+    if (!event.callId) return event;
+    const phase = correlatedSkillPhase(event);
+    streamPhases.add(phase);
+    return observedByPhase.get(phase) || event;
+  });
+  const complementaryObserved = correlatedEvents.filter((event) => (
+    !streamPhases.has(correlatedSkillPhase(event))
+  ));
+  return deduplicateLifecycleEvents([
+    ...explicitEvents,
+    ...chronologicalStream,
+    ...complementaryObserved,
+  ]);
 }
 
 function finalizeOpenSkillLoads(events, cancelled) {

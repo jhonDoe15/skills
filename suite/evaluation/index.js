@@ -137,6 +137,55 @@ function controlPolicySkills(policy, target) {
   return [...new Set(controlPolicySkillsUnchecked(normalized))];
 }
 
+const GENERIC_SOURCE_IDENTITIES = new Set([
+  'claude',
+  'cursor',
+  'enabled',
+  'marketplace',
+  'plugin',
+  'plugins',
+  'project',
+  'rule',
+  'rules',
+  'unknown',
+]);
+
+function provisionedSourceIdentities(source) {
+  if (typeof source !== 'string' || source.length === 0) return [];
+  return source
+    .toLowerCase()
+    .split(/[/:\\@=]+/)
+    .map((part) => part
+      .replace(/^\.+/, '')
+      .replace(/\.(?:json|md|mdc|yaml|yml)$/u, ''))
+    .filter((part) => (
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(part)
+        && !GENERIC_SOURCE_IDENTITIES.has(part)
+    ));
+}
+
+function inspectProvisionedSources(sources, prohibitedSkills) {
+  const matches = [];
+  let verifiable = true;
+  for (const source of sources) {
+    const identities = provisionedSourceIdentities(source);
+    const exactMatches = prohibitedSkills.filter((name) => (
+      identities.includes(name)
+    ));
+    matches.push(...exactMatches);
+    const normalizedSource = typeof source === 'string'
+      ? source.toLowerCase()
+      : '';
+    const ambiguousRelevantOwner = exactMatches.length === 0
+      && prohibitedSkills.some((name) => normalizedSource.includes(name));
+    if (identities.length === 0 || ambiguousRelevantOwner) verifiable = false;
+  }
+  return {
+    matches: [...new Set(matches)],
+    verifiable,
+  };
+}
+
 function inspectNoSkillContamination(observations, policy) {
   requireObject(observations, 'No-Skill observations');
   const prohibitedSkills = controlPolicySkills(
@@ -150,8 +199,15 @@ function inspectNoSkillContamination(observations, policy) {
     ...observations.packageSkills,
     ...observations.routing.resolvedSkills,
   ];
+  const sourceInspection = inspectProvisionedSources([
+    ...observations.preExecutionInventory.plugins,
+    ...observations.preExecutionInventory.ruleSources,
+  ], prohibitedSkills);
   const provisioningMatches = [
-    ...new Set(provisionedSkills.filter((name) => prohibited.has(name))),
+    ...new Set([
+      ...provisionedSkills.filter((name) => prohibited.has(name)),
+      ...sourceInspection.matches,
+    ]),
   ];
   const runtimeMatches = [
     ...new Set(
@@ -160,7 +216,8 @@ function inspectNoSkillContamination(observations, policy) {
         .filter((name) => prohibited.has(name)),
     ),
   ];
-  const inventoryVerifiable = observations.preExecutionInventory.truncated === false;
+  const inventoryVerifiable = observations.preExecutionInventory.truncated === false
+    && sourceInspection.verifiable;
   return {
     clean: inventoryVerifiable
       && provisioningMatches.length === 0

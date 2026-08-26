@@ -52,7 +52,7 @@ function buildPreExecutionInventory({
   if (!Number.isInteger(maxDefinitions) || maxDefinitions < 0) {
     throw new TypeError('maxDefinitions must be a non-negative integer');
   }
-  const packageDigest = createHash('sha256');
+  const digestEntries = [];
   const skillDefinitions = [];
   const seen = new Set();
   for (const name of skillNames) {
@@ -71,8 +71,7 @@ function buildPreExecutionInventory({
       throw new Error(`Inventory path escapes project: ${relativePath}`);
     }
     const digest = digestRegularFile(absolutePath);
-    packageDigest.update(JSON.stringify([name, digest]));
-    packageDigest.update('\n');
+    digestEntries.push({ name, digest });
     if (skillDefinitions.length < maxDefinitions) {
       skillDefinitions.push({ name, path: relativePath, digest });
     }
@@ -84,7 +83,7 @@ function buildPreExecutionInventory({
     skillDefinitions,
     plugins: retainedPlugins,
     ruleSources: retainedRuleSources,
-    packageDigest: packageDigest.digest('hex'),
+    packageDigest: sha256(JSON.stringify(digestEntries)),
     truncated: skillDefinitions.length < skillNames.length
       || retainedPlugins.length < plugins.length
       || retainedRuleSources.length < ruleSources.length,

@@ -126,6 +126,8 @@ function normalizedResult({
   costUsd = 0.01,
   preExecutionSkills = resolvedSkills,
   preExecutionTruncated = false,
+  preExecutionPlugins = [],
+  preExecutionRuleSources = [],
   skillEvents = loadedSkills.map((name, index) => fixtureSkillEvent(name, {
     callId: `fixture-load-${index}`,
   })),
@@ -141,8 +143,8 @@ function normalizedResult({
           path: `.fixture/skills/${name}/SKILL.md`,
           digest: hash(`fixture:${name}`),
         })),
-        plugins: [],
-        ruleSources: [],
+        plugins: preExecutionPlugins,
+        ruleSources: preExecutionRuleSources,
         packageDigest: hash(preExecutionSkills),
         truncated: preExecutionTruncated,
       },
@@ -522,6 +524,91 @@ test('No-Skill contamination checks provisioning and runtime independently', () 
       runtimeMatches: [],
     },
   );
+
+  for (const {
+    label,
+    plugins = [],
+    ruleSources = [],
+    expectedClean,
+    expectedVerifiable,
+    expectedMatch = null,
+  } of [
+    {
+      label: 'target plugin',
+      plugins: ['plugin:agent-writing'],
+      expectedClean: false,
+      expectedVerifiable: true,
+      expectedMatch: 'agent-writing',
+    },
+    {
+      label: 'dependency plugin',
+      plugins: ['plugin:writing-foundation'],
+      expectedClean: false,
+      expectedVerifiable: true,
+      expectedMatch: 'writing-foundation',
+    },
+    {
+      label: 'conflicting owner plugin',
+      plugins: ['plugin:other-writer'],
+      expectedClean: false,
+      expectedVerifiable: true,
+      expectedMatch: 'other-writer',
+    },
+    {
+      label: 'target rule source',
+      ruleSources: ['.cursor/rules/agent-writing.mdc'],
+      expectedClean: false,
+      expectedVerifiable: true,
+      expectedMatch: 'agent-writing',
+    },
+    {
+      label: 'unrelated verified source',
+      plugins: ['plugin:unrelated-linter'],
+      ruleSources: ['.cursor/rules/safety.mdc'],
+      expectedClean: true,
+      expectedVerifiable: true,
+    },
+    {
+      label: 'unknown source owner',
+      plugins: ['plugin:unknown'],
+      expectedClean: false,
+      expectedVerifiable: false,
+    },
+    {
+      label: 'ambiguous relevant source owner',
+      plugins: ['plugin:agent-writing-copy'],
+      expectedClean: false,
+      expectedVerifiable: false,
+    },
+  ]) {
+    const sourced = normalizedResult({
+      skill: 'agent-writing',
+      model: 'test-model',
+      output: `Control with ${label}.`,
+      packageSkills: [],
+      resolvedSkills: [],
+      preExecutionSkills: [],
+      preExecutionPlugins: plugins,
+      preExecutionRuleSources: ruleSources,
+    });
+    const contamination = inspectNoSkillContamination(
+      sourced.observations,
+      policy,
+    );
+    assert.equal(contamination.clean, expectedClean, label);
+    assert.equal(
+      contamination.inventoryVerifiable,
+      expectedVerifiable,
+      label,
+    );
+    assert.equal(
+      expectedMatch === null
+        ? contamination.provisioningMatches.length === 0
+        : contamination.provisioningMatches.includes(expectedMatch),
+      true,
+      label,
+    );
+  }
 
   for (const prohibited of [
     'agent-writing',

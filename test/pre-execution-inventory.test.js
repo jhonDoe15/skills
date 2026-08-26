@@ -46,6 +46,33 @@ test('shared inventory builder bounds retained definitions without losing digest
   );
 });
 
+test('shared inventory preserves the pre-extraction package digest', (t) => {
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'suite-inventory-'));
+  t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }));
+  for (const name of ['first', 'second']) {
+    const directory = path.join(projectRoot, '.host', 'skills', name);
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(directory, 'SKILL.md'), `# ${name}\n`);
+  }
+
+  const inventory = buildPreExecutionInventory({
+    projectRoot,
+    skillNames: ['first', 'second'],
+    relativePathFor: (name) => `.host/skills/${name}/SKILL.md`,
+  });
+
+  assert.equal(
+    inventory.packageDigest,
+    '48307d8ebf8d70a94dab7d76f9521d35f2e684b128321e3e55c922831bb7cd4f',
+  );
+  assert.equal(
+    normalizeRetainedPreExecutionInventory(
+      retainPreExecutionInventory(inventory),
+    ).packageDigest,
+    inventory.packageDigest,
+  );
+});
+
 test('shared empty inventory has the canonical empty digest', () => {
   assert.deepEqual(emptyPreExecutionInventory(), {
     skillDefinitions: [],

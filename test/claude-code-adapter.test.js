@@ -959,10 +959,26 @@ test('Claude Code Adapter distinguishes absent, empty, and malformed catalogs', 
       expected: null,
     },
     {
-      label: 'malformed',
+      label: 'malformed only',
       init: {
         skills: 'agent-writing',
         slash_commands: [{ name: 'writing-foundation' }],
+      },
+      expected: null,
+    },
+    {
+      label: 'malformed plus empty',
+      init: {
+        skills: 'agent-writing',
+        slash_commands: [],
+      },
+      expected: null,
+    },
+    {
+      label: 'malformed plus populated',
+      init: {
+        skills: [{ name: 'agent-writing' }],
+        slash_commands: ['/writing-foundation'],
       },
       expected: null,
     },
@@ -1126,17 +1142,69 @@ test('Claude Code Adapter merges complementary hook and stream lifecycle phases'
       ['agent-writing', 'load', 'started', 'complement-success'],
       ['writing-foundation', 'select', 'started', 'complement-failure'],
       ['writing-foundation', 'load', 'started', 'complement-failure'],
+      ['agent-writing', 'load', 'succeeded', 'complement-success'],
+      ['writing-foundation', 'load', 'failed', 'complement-failure'],
       ['agent-writing', 'select', 'rejected', 'rejected-call'],
       ['agent-writing', 'select', 'started', 'cancelled-call'],
       ['agent-writing', 'load', 'started', 'cancelled-call'],
       ['agent-writing', 'load', 'cancelled', 'cancelled-call'],
-      ['agent-writing', 'load', 'succeeded', 'complement-success'],
-      ['writing-foundation', 'load', 'failed', 'complement-failure'],
     ],
   );
   assert.equal(
-    result.observations.skillEvents.at(-1).provenance.mechanism,
+    result.observations.skillEvents.find(
+      ({ callId, status }) => (
+        callId === 'complement-failure' && status === 'failed'
+      ),
+    ).provenance.mechanism,
     'stream-json-fallback',
+  );
+});
+
+test('Claude Code Adapter orders terminal-only hooks after stream starts', async (t) => {
+  const events = successEventsWithoutSkillTool();
+  events.splice(1, 0, {
+    type: 'assistant',
+    message: {
+      content: [
+        {
+          type: 'tool_use',
+          id: 'terminal-success',
+          name: 'Skill',
+          input: { skill: 'agent-writing' },
+        },
+        {
+          type: 'tool_use',
+          id: 'terminal-failure',
+          name: 'Skill',
+          input: { skill: 'writing-foundation' },
+        },
+      ],
+    },
+  });
+
+  const result = await executeClaudeFixture(t, [
+    hookSkillEvent('PostToolUse', 'agent-writing', 'terminal-success'),
+    hookSkillEvent(
+      'PostToolUseFailure',
+      'writing-foundation',
+      'terminal-failure',
+    ),
+  ], events);
+
+  assert.deepEqual(
+    result.observations.skillEvents.map(({
+      operation,
+      status,
+      callId,
+    }) => [operation, status, callId]),
+    [
+      ['select', 'started', 'terminal-success'],
+      ['load', 'started', 'terminal-success'],
+      ['select', 'started', 'terminal-failure'],
+      ['load', 'started', 'terminal-failure'],
+      ['load', 'succeeded', 'terminal-success'],
+      ['load', 'failed', 'terminal-failure'],
+    ],
   );
 });
 
