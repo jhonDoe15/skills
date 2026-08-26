@@ -9,7 +9,7 @@ function check(name, passed, details) {
   return { name, passed, details };
 }
 
-function outputFromResult(result) {
+function responseTextFromResult(result) {
   return result.observations.responses
     .map(({ text }) => text)
     .join('\n\n');
@@ -33,46 +33,96 @@ function verifiedReferences(markdown) {
     .map((match) => match[1]);
 }
 
+function invokedSkillsDetails(invokedSkills) {
+  return `invoked=${invokedSkills.join(',') || 'none'}`;
+}
+
+function gradeTakeItOfflineRouting({ caseDefinition, result }) {
+  validateResult(result);
+  const invokedSkills = result.observations.routing.invokedSkills;
+  const primaryInvoked = invokedSkills.includes('take-it-offline');
+  const shouldTrigger = caseDefinition.should_trigger === true;
+  const details = invokedSkillsDetails(invokedSkills);
+  const checks = [
+    check(
+      'exact take-it-offline membership',
+      primaryInvoked === shouldTrigger,
+      `expected=${shouldTrigger} ${details}`,
+    ),
+    check(
+      'to-humans remains inactive',
+      !invokedSkills.includes('to-humans'),
+      details,
+    ),
+  ];
+  return {
+    passed: checks.every(({ passed }) => passed),
+    checks,
+  };
+}
+
 function gradeTakeItOfflineResult({
   definition,
   caseDefinition,
   result,
+  resolveArtifact = () => null,
   resolveReference = () => false,
 }) {
   validateResult(result);
-  const output = outputFromResult(result);
+  const response = responseTextFromResult(result);
+  const continuationArtifacts = result.observations.artifacts;
+  const artifact = continuationArtifacts.length === 1
+    ? continuationArtifacts[0]
+    : null;
+  const artifactIsMarkdown = artifact?.mediaType === 'text/markdown';
+  const continuationMarkdown = artifactIsMarkdown
+    ? resolveArtifact(artifact.reference)
+    : null;
+  const artifactIsReadable = typeof continuationMarkdown === 'string';
+  const hasReadableMarkdownArtifact = artifact !== null
+    && artifactIsMarkdown
+    && artifactIsReadable;
   const deterministic = gradeDeterministicOutput({
     definition,
     caseDefinition,
-    output,
+    output: artifactIsReadable ? continuationMarkdown : '',
   });
   const checks = [...deterministic.checks];
-  const invoked = result.observations.routing.invokedSkills;
+  const invokedSkills = result.observations.routing.invokedSkills;
 
   checks.push(check(
     'canonical primary and dependency routing',
-    invoked.includes('take-it-offline')
-      && invoked.includes('agent-writing')
-      && !invoked.includes('to-humans'),
-    `invoked=${invoked.join(',') || 'none'}`,
+    invokedSkills.includes('take-it-offline')
+      && invokedSkills.includes('agent-writing')
+      && !invokedSkills.includes('to-humans'),
+    invokedSkillsDetails(invokedSkills),
   ));
 
-  const continuationArtifacts = result.observations.artifacts;
-  const artifactAvailable = continuationArtifacts.length === 1
-    && resolveReference(continuationArtifacts[0].reference);
   checks.push(check(
-    'one available continuation artifact',
-    artifactAvailable,
-    artifactAvailable
-      ? continuationArtifacts[0].reference
+    'one readable Markdown continuation artifact',
+    hasReadableMarkdownArtifact,
+    artifact
+      ? `count=1 mediaType=${artifact.mediaType} readable=${artifactIsReadable}`
       : `count=${continuationArtifacts.length}`,
   ));
 
-  const references = verifiedReferences(output);
+  const responseReferencesArtifact = artifact !== null
+    && response.includes(artifact.reference);
+  checks.push(check(
+    'response references continuation artifact',
+    responseReferencesArtifact,
+    responseReferencesArtifact
+      ? artifact.reference
+      : 'artifact reference absent from response',
+  ));
+
+  const references = artifactIsReadable
+    ? verifiedReferences(continuationMarkdown)
+    : [];
   const unresolved = references.filter((reference) => !resolveReference(reference));
   const referencesRequired = caseDefinition.requires_verified_references === true;
-  const referencesPass = unresolved.length === 0
-    && (!referencesRequired || references.length > 0);
+  const hasRequiredReferences = !referencesRequired || references.length > 0;
+  const referencesPass = unresolved.length === 0 && hasRequiredReferences;
   checks.push(check(
     'verified artifact references resolve',
     referencesPass,
@@ -89,4 +139,5 @@ function gradeTakeItOfflineResult({
 
 module.exports = {
   gradeTakeItOfflineResult,
+  gradeTakeItOfflineRouting,
 };

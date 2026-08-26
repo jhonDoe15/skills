@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
+const { pathToFileURL } = require('node:url');
 
 const {
   createCampaignManifest,
@@ -35,6 +36,13 @@ const routingObservations = Object.freeze({
   'agent-skill-authoring': false,
   'private-dependency-request': false,
 });
+const fixtureReferenceAllowlist = new Map([
+  [
+    'fixture://status.json',
+    path.join(fixtureRoot, 'artifacts', 'status.json'),
+  ],
+]);
+const continuationArtifactAllowlist = new Map();
 
 function assertFile(filePath) {
   assert.equal(
@@ -106,7 +114,7 @@ function normalizedResult({
   output,
   invokedSkills,
   discoveredSkills = ['agent-writing', 'take-it-offline', 'writing-foundation'],
-  artifacts = [{ reference: 'temporary://continuation.md', mediaType: 'text/markdown' }],
+  artifacts = [],
   toolUses = [],
 }) {
   return {
@@ -163,12 +171,117 @@ function baselineGrade() {
   };
 }
 
-function referenceResolver(reference) {
-  if (reference === 'temporary://continuation.md') return true;
-  const match = /^fixture:\/\/(.+)$/.exec(reference);
-  return Boolean(match)
-    && fs.existsSync(path.join(fixtureRoot, 'artifacts', match[1]));
+function isRegularNonSymlinkFile(filePath) {
+  if (!fs.existsSync(filePath)) return false;
+  const stat = fs.lstatSync(filePath);
+  return stat.isFile() && !stat.isSymbolicLink();
 }
+
+function referenceResolver(reference) {
+  const filePath = fixtureReferenceAllowlist.get(reference);
+  return Boolean(filePath) && isRegularNonSymlinkFile(filePath);
+}
+
+function createContinuationArtifact(
+  t,
+  markdown,
+  { fileName = 'continuation.md', mediaType = 'text/markdown' } = {},
+) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'take-it-offline-artifact-'));
+  const filePath = path.join(root, fileName);
+  fs.writeFileSync(filePath, markdown);
+  const reference = pathToFileURL(filePath).href;
+  continuationArtifactAllowlist.set(reference, filePath);
+  t.after(() => {
+    continuationArtifactAllowlist.delete(reference);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  return {
+    artifact: { reference, mediaType },
+    response: `Continuation document: ${reference}`,
+  };
+}
+
+function continuationArtifactResolver(reference) {
+  const filePath = continuationArtifactAllowlist.get(reference);
+  if (!filePath || !isRegularNonSymlinkFile(filePath)) return null;
+  return fs.readFileSync(filePath, 'utf8');
+}
+
+test('fixture references reject traversal and unrelated files', () => {
+  assert.equal(referenceResolver('fixture://status.json'), true);
+  assert.equal(referenceResolver('fixture://pressure-state.md'), false);
+  assert.equal(
+    referenceResolver('fixture://../continuations/complete.md'),
+    false,
+  );
+  assert.equal(referenceResolver('fixture://../../agent-writing.skill.md'), false);
+  assert.equal(referenceResolver('fixture://missing.json'), false);
+});
+
+test('grader reads one referenced Markdown continuation artifact', (t) => {
+  const definition = readJson(path.join(evaluationRoot, 'role.json'));
+  const caseDefinition = definition.evals[0];
+  const completeOutput = readFixture(caseDefinition.fixture_output);
+  const { gradeTakeItOfflineResult } = loadGrader();
+  const complete = createContinuationArtifact(t, completeOutput);
+  const malformed = createContinuationArtifact(t, '# Session notes\n');
+  const second = createContinuationArtifact(t, completeOutput, {
+    fileName: 'second.md',
+  });
+  function grade({
+    response = complete.response,
+    artifacts = [complete.artifact],
+  }) {
+    return gradeTakeItOfflineResult({
+      definition,
+      caseDefinition,
+      result: normalizedResult({
+        model: 'test-model',
+        output: response,
+        invokedSkills: ['writing-foundation', 'agent-writing', 'take-it-offline'],
+        artifacts,
+      }),
+      resolveArtifact: continuationArtifactResolver,
+      resolveReference: referenceResolver,
+    });
+  }
+
+  assert.equal(grade({}).passed, true);
+  assert.equal(grade({ artifacts: [] }).passed, false);
+  assert.equal(
+    grade({ artifacts: [complete.artifact, second.artifact] }).passed,
+    false,
+  );
+  assert.equal(
+    grade({
+      artifacts: [{ ...complete.artifact, mediaType: 'application/json' }],
+    }).passed,
+    false,
+  );
+  assert.equal(
+    grade({
+      artifacts: [{
+        reference: 'not-a-valid-test-artifact',
+        mediaType: 'text/markdown',
+      }],
+    }).passed,
+    false,
+  );
+  assert.equal(grade({ response: 'Continuation created.' }).passed, false);
+  assert.equal(grade({ artifacts: [malformed.artifact] }).passed, false);
+});
+
+test('continuations do not duplicate state owned by the status artifact', () => {
+  const status = readJson(path.join(fixtureRoot, 'artifacts', 'status.json'));
+  for (const fixture of ['complete.md', 'pressure.md']) {
+    const continuation = readFixture(`continuations/${fixture}`);
+    assert.match(continuation, /\(fixture:\/\/status\.json\)/);
+    assert.equal(continuation.includes(status.branch), false);
+    assert.doesNotMatch(continuation, /^Next action:\s+run the focused/im);
+    assert.match(continuation, /^Next action:.*status artifact.*nextAction/im);
+  }
+});
 
 test('canonical package discovers Take It Offline without test fixtures', (t) => {
   assertFile(path.join(skillRoot, 'SKILL.md'));
@@ -250,14 +363,70 @@ test('owner-local definitions cover every required evaluation layer', () => {
   );
 });
 
+test('owner-local routing grading requires exact Skill membership', () => {
+  const definition = readJson(path.join(evaluationRoot, 'trigger.json'));
+  const { gradeTakeItOfflineRouting } = loadGrader();
+  const caseById = new Map(definition.evals.map((entry) => [entry.id, entry]));
+  function grade(caseId, invokedSkills, toolUses = []) {
+    return gradeTakeItOfflineRouting({
+      caseDefinition: caseById.get(caseId),
+      result: normalizedResult({
+        model: 'test-model',
+        output: 'Routing observation.',
+        invokedSkills,
+        artifacts: [],
+        toolUses,
+      }),
+    });
+  }
+
+  assert.equal(
+    grade(
+      'fresh-context-continuation',
+      ['agent-writing', 'take-it-offline'],
+    ).passed,
+    true,
+  );
+  assert.equal(
+    grade(
+      'fresh-context-continuation',
+      ['agent-writing'],
+      [{ name: 'Skill', outcome: 'invoked another-skill' }],
+    ).passed,
+    false,
+  );
+  assert.equal(grade('human-summary', ['to-humans']).passed, false);
+  assert.equal(grade('human-summary', ['another-skill']).passed, true);
+  assert.equal(grade('human-summary', ['take-it-offline']).passed, false);
+  assert.equal(
+    grade(
+      'canonical-direct-invocation',
+      ['take-it-offline', 'to-humans'],
+    ).passed,
+    false,
+  );
+});
+
 test('routing boundaries execute unchanged through both host cells', async (t) => {
   const definition = readJson(path.join(evaluationRoot, 'trigger.json'));
   const manifest = manifestFor(definition);
   const packageRoot = createCompletePackage(t);
+  const { gradeTakeItOfflineRouting } = loadGrader();
 
   for (const cell of manifest.cells) {
     for (const caseDefinition of definition.evals) {
       const observed = routingObservations[caseDefinition.id];
+      const normalized = normalizedResult({
+        model: cell.model,
+        output: observed ? 'Continuation route selected.' : 'No continuation route.',
+        invokedSkills: observed
+          ? ['writing-foundation', 'agent-writing', 'take-it-offline']
+          : [],
+        toolUses: observed
+          ? [{ name: 'Skill', outcome: 'invoked take-it-offline' }]
+          : [],
+        artifacts: [],
+      });
       const record = await runTriggerEvaluation({
         repositoryRoot: packageRoot,
         manifest,
@@ -266,22 +435,19 @@ test('routing boundaries execute unchanged through both host cells', async (t) =
         cell,
         repetition: 1,
         async execute() {
-          return normalizedResult({
-            model: cell.model,
-            output: observed ? 'Continuation route selected.' : 'No continuation route.',
-            invokedSkills: observed
-              ? ['writing-foundation', 'agent-writing', 'take-it-offline']
-              : [],
-            toolUses: observed
-              ? [{ name: 'Skill', outcome: 'invoked take-it-offline' }]
-              : [],
-            artifacts: [],
-          });
+          return normalized;
         },
       });
 
       assert.equal(record.host, cell.host);
       assert.equal(record.deterministic.passed, true);
+      assert.equal(
+        gradeTakeItOfflineRouting({
+          caseDefinition,
+          result: normalized,
+        }).passed,
+        true,
+      );
     }
   }
 });
@@ -294,15 +460,17 @@ test('component evaluation observes Agent Writing and its test-only ablation', a
   const packageRoot = createCompletePackage(t);
   const completeOutput = readFixture('continuations/complete.md');
   const ablatedOutput = readFixture('continuations/dependency-ablated.md');
+  const complete = createContinuationArtifact(t, completeOutput);
   const { gradeTakeItOfflineResult } = loadGrader();
   const adapter = defineTestAdapter({
     name: 'take-it-offline-agent-writing-ablation',
     async execute(invocation, context) {
       return normalizedResult({
         model: invocation.model,
-        output: context.dependencyAblation ? ablatedOutput : completeOutput,
+        output: context.dependencyAblation ? ablatedOutput : complete.response,
         invokedSkills: context.resolvedSkills,
         discoveredSkills: context.discoveredSkills,
+        artifacts: context.dependencyAblation ? [] : [complete.artifact],
       });
     },
   });
@@ -320,6 +488,7 @@ test('component evaluation observes Agent Writing and its test-only ablation', a
           definition,
           caseDefinition: definition.evals[0],
           result,
+          resolveArtifact: continuationArtifactResolver,
           resolveReference: referenceResolver,
         })
         : baselineGrade();
@@ -348,6 +517,7 @@ test('complete outcome beats its matched No-Skill control on both hosts', async 
   const packageRoot = createCompletePackage(t);
   const completeOutput = readFixture('continuations/complete.md');
   const controlOutput = readFixture('continuations/no-skill.md');
+  const complete = createContinuationArtifact(t, completeOutput);
   const { gradeTakeItOfflineResult } = loadGrader();
 
   for (const cell of manifest.cells) {
@@ -360,7 +530,7 @@ test('complete outcome beats its matched No-Skill control on both hosts', async 
       async executeArm({ arm }) {
         return normalizedResult({
           model: cell.model,
-          output: arm === 'treatment' ? completeOutput : controlOutput,
+          output: arm === 'treatment' ? complete.response : controlOutput,
           invokedSkills: arm === 'treatment'
             ? ['writing-foundation', 'agent-writing', 'take-it-offline']
             : [],
@@ -368,10 +538,7 @@ test('complete outcome beats its matched No-Skill control on both hosts', async 
             ? ['agent-writing', 'take-it-offline', 'writing-foundation']
             : [],
           artifacts: arm === 'treatment'
-            ? [{
-              reference: 'temporary://continuation.md',
-              mediaType: 'text/markdown',
-            }]
+            ? [complete.artifact]
             : [],
         });
       },
@@ -380,6 +547,7 @@ test('complete outcome beats its matched No-Skill control on both hosts', async 
           definition,
           caseDefinition: definition.evals[0],
           result,
+          resolveArtifact: continuationArtifactResolver,
           resolveReference: referenceResolver,
         });
         return arm === 'treatment' ? grade : {
@@ -401,21 +569,26 @@ test('complete outcome beats its matched No-Skill control on both hosts', async 
   }
 });
 
-test('role fixtures cover verified, missing-context, and pressure behavior', () => {
+test('role fixtures cover verified, missing-context, and pressure behavior', (t) => {
   const definition = readJson(path.join(evaluationRoot, 'role.json'));
   const { gradeTakeItOfflineResult } = loadGrader();
 
   for (const caseDefinition of definition.evals) {
     const output = readFixture(caseDefinition.fixture_output);
+    const continuation = createContinuationArtifact(t, output, {
+      fileName: `${caseDefinition.id}.md`,
+    });
     const result = normalizedResult({
       model: 'test-model',
-      output,
+      output: continuation.response,
       invokedSkills: ['writing-foundation', 'agent-writing', 'take-it-offline'],
+      artifacts: [continuation.artifact],
     });
     const grade = gradeTakeItOfflineResult({
       definition,
       caseDefinition,
       result,
+      resolveArtifact: continuationArtifactResolver,
       resolveReference: referenceResolver,
     });
     assert.equal(
@@ -426,23 +599,26 @@ test('role fixtures cover verified, missing-context, and pressure behavior', () 
   }
 });
 
-test('deterministic grading rejects unsafe, unverifiable, and unresumable output', () => {
+test('deterministic grading rejects unsafe, unverifiable, and unresumable artifact', (t) => {
   const definition = readJson(path.join(evaluationRoot, 'role.json'));
   const caseDefinition = definition.evals[0];
   const completeOutput = readFixture(caseDefinition.fixture_output);
   const { gradeTakeItOfflineResult } = loadGrader();
-  const grade = (output, resolveReference = referenceResolver) => (
-    gradeTakeItOfflineResult({
+  function grade(output, resolveReference = referenceResolver) {
+    const continuation = createContinuationArtifact(t, output);
+    return gradeTakeItOfflineResult({
       definition,
       caseDefinition,
       result: normalizedResult({
         model: 'test-model',
-        output,
+        output: continuation.response,
         invokedSkills: ['writing-foundation', 'agent-writing', 'take-it-offline'],
+        artifacts: [continuation.artifact],
       }),
+      resolveArtifact: continuationArtifactResolver,
       resolveReference,
-    })
-  );
+    });
+  }
 
   assert.equal(grade(`${completeOutput}\nOFFLINE_SECRET_CANARY_91A7\n`).passed, false);
   assert.equal(

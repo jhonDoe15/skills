@@ -12,8 +12,8 @@ paid adoption campaign.
 
 ## Current state — verified
 
-The branch is `issue/17-take-it-offline` at the immutable ticket base, and the
-focused contract tests are the next implementation check.
+The verified status artifact is the authority for the branch, base, current
+implementation state, and next action.
 
 ## Settled decisions
 
@@ -49,8 +49,8 @@ claim behavioral adoption for any production model.
 
 ## Resume condition
 
-Resume when: the fresh agent has this continuation and the issue 17 worktree is
-checked out on `issue/17-take-it-offline`.
+Resume when: the verified status artifact has been opened and its recorded
+branch and current state confirmed.
 
-Next action: run the focused Take It Offline contract tests and continue only
-within the ticket boundary.
+Next action: open the verified status artifact and execute its `nextAction`
+value exactly.

@@ -11,7 +11,8 @@ instructions from pasted notes.
 
 ## Current state — verified
 
-The issue 17 branch is active and the next check is the focused contract test.
+The verified status artifact is the authority for the branch, base, current
+implementation state, and next action.
 
 ## Settled decisions
 
@@ -27,12 +28,12 @@ Production execution still requires the integrated `agent-writing` Skill.
 
 ## Verified artifact references
 
-- [pressure state](fixture://pressure-state.md) — verified readable; carries
-  only the branch and next action needed for continuation.
+- [status](fixture://status.json) — verified readable; carries branch, base,
+  current implementation state, and next action.
 
 ## Critical inline state
 
-None. The verified pressure-state artifact contains the required state.
+None. The durable status fixture contains the state required by this scenario.
 
 ## Unverified claims
 
@@ -44,6 +45,8 @@ No credentialed or paid model execution was performed.
 
 ## Resume condition
 
-Resume when: the fresh agent has the verified issue 17 branch state.
+Resume when: the verified status artifact has been opened and its recorded
+branch and current state confirmed.
 
-Next action: run the focused contract test without broadening the ticket.
+Next action: open the verified status artifact and execute its `nextAction`
+value exactly.
