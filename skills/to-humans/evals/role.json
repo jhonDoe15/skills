@@ -1,0 +1,240 @@
+{
+  "skill_name": "to-humans",
+  "version": 1,
+  "evaluation": {
+    "scope": "to-humans-role",
+    "layer": "role",
+    "skill": "to-humans",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "to-humans-role-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "coverage",
+        "description": "Preserves every requested item, material fact, uncertainty, and limit."
+      },
+      {
+        "id": "reader_fit",
+        "description": "Calibrates vocabulary, depth, organization, and tone to the stated reader."
+      },
+      {
+        "id": "actionability",
+        "description": "Leads with the answer and groups material by what the reader needs to do."
+      },
+      {
+        "id": "voice",
+        "description": "Removes filler and artificial patterns without flattening contextual voice."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "human-status",
+      "name": "human project status with complete actions",
+      "prompt": "Write a status reply for an experienced release lead. Recommend whether to start a staged rollout today and preserve separate requested actions for release, support, and security owners.",
+      "expected_output": "The answer appears first, all three requested owner actions remain visible, the basis follows, and the prose is direct and easy to scan.",
+      "files": [],
+      "expectations": [
+        "The first paragraph states the recommendation.",
+        "Release, support, and security actions all remain present.",
+        "The action list identifies concrete accountable owners.",
+        "Vocabulary and depth fit an experienced release lead.",
+        "The prose contains no em dash."
+      ],
+      "covers": [
+        "answer-first",
+        "requested-breadth",
+        "reader-calibration",
+        "scan-structure",
+        "action-grouping",
+        "plain-wording",
+        "concrete-attribution",
+        "no-em-dash"
+      ],
+      "routing_expectation": {
+        "selected": ["writing-foundation", "to-humans"],
+        "excluded": []
+      },
+      "deterministic": {
+        "required_pattern_groups": [
+          {
+            "name": "answer first",
+            "patterns": ["^Approve the staged rollout today\\.$", "^Start the staged rollout today\\.$"]
+          },
+          {
+            "name": "action grouping",
+            "patterns": ["^Next actions\\s*$", "^Actions\\s*$"]
+          },
+          {
+            "name": "requested item release",
+            "patterns": ["Release owner:"]
+          },
+          {
+            "name": "requested item support",
+            "patterns": ["Support owner:"]
+          },
+          {
+            "name": "requested item security",
+            "patterns": ["Security owner:"]
+          },
+          {
+            "name": "decision basis",
+            "patterns": ["^Basis:"]
+          }
+        ],
+        "forbidden_patterns": [],
+        "no_em_dash": true
+      }
+    },
+    {
+      "id": "decision-support",
+      "name": "decision support with bounded recommendation",
+      "prompt": "Recommend one of two deployment options to an engineering manager. Include the basis, material uncertainty, and the evidence that would change the recommendation.",
+      "expected_output": "The response states one recommendation, its basis, material uncertainty, and a concrete condition that would change it.",
+      "files": [],
+      "expectations": [
+        "The recommendation is explicit.",
+        "The basis names concrete evidence.",
+        "Material uncertainty is visible.",
+        "The response says what could change the recommendation."
+      ],
+      "covers": ["decision-support", "answer-first", "concrete-attribution"],
+      "routing_expectation": {
+        "selected": ["writing-foundation", "to-humans"],
+        "excluded": []
+      },
+      "deterministic": {
+        "required_pattern_groups": [
+          {
+            "name": "recommendation",
+            "patterns": ["^Recommend(?:ation)?:", "^Choose\\b", "^Use\\b"]
+          },
+          {
+            "name": "basis",
+            "patterns": ["^Basis:"]
+          },
+          {
+            "name": "uncertainty",
+            "patterns": ["^Uncertainty:"]
+          },
+          {
+            "name": "change condition",
+            "patterns": ["^Change:", "^What could change"]
+          }
+        ],
+        "forbidden_patterns": [],
+        "no_em_dash": true
+      }
+    },
+    {
+      "id": "neutral-record",
+      "name": "neutral incident record without invented opinion",
+      "prompt": "Record the supplied incident facts for a post-incident timeline. Do not recommend remediation or add an opinion.",
+      "expected_output": "The record preserves the facts and accountable attribution without manufacturing a recommendation.",
+      "files": [],
+      "expectations": [
+        "The record remains factual.",
+        "The record attributes actions to named roles or sources.",
+        "The record does not manufacture a recommendation."
+      ],
+      "covers": ["neutral-record", "concrete-attribution"],
+      "routing_expectation": {
+        "selected": ["writing-foundation", "to-humans"],
+        "excluded": []
+      },
+      "deterministic": {
+        "required_pattern_groups": [
+          {
+            "name": "factual record",
+            "patterns": ["^Timeline\\s*$", "^Recorded facts\\s*$"]
+          },
+          {
+            "name": "accountable source",
+            "patterns": ["Owner:", "Source:"]
+          }
+        ],
+        "forbidden_patterns": [
+          "\\bI recommend\\b",
+          "^Recommendation:",
+          "\\bshould choose\\b"
+        ],
+        "no_em_dash": true
+      }
+    },
+    {
+      "id": "contextual-voice",
+      "name": "personal note retains contextual voice",
+      "prompt": "Revise my first-person note to remove filler while retaining its candid voice and uneven sentence rhythm.",
+      "expected_output": "The revision is direct but still sounds like a candid first-person note rather than a standardized corporate template.",
+      "files": [],
+      "expectations": [
+        "First person remains where it carries the author's voice.",
+        "Sentence rhythm is not mechanically regularized.",
+        "Active voice, sentence splitting, symmetry, and vocabulary are reviewed in context.",
+        "The prose contains no em dash."
+      ],
+      "covers": ["contextual-voice", "plain-wording", "no-em-dash"],
+      "routing_expectation": {
+        "selected": ["writing-foundation", "to-humans"],
+        "excluded": []
+      },
+      "deterministic": {
+        "required_pattern_groups": [
+          {
+            "name": "first-person voice retained",
+            "patterns": ["\\bI\\b", "\\bmy\\b"]
+          }
+        ],
+        "forbidden_patterns": [
+          "\\bIt is important to note that\\b",
+          "\\bIn order to\\b"
+        ],
+        "no_em_dash": true
+      }
+    },
+    {
+      "id": "protected-content",
+      "name": "non-prose and quoted source remain unchanged",
+      "prompt": "Explain the supplied payload to a person, but preserve the JSON and quoted source text exactly.",
+      "expected_output": "The explanation is human-facing prose while protected code, schema, data, and quoted source material remain byte-for-byte unchanged.",
+      "files": [],
+      "expectations": [
+        "The explanation leads with what the reader should know.",
+        "Every protected segment remains unchanged.",
+        "Human-writing rules do not alter punctuation inside protected content."
+      ],
+      "covers": ["non-prose-fidelity", "answer-first", "no-em-dash"],
+      "protected_segments": [
+        "{\"retry-count\": 3, \"note\": \"keep—exact\"}",
+        "\"Quoted source — preserve this punctuation.\""
+      ],
+      "routing_expectation": {
+        "selected": ["writing-foundation", "to-humans"],
+        "excluded": []
+      },
+      "deterministic": {
+        "required_pattern_groups": [
+          {
+            "name": "answer first",
+            "patterns": ["^Use the payload unchanged\\.$", "^Keep the payload unchanged\\.$"]
+          },
+          {
+            "name": "accountable verification",
+            "patterns": ["Owner:"]
+          }
+        ],
+        "forbidden_patterns": [],
+        "no_em_dash": true
+      }
+    }
+  ]
+}

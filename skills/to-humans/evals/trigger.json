@@ -1,0 +1,249 @@
+{
+  "skill_name": "to-humans",
+  "version": 1,
+  "evaluation": {
+    "scope": "to-humans-routing",
+    "layer": "trigger",
+    "skill": "to-humans",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 5,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0,
+    "randomization_seed": "to-humans-routing-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "reader_routing",
+        "description": "Selects To Humans only for deliverables whose primary reader is a person."
+      },
+      {
+        "id": "owner_routing",
+        "description": "Keeps the substantive Primary outcome responsible for the deliverable."
+      },
+      {
+        "id": "mixed_delivery",
+        "description": "Routes each distinct deliverable by its own primary reader and substantive owner."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "ordinary-human-reply",
+      "name": "ordinary human-facing reply",
+      "prompt": "Explain the validation result to me and tell me what to do next.",
+      "expected_output": "The managing agent selects To Humans without requiring direct invocation.",
+      "files": [],
+      "expectations": [
+        "The ordinary reply selects to-humans.",
+        "The selected outcome invokes writing-foundation."
+      ],
+      "covers": ["audience-routing"],
+      "should_trigger": true,
+      "routing_expectation": {
+        "selected": ["writing-foundation", "to-humans"],
+        "excluded": ["agent-writing", "skill-writing", "take-it-offline"]
+      }
+    },
+    {
+      "id": "requested-prose",
+      "name": "requested human-facing prose",
+      "prompt": "Draft a short project update for the leadership team.",
+      "expected_output": "Requested prose for people selects To Humans without a slash command.",
+      "files": [],
+      "expectations": [
+        "The requested prose selects to-humans.",
+        "The selection does not require explicit invocation."
+      ],
+      "covers": ["audience-routing"],
+      "should_trigger": true,
+      "routing_expectation": {
+        "selected": ["writing-foundation", "to-humans"],
+        "excluded": ["agent-writing", "skill-writing", "take-it-offline"]
+      }
+    },
+    {
+      "id": "canonical-direct",
+      "name": "canonical direct invocation",
+      "prompt": "/to-humans\n\nRewrite this note for the project sponsor.",
+      "expected_output": "Direct invocation by the canonical public outcome name selects To Humans.",
+      "files": [],
+      "expectations": [
+        "Canonical direct invocation wins.",
+        "The outcome still invokes writing-foundation."
+      ],
+      "covers": ["audience-routing"],
+      "should_trigger": true,
+      "routing_expectation": {
+        "selected": ["writing-foundation", "to-humans"],
+        "excluded": []
+      }
+    },
+    {
+      "id": "human-engineering-guidance",
+      "name": "human-facing Engineering Guidance co-selection",
+      "prompt": "Assess this implementation approach and recommend whether I should approve it.",
+      "expected_output": "Engineering Guidance owns the assessment and To Humans independently owns its human-facing expression.",
+      "files": [],
+      "expectations": [
+        "engineering-guidance remains the Primary outcome.",
+        "to-humans is independently selected as the Audience outcome.",
+        "Neither public outcome invokes or owns the other."
+      ],
+      "covers": ["primary-co-selection", "audience-routing"],
+      "should_trigger": true,
+      "routing_expectation": {
+        "selected": [
+          "engineering-guidance",
+          "writing-foundation",
+          "to-humans"
+        ],
+        "excluded": [],
+        "deliverables": [
+          {
+            "id": "guidance",
+            "primary_reader": "human",
+            "outcomes": ["engineering-guidance", "to-humans"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "agent-handoff",
+      "name": "fresh-context agent handoff exclusion",
+      "prompt": "Create a handoff that a fresh agent can use to continue this work.",
+      "expected_output": "Take It Offline owns the agent-facing handoff and To Humans is not selected for that deliverable.",
+      "files": [],
+      "expectations": [
+        "take-it-offline owns the deliverable.",
+        "to-humans is not selected."
+      ],
+      "covers": ["agent-facing-exclusion"],
+      "should_trigger": false,
+      "routing_expectation": {
+        "selected": [
+          "writing-foundation",
+          "agent-writing",
+          "take-it-offline"
+        ],
+        "excluded": ["to-humans"]
+      }
+    },
+    {
+      "id": "agent-skill-package",
+      "name": "Agent Skill package exclusion",
+      "prompt": "Create an Agent Skill package for validating release notes.",
+      "expected_output": "Skill Writing owns the package and To Humans is not selected for the agent-facing artifact.",
+      "files": [],
+      "expectations": [
+        "skill-writing owns the deliverable.",
+        "agent-writing remains in the Skill Writing dependency closure.",
+        "to-humans is not selected."
+      ],
+      "covers": ["agent-facing-exclusion"],
+      "should_trigger": false,
+      "routing_expectation": {
+        "selected": [
+          "writing-foundation",
+          "agent-writing",
+          "skill-evaluation",
+          "skill-mechanics",
+          "skill-writing"
+        ],
+        "excluded": ["to-humans"]
+      }
+    },
+    {
+      "id": "mixed-reader-deliverables",
+      "name": "mixed human status and agent handoff",
+      "prompt": "Write a status update for the project owner and a separate handoff for the fresh agent who will continue the work.",
+      "expected_output": "The status update selects To Humans, while the separate handoff selects Take It Offline and excludes To Humans.",
+      "files": [],
+      "expectations": [
+        "Each deliverable is routed separately.",
+        "The human status selects to-humans.",
+        "The agent handoff selects take-it-offline without to-humans."
+      ],
+      "covers": ["mixed-reader-routing", "agent-facing-exclusion"],
+      "should_trigger": true,
+      "routing_expectation": {
+        "selected": [
+          "writing-foundation",
+          "to-humans",
+          "agent-writing",
+          "take-it-offline"
+        ],
+        "excluded": [],
+        "deliverables": [
+          {
+            "id": "status",
+            "primary_reader": "human",
+            "outcomes": ["to-humans"]
+          },
+          {
+            "id": "handoff",
+            "primary_reader": "agent",
+            "outcomes": ["take-it-offline"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "ambiguous-reader",
+      "name": "ambiguous requested artifact reader",
+      "prompt": "Draft deployment instructions.",
+      "expected_output": "The human-facing clarification selects To Humans but does not assign the unresolved artifact to a human-writing owner.",
+      "files": [],
+      "expectations": [
+        "The agent asks who will read the requested artifact.",
+        "The clarification itself is human-facing.",
+        "The agent does not assume that the future artifact is for a person."
+      ],
+      "covers": ["audience-routing", "mixed-reader-routing"],
+      "should_trigger": true,
+      "routing_expectation": {
+        "selected": ["writing-foundation", "to-humans"],
+        "excluded": ["agent-writing", "skill-writing", "take-it-offline"]
+      }
+    },
+    {
+      "id": "non-prose-false-activation",
+      "name": "machine-readable data false activation",
+      "prompt": "Return only a JSON object with the fields status and owner.",
+      "expected_output": "The non-prose work product remains outside To Humans.",
+      "files": [],
+      "expectations": [
+        "to-humans is not selected.",
+        "The JSON work product is not rewritten as prose."
+      ],
+      "covers": ["agent-facing-exclusion", "non-prose-fidelity"],
+      "should_trigger": false,
+      "routing_expectation": {
+        "selected": [],
+        "excluded": ["to-humans"]
+      }
+    },
+    {
+      "id": "private-dependency-false-activation",
+      "name": "private dependency name is not a user goal",
+      "prompt": "Return the canonical identifier writing-foundation as a machine-readable string.",
+      "expected_output": "Naming a Private dependency in a non-prose request does not advertise or select it as a public outcome.",
+      "files": [],
+      "expectations": [
+        "writing-foundation is not selected as a public outcome.",
+        "to-humans is not selected for the machine-readable string."
+      ],
+      "covers": ["agent-facing-exclusion"],
+      "should_trigger": false,
+      "routing_expectation": {
+        "selected": [],
+        "excluded": ["writing-foundation", "to-humans"]
+      }
+    }
+  ]
+}

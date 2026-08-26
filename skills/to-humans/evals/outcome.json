@@ -1,0 +1,88 @@
+{
+  "skill_name": "to-humans",
+  "version": 1,
+  "evaluation": {
+    "scope": "to-humans-outcome",
+    "layer": "outcome",
+    "skill": "to-humans",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "to-humans-outcome-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "decision_quality",
+        "description": "Includes a recommendation, basis, material uncertainty, and evidence that could change it."
+      },
+      {
+        "id": "reader_effort",
+        "description": "Presents the answer before detail and supports scanning without dropping requested content."
+      },
+      {
+        "id": "fidelity",
+        "description": "Preserves facts, evidence, uncertainty, requested breadth, and non-prose work products."
+      },
+      {
+        "id": "natural_voice",
+        "description": "Removes filler and artificial patterns without standardizing contextual voice."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "complete-human-decision",
+      "name": "complete human-facing deployment decision",
+      "prompt": "Recommend a deployment approach to the release owner. Include the basis, the untested condition that matters, and what result would change the recommendation.",
+      "expected_output": "The treatment provides a complete human-facing decision with its canonical dependency, while the matched No-Skill control receives the same scenario without writing Skills.",
+      "files": [],
+      "expectations": [
+        "The recommendation appears before supporting detail.",
+        "The basis is concrete.",
+        "Material uncertainty remains visible.",
+        "The output says what could change the recommendation.",
+        "The treatment retains all requested elements and contains no em dash."
+      ],
+      "covers": [
+        "matched-no-skill-control",
+        "decision-support",
+        "answer-first",
+        "requested-breadth",
+        "no-em-dash"
+      ],
+      "routing_expectation": {
+        "selected": ["writing-foundation", "to-humans"],
+        "excluded": []
+      },
+      "deterministic": {
+        "required_pattern_groups": [
+          {
+            "name": "recommendation",
+            "patterns": ["^Choose\\b", "^Use\\b", "^Recommend(?:ation)?:"]
+          },
+          {
+            "name": "basis",
+            "patterns": ["^Basis:"]
+          },
+          {
+            "name": "uncertainty",
+            "patterns": ["^Uncertainty:"]
+          },
+          {
+            "name": "change condition",
+            "patterns": ["^Change:", "^What could change"]
+          }
+        ],
+        "forbidden_patterns": [],
+        "no_em_dash": true
+      }
+    }
+  ]
+}
