@@ -1,0 +1,113 @@
+{
+  "skill_name": "agent-writing",
+  "version": 1,
+  "evaluation": {
+    "scope": "agent-writing-outcome",
+    "layer": "outcome",
+    "skill": "agent-writing",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "agent-writing-outcome-v1"
+  },
+  "signals": {
+    "aw-accepted-context": ["^Accepted context:"],
+    "aw-foundation-edge": ["^Dependency invocation: writing-foundation$"],
+    "aw-activation": ["^Activation:"],
+    "aw-intended-outcomes": ["^Intended outcome:"],
+    "aw-branches": ["^Branch:"],
+    "aw-steps-reference": ["^Steps versus reference:"],
+    "aw-branch-disclosure": ["^Branch disclosure:"],
+    "aw-co-located-authority": ["^Co-located authority:"],
+    "aw-instruction-form": ["^Instruction form:"],
+    "aw-context-load": ["^Context load:"],
+    "aw-behavioral-pruning": ["^Behavioral pruning:"],
+    "aw-terminology": ["^Terminology:"],
+    "aw-execution-semantics": ["^Execution semantics:"],
+    "aw-environment-source": ["^Environment source:"],
+    "aw-failure-behavior": ["^Failure behavior:"],
+    "aw-completion": ["^Completion:"]
+  },
+  "global_required_signals": [
+    "aw-accepted-context",
+    "aw-foundation-edge",
+    "aw-activation",
+    "aw-intended-outcomes",
+    "aw-branches",
+    "aw-steps-reference",
+    "aw-branch-disclosure",
+    "aw-co-located-authority",
+    "aw-instruction-form",
+    "aw-context-load",
+    "aw-behavioral-pruning",
+    "aw-terminology",
+    "aw-execution-semantics",
+    "aw-environment-source",
+    "aw-failure-behavior",
+    "aw-completion"
+  ],
+  "global_order": [
+    ["aw-foundation-edge"],
+    ["aw-activation"],
+    ["aw-intended-outcomes"],
+    ["aw-branches"],
+    ["aw-steps-reference"],
+    ["aw-completion"]
+  ],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "complete-agent-outcome",
+        "description": "Produces a complete executable artifact with observable activation, branches, execution, disclosure, semantics, failure behavior, and completion."
+      },
+      {
+        "id": "foundation-preservation",
+        "description": "Preserves shared coverage, grounding, uncertainty, structure, terminology, relevance, work-product fidelity, and pruning through the canonical dependency."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "host-neutral-agent-instructions",
+      "name": "complete-host-neutral-agent-writing-outcome",
+      "prompt": "Create an agent-facing procedure for validating `deploy-plan.json`. Activate when the file path is supplied. Preserve the canonical `DAG frontier` term and the JSON literal `{\"maxAttempts\":3}`. Read the current schema command from the environment. On valid input, report the frontier; on invalid input, disclose failure-only remediation reference. Never modify the input. Complete after reporting the observed validation result and branch. Return the procedure and a compact contract record.",
+      "expected_output": "A complete host-neutral Agent Writing outcome that invokes Writing Foundation and exposes the accepted context, activation, outcome, branches, ordered steps, conditional reference, co-located authority, instruction form, context choices, exact semantics, failure path, pruning, and completion.",
+      "files": [],
+      "expectations": [
+        "The same scenario and expected contract can run through either host Adapter.",
+        "The treatment invokes writing-foundation and agent-writing by canonical name.",
+        "Activation, outcome, success and failure branches, ordered steps, and terminal checks are observable.",
+        "Failure-only reference is absent from the success path until its branch applies.",
+        "The canonical term, JSON literal, and read-only semantics are preserved.",
+        "The schema command remains an environment lookup.",
+        "The matched No-Skill control receives the same task without the Agent Writing package."
+      ],
+      "covered_clauses": [
+        "aw-accepted-context",
+        "aw-activation",
+        "aw-intended-outcomes",
+        "aw-branches",
+        "aw-completion",
+        "aw-steps-reference",
+        "aw-branch-disclosure",
+        "aw-co-located-authority",
+        "aw-instruction-form",
+        "aw-context-load",
+        "aw-behavioral-pruning",
+        "aw-terminology",
+        "aw-execution-semantics",
+        "aw-environment-source",
+        "aw-failure-behavior",
+        "aw-foundation-edge"
+      ],
+      "required_signals": []
+    }
+  ]
+}

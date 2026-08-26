@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "scope": "agent-writing-package-closure",
+  "owner": "agent-writing",
+  "cases": [
+    {
+      "id": "missing-writing-foundation",
+      "consumer": "agent-writing",
+      "missing_dependency": "writing-foundation",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"writing-foundation\"",
+        "missingSkill": "writing-foundation"
+      },
+      "covered_clauses": ["aw-missing-dependency"]
+    }
+  ]
+}

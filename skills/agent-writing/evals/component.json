@@ -1,0 +1,74 @@
+{
+  "skill_name": "agent-writing",
+  "version": 1,
+  "evaluation": {
+    "scope": "agent-writing-to-writing-foundation",
+    "layer": "component",
+    "skill": "agent-writing",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment", "component-ablation"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "agent-writing-foundation-component-v1"
+  },
+  "signals": {
+    "aw-foundation-edge-invocation": ["^Dependency invocation: writing-foundation$"],
+    "aw-foundation-edge-coverage": ["^Coverage:"],
+    "aw-foundation-edge-grounding": ["^Grounding:"],
+    "aw-foundation-edge-uncertainty": ["^Uncertainty:"],
+    "aw-foundation-edge-terminology": ["^Terminology:"],
+    "aw-foundation-edge-work-product": ["^Work-product fidelity:"],
+    "aw-foundation-edge-completion": ["^Completion:"]
+  },
+  "global_required_signals": [
+    "aw-foundation-edge-invocation",
+    "aw-foundation-edge-coverage",
+    "aw-foundation-edge-grounding",
+    "aw-foundation-edge-uncertainty",
+    "aw-foundation-edge-terminology",
+    "aw-foundation-edge-work-product",
+    "aw-foundation-edge-completion"
+  ],
+  "global_order": [
+    ["aw-foundation-edge-invocation"],
+    ["aw-foundation-edge-coverage"],
+    ["aw-foundation-edge-completion"]
+  ],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "foundation-contribution",
+        "description": "The complete consumer preserves the shared coverage, grounding, uncertainty, terminology, and work-product behavior that the ablated consumer lacks."
+      },
+      {
+        "id": "agent-contract-stability",
+        "description": "Both arms keep the Agent Writing task and agent-specific behavior fixed while only the Foundation invocation varies."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "complete-consumer-versus-foundation-ablation",
+      "name": "complete-agent-writing-consumer",
+      "prompt": "Create agent instructions for validating `deploy-plan.json`. Account for the required success and failure branches, preserve the canonical term `DAG frontier` and JSON literal `{\"maxAttempts\":3}`, keep the unresolved retry owner visible, and complete only after reporting the observed result. Run the same host-neutral scenario for the complete consumer and a test-only ablation of its Foundation invocation.",
+      "expected_output": "The complete consumer invokes Writing Foundation and preserves shared coverage, grounding, uncertainty, exact terminology, work-product fidelity, and completion behavior beyond the dependency-ablated control.",
+      "files": [],
+      "expectations": [
+        "The treatment records writing-foundation and agent-writing as canonical invocations.",
+        "The treatment accounts for both branches and the unresolved owner.",
+        "The treatment preserves the exact canonical term and JSON literal.",
+        "The ablated control removes only the writing-foundation invocation through the test Adapter boundary.",
+        "A missing production dependency is not used as either arm."
+      ],
+      "covered_clauses": ["aw-foundation-edge"],
+      "ablated_dependency": "writing-foundation",
+      "required_signals": []
+    }
+  ]
+}

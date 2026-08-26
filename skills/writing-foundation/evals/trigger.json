@@ -1,0 +1,59 @@
+{
+  "skill_name": "writing-foundation",
+  "version": 1,
+  "evaluation": {
+    "scope": "writing-foundation-trigger",
+    "layer": "trigger",
+    "skill": "writing-foundation",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 5,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 1,
+    "randomization_seed": "writing-foundation-trigger-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "private-routing",
+        "description": "Makes the private dependency reachable by canonical name without advertising it as a user-facing writing goal."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "foundation-canonical-dependency",
+      "name": "canonical-dependency-invocation",
+      "prompt": "/writing-foundation\n\nApply the shared writing contract requested by the consuming Skill.",
+      "expected_output": "The canonical private dependency is available when it is explicitly invoked by name.",
+      "files": [],
+      "expectations": [
+        "The host records invocation of writing-foundation by its canonical name."
+      ],
+      "covered_clauses": [
+        "wf-canonical-private-reach"
+      ],
+      "should_trigger": true,
+      "expected_output_patterns": []
+    },
+    {
+      "id": "foundation-private-false-activation",
+      "name": "private-user-goal-false-activation",
+      "prompt": "Make this customer update clearer and friendlier for a nontechnical reader.",
+      "expected_output": "The host does not select writing-foundation as a public user-facing writing outcome.",
+      "files": [],
+      "expectations": [
+        "The private dependency does not activate from a user-facing writing goal."
+      ],
+      "covered_clauses": [
+        "wf-private-routing-exclusion"
+      ],
+      "should_trigger": false,
+      "expected_output_patterns": []
+    }
+  ]
+}

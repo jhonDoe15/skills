@@ -1,0 +1,94 @@
+{
+  "skill_name": "writing-foundation",
+  "version": 1,
+  "evaluation": {
+    "scope": "writing-foundation-role",
+    "layer": "role",
+    "skill": "writing-foundation",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "writing-foundation-role-v1"
+  },
+  "signals": {
+    "wf-accepted-context": ["^Accepted context:"],
+    "wf-coverage": ["^Coverage:"],
+    "wf-grounding": ["^Grounding:"],
+    "wf-uncertainty": ["^Uncertainty:"],
+    "wf-structure": ["^Structure:"],
+    "wf-terminology": ["^Terminology:"],
+    "wf-relevance": ["^Relevance:"],
+    "wf-work-product-fidelity": ["^Work-product fidelity:"],
+    "wf-behavioral-pruning": ["^Behavioral pruning:"],
+    "wf-exclusions": ["^Exclusions:"],
+    "wf-failure-behavior": ["^Failure behavior:"],
+    "wf-completion": ["^Completion:"]
+  },
+  "global_required_signals": [
+    "wf-accepted-context",
+    "wf-coverage",
+    "wf-grounding",
+    "wf-uncertainty",
+    "wf-structure",
+    "wf-terminology",
+    "wf-relevance",
+    "wf-work-product-fidelity",
+    "wf-behavioral-pruning",
+    "wf-exclusions",
+    "wf-failure-behavior",
+    "wf-completion"
+  ],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "foundation-contract",
+        "description": "Preserves required coverage, grounding, uncertainty, exact terminology, relevance, and work-product semantics."
+      },
+      {
+        "id": "foundation-pruning",
+        "description": "Uses structure and pruning to remove only material without a required or observable purpose."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "foundation-complete-contract",
+      "name": "audience-independent-writing-contract",
+      "prompt": "Revise the supplied deployment note without choosing an audience-specific voice. Preserve the exact domain term `DAG frontier`, the JSON value `{\"maxAttempts\":3}`, and all three requirements: deploy only unblocked tickets, retain the unresolved concurrency limit, and remove the duplicated background paragraph. Return a concise contract record that makes coverage, grounding, uncertainty, structure, terminology, relevance, work-product fidelity, behavioral pruning, and completion observable.",
+      "expected_output": "A purpose-shaped record that accounts for every requirement, grounds claims, keeps the concurrency limit unresolved, preserves the exact term and JSON value, removes only the duplicate, and exposes a checkable completion result.",
+      "files": [],
+      "expectations": [
+        "Every requested requirement and exclusion has an explicit disposition.",
+        "Factual claims distinguish supplied evidence from inference or unknown information.",
+        "The unresolved concurrency limit remains visible.",
+        "The structure follows the artifact purpose rather than an audience-specific style.",
+        "The exact term `DAG frontier` and JSON value keep their original semantics.",
+        "Only duplicated or behaviorally irrelevant material is removed.",
+        "Completion is withheld if any required disposition, grounding, uncertainty, terminology, or work-product check is missing."
+      ],
+      "covered_clauses": [
+        "wf-accepted-context",
+        "wf-coverage",
+        "wf-grounding",
+        "wf-uncertainty",
+        "wf-structure",
+        "wf-terminology",
+        "wf-relevance",
+        "wf-work-product-fidelity",
+        "wf-behavioral-pruning",
+        "wf-exclusions",
+        "wf-failure-behavior",
+        "wf-completion"
+      ],
+      "required_signals": []
+    }
+  ]
+}

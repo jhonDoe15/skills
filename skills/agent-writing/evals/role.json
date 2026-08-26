@@ -1,0 +1,107 @@
+{
+  "skill_name": "agent-writing",
+  "version": 1,
+  "evaluation": {
+    "scope": "agent-writing-role",
+    "layer": "role",
+    "skill": "agent-writing",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "agent-writing-role-v1"
+  },
+  "signals": {
+    "aw-accepted-context": ["^Accepted context:"],
+    "aw-activation": ["^Activation:"],
+    "aw-intended-outcomes": ["^Intended outcome:"],
+    "aw-branches": ["^Branch:"],
+    "aw-completion": ["^Completion:"],
+    "aw-steps-reference": ["^Steps versus reference:"],
+    "aw-branch-disclosure": ["^Branch disclosure:"],
+    "aw-co-located-authority": ["^Co-located authority:"],
+    "aw-instruction-form": ["^Instruction form:"],
+    "aw-context-load": ["^Context load:"],
+    "aw-behavioral-pruning": ["^Behavioral pruning:"],
+    "aw-terminology": ["^Terminology:"],
+    "aw-execution-semantics": ["^Execution semantics:"],
+    "aw-environment-source": ["^Environment source:"],
+    "aw-failure-behavior": ["^Failure behavior:"]
+  },
+  "global_required_signals": [
+    "aw-accepted-context",
+    "aw-activation",
+    "aw-intended-outcomes",
+    "aw-branches",
+    "aw-steps-reference",
+    "aw-branch-disclosure",
+    "aw-co-located-authority",
+    "aw-instruction-form",
+    "aw-context-load",
+    "aw-behavioral-pruning",
+    "aw-terminology",
+    "aw-execution-semantics",
+    "aw-environment-source",
+    "aw-failure-behavior",
+    "aw-completion"
+  ],
+  "global_order": [
+    ["aw-activation"],
+    ["aw-intended-outcomes"],
+    ["aw-branches"],
+    ["aw-steps-reference"],
+    ["aw-completion"]
+  ],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "agent-executability",
+        "description": "Makes activation, outcomes, branches, execution, failure, and completion observable to the consuming agent."
+      },
+      {
+        "id": "agent-information-design",
+        "description": "Separates steps from reference, discloses by branch, co-locates authority, preserves semantics, and spends context deliberately."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "agent-writing-owned-contract",
+      "name": "isolated-agent-writing-behavior",
+      "prompt": "Create instructions for a deployment-status agent. It activates after deploy-status.json appears, reports the canonical `DAG frontier` state, follows a success or failure branch without changing the file, reads retry limits from the environment, and finishes only after reporting the observed status. Keep branch-only troubleshooting reference off the success path. Return a contract record that makes Agent Writing's owned behavior observable.",
+      "expected_output": "An executable agent-facing contract with an observable trigger and outcome, explicit branches, ordered steps separate from reference, conditional disclosure, co-located authority, exact terminology and read-only semantics, environment lookups, failure behavior, pruning, and terminal checks.",
+      "files": [],
+      "expectations": [
+        "Activation, intended outcome, branch predicates, ordered actions, failure behavior, and completion are checkable.",
+        "Steps are distinct from reference and failure-only reference is disclosed only on failure.",
+        "The canonical term and read-only execution semantics are unchanged.",
+        "The retry limit remains an environment lookup instead of a cached value.",
+        "Every retained instruction maps to an observable behavior."
+      ],
+      "covered_clauses": [
+        "aw-accepted-context",
+        "aw-activation",
+        "aw-intended-outcomes",
+        "aw-branches",
+        "aw-completion",
+        "aw-steps-reference",
+        "aw-branch-disclosure",
+        "aw-co-located-authority",
+        "aw-instruction-form",
+        "aw-context-load",
+        "aw-behavioral-pruning",
+        "aw-terminology",
+        "aw-execution-semantics",
+        "aw-environment-source",
+        "aw-failure-behavior"
+      ],
+      "required_signals": []
+    }
+  ]
+}
