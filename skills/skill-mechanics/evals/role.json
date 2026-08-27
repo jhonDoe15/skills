@@ -1,0 +1,76 @@
+{
+  "skill_name": "skill-mechanics",
+  "version": 1,
+  "evaluation": {
+    "scope": "skill-mechanics-role",
+    "layer": "role",
+    "skill": "skill-mechanics",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "skill-mechanics-role-v1"
+  },
+  "signals": {
+    "sm-name": ["name: deployment-triage"],
+    "sm-description": ["description:"],
+    "sm-reference": ["references/failure-path\\.md"],
+    "sm-dependency": ["incident-investigation"]
+  },
+  "global_required_signals": [
+    "sm-name",
+    "sm-description",
+    "sm-reference",
+    "sm-dependency"
+  ],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "portable-representation",
+        "description": "Semantically assess whether the decided contract is represented as one portable Agent Skill with trigger-first routing metadata, ordered steps, conditional reference loading, named dependencies, and resolvable pointers. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "mechanics-boundary",
+        "description": "Semantically assess whether the result reports structural mechanics without redesigning the behavior or claiming that routing and runtime behavior work. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "represent-decided-contract",
+      "name": "portable-representation-of-decided-contract",
+      "prompt": "Represent the supplied `evals/fixtures/behavior-contract.json` as a portable Agent Skill. Keep the behavior decisions unchanged. Use the canonical name `deployment-triage`, declare `incident-investigation` as a named dependency, and put failure-only detail behind a direct `references/failure-path.md` pointer. Return the represented Skill and a mechanics result; headings and prose may vary.",
+      "expected_output": "A portable Agent Skill representation of the already-decided contract plus a mechanics-only result that covers frontmatter, routing-description shape, ordered steps, conditional reference reachability, named dependencies, and resolvable pointers without making behavioral claims.",
+      "files": ["evals/fixtures/behavior-contract.json"],
+      "required_skill_loads": ["skill-mechanics"],
+      "expectations": [
+        "The deterministic gate establishes only the exact canonical name, description field, dependency name, and reference pointer.",
+        "The blind judge assesses portable representation, ordered execution, conditional reachability, and faithful preservation of the decided contract.",
+        "The blind judge rejects behavior redesign and any claim that valid mechanics prove trigger selection or runtime effectiveness.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness.",
+        "Failed critical mechanical gates are non-overridable."
+      ],
+      "covered_clauses": [
+        "sm-accepted-contract",
+        "sm-portable-representation",
+        "sm-routing-description",
+        "sm-ordered-steps",
+        "sm-conditional-references",
+        "sm-named-dependencies",
+        "sm-resolvable-pointers",
+        "sm-structural-validation",
+        "sm-mechanics-result",
+        "sm-no-behavior-design",
+        "sm-no-behavior-proof"
+      ],
+      "required_signals": []
+    }
+  ]
+}

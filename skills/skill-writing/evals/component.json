@@ -1,0 +1,93 @@
+{
+  "skill_name": "skill-writing",
+  "version": 1,
+  "evaluation": {
+    "scope": "skill-writing-components",
+    "layer": "component",
+    "skill": "skill-writing",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment", "component-ablation"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "skill-writing-components-v1"
+  },
+  "signals": {
+    "sw-component-artifact": ["skills/deployment-triage/SKILL\\.md"],
+    "sw-component-mechanics": ["Mechanics:"],
+    "sw-component-evidence": ["Behavioral evidence:"]
+  },
+  "global_required_signals": [
+    "sw-component-artifact",
+    "sw-component-mechanics",
+    "sw-component-evidence"
+  ],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "dependency-contribution",
+        "description": "Blindly compare whether the complete consumer improves the behavior owned by the declared dependency while preserving the same neutral Skill-authoring task. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "complete-skill-outcome",
+        "description": "Assess whether the complete consumer still produces a justified, portable Skill with mechanics and behavioral evidence reported separately and without semantic regressions. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "agent-writing-edge",
+      "name": "complete-consumer-versus-agent-writing-ablation",
+      "prompt": "Create or revise `skills/deployment-triage/SKILL.md` from the supplied decided contract. Preserve exact terms and execution semantics, keep failure-only reference off the success path, and return separate mechanics and behavioral-evidence conclusions.",
+      "expected_output": "The complete consumer uses Agent Writing to improve executable behavior, information hierarchy, terminology, and branch disclosure over the dependency-ablated control.",
+      "files": ["evals/fixtures/skill-request.json"],
+      "expectations": [
+        "Exact lifecycle evidence records Skill Writing and Agent Writing in the treatment.",
+        "The blind judge assesses executable behavior, terminology, branch disclosure, and completion with output evidence.",
+        "The ablated control removes only the agent-writing invocation through the test Adapter boundary.",
+        "Missing production dependencies are packaging failures, not controls."
+      ],
+      "covered_clauses": ["sw-agent-writing-edge"],
+      "ablated_dependency": "agent-writing",
+      "required_signals": []
+    },
+    {
+      "id": "skill-mechanics-edge",
+      "name": "complete-consumer-versus-skill-mechanics-ablation",
+      "prompt": "Create or revise `skills/deployment-triage/SKILL.md` from the supplied decided contract. Represent it portably with routing metadata, ordered steps, named dependencies, and resolvable conditional references, then return separate mechanics and behavioral-evidence conclusions.",
+      "expected_output": "The complete consumer uses Skill Mechanics to improve portable representation and structural verification over the dependency-ablated control.",
+      "files": ["evals/fixtures/skill-request.json"],
+      "expectations": [
+        "Exact lifecycle evidence records Skill Writing and Skill Mechanics in the treatment.",
+        "The blind judge assesses portable representation, routing shape, ordered steps, named dependencies, and reference reachability with output evidence.",
+        "The ablated control removes only the skill-mechanics invocation through the test Adapter boundary.",
+        "Mechanics validity is not scored as behavioral proof."
+      ],
+      "covered_clauses": ["sw-skill-mechanics-edge"],
+      "ablated_dependency": "skill-mechanics",
+      "required_signals": []
+    },
+    {
+      "id": "skill-evaluation-edge",
+      "name": "complete-consumer-versus-skill-evaluation-ablation",
+      "prompt": "Create or revise `skills/deployment-triage/SKILL.md` from the supplied decided contract. Request evidence proportionate to each claim, keep trigger selection separate from output quality, and return separate mechanics and behavioral-evidence conclusions.",
+      "expected_output": "The complete consumer uses Skill Evaluation to improve claim-proportionate evidence and explicit unverified status over the dependency-ablated control.",
+      "files": ["evals/fixtures/skill-request.json"],
+      "expectations": [
+        "Exact lifecycle evidence records Skill Writing and Skill Evaluation in the treatment.",
+        "The blind judge assesses proportionate evidence, matched controls, trigger/output separation, and honest limitations with output evidence.",
+        "The ablated control removes only the skill-evaluation invocation through the test Adapter boundary.",
+        "Generated model runs and reports are not versioned case artifacts."
+      ],
+      "covered_clauses": ["sw-skill-evaluation-edge"],
+      "ablated_dependency": "skill-evaluation",
+      "required_signals": []
+    }
+  ]
+}
