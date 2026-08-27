@@ -24,6 +24,12 @@ const readyPlanPath = path.join(
   'carve',
   'ready-plan.json',
 );
+const collisionPlanPath = path.join(
+  __dirname,
+  'fixtures',
+  'carve',
+  'ready-plan-with-collisions.json',
+);
 const validatorPath = path.join(
   repositoryRoot,
   'skills',
@@ -454,6 +460,7 @@ test('deterministic outcome grading separates publication from plan quality', ()
   const publication = {
     ticket_ids: ['T1', 'T2'],
     blockers: [{ ticket_id: 'T2', blocked_by: 'T1' }],
+    collisions: [],
     initial_frontier: ['T1'],
     later_workflow_started: false,
   };
@@ -511,6 +518,88 @@ test('deterministic outcome grading separates publication from plan quality', ()
   assert.equal(assessment.publication_authorized, false);
   assert.equal(grade(assessment, []).passed, true);
   assert.equal(grade(assessment, attemptedMutations).passed, false);
+});
+
+test('publication grading requires exact collision records', () => {
+  const definition = readEvaluation('carve', 'outcome.json');
+  const [authorized] = definition.evals;
+  const { gradeCarveResult } = require('../skills/carve/evals/grader');
+  const plan = readJson(collisionPlanPath);
+  const artifactReference = 'fixture://ready-plan-with-collisions.json';
+  const collisionMutations = [
+    { operation: 'create-ticket', target: 'T1', outcome: 'succeeded' },
+    { operation: 'create-ticket', target: 'T2', outcome: 'succeeded' },
+    { operation: 'create-blocker', target: 'T2<-T1', outcome: 'succeeded' },
+    {
+      operation: 'record-collision',
+      target: '["T1","account persistence model"]',
+      outcome: 'succeeded',
+    },
+    {
+      operation: 'record-collision',
+      target: '["T2","account persistence model"]',
+      outcome: 'succeeded',
+    },
+  ];
+  const publication = {
+    ticket_ids: ['T1', 'T2'],
+    blockers: [{ ticket_id: 'T2', blocked_by: 'T1' }],
+    collisions: [
+      { ticket_id: 'T1', collision: 'account persistence model' },
+      { ticket_id: 'T2', collision: 'account persistence model' },
+    ],
+    initial_frontier: ['T1'],
+    later_workflow_started: false,
+  };
+  function grade(mutations, observedPublication = publication) {
+    return gradeCarveResult({
+      definition,
+      caseDefinition: authorized,
+      result: normalizedPlanningResult({
+        artifactReference,
+        attemptedMutations: mutations,
+      }),
+      resolvePlan: (reference) => (
+        reference === artifactReference ? plan : null
+      ),
+      observedPublication,
+    });
+  }
+
+  assert.equal(grade(collisionMutations).passed, true);
+  assert.equal(
+    grade(collisionMutations, {
+      ...publication,
+      collisions: publication.collisions.slice(0, 1),
+    }).passed,
+    false,
+    'missing collision read-back must fail',
+  );
+  assert.equal(
+    grade(collisionMutations.slice(0, -1)).passed,
+    false,
+    'missing collision mutation must fail',
+  );
+  assert.equal(
+    grade([
+      ...collisionMutations,
+      collisionMutations[3],
+    ]).passed,
+    false,
+    'duplicate collision mutation must fail',
+  );
+  assert.equal(
+    grade([
+      ...collisionMutations,
+      {
+        operation: 'record-collision',
+        target: '["T3","account persistence model"]',
+        outcome: 'succeeded',
+      },
+    ]).passed,
+    false,
+    'extra collision mutation must fail',
+  );
 });
 
 test('Ticket Scope preserves each declared consumer shape contract', () => {

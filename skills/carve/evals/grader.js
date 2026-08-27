@@ -75,10 +75,33 @@ function blockerKeysFromObservation(blockers) {
   ));
 }
 
+function collisionKey(ticketId, collision) {
+  return JSON.stringify([ticketId, collision]);
+}
+
+function collisionKeysFromPlan(plan) {
+  return plan.tickets.flatMap((ticket) => (
+    ticket.collisions.map((collision) => collisionKey(ticket.id, collision))
+  ));
+}
+
+function collisionKeysFromObservation(collisions) {
+  if (!Array.isArray(collisions)) return [];
+  return collisions.map((record) => (
+    record && typeof record.ticket_id === 'string'
+      && typeof record.collision === 'string'
+      ? collisionKey(record.ticket_id, record.collision)
+      : ''
+  ));
+}
+
 function mutationKeysFromPlan(plan) {
   return [
     ...plan.tickets.map(({ id }) => `create-ticket\0${id}`),
     ...blockerKeysFromPlan(plan).map((edge) => `create-blocker\0${edge}`),
+    ...collisionKeysFromPlan(plan).map(
+      (collision) => `record-collision\0${collision}`,
+    ),
   ];
 }
 
@@ -95,6 +118,7 @@ function isPublicationObservation(observation) {
       && !Array.isArray(observation)
       && Array.isArray(observation.ticket_ids)
       && Array.isArray(observation.blockers)
+      && Array.isArray(observation.collisions)
       && Array.isArray(observation.initial_frontier)
       && typeof observation.later_workflow_started === 'boolean'
   );
@@ -113,6 +137,10 @@ function gradePublication(plan, result, observation) {
   const expectedTickets = plan.tickets.map(({ id }) => id);
   const expectedBlockers = blockerKeysFromPlan(plan);
   const observedBlockers = blockerKeysFromObservation(observation.blockers);
+  const expectedCollisions = collisionKeysFromPlan(plan);
+  const observedCollisions = collisionKeysFromObservation(
+    observation.collisions,
+  );
   checks.push(check(
     'every planned ticket was read back',
     haveExactUniqueMembers(observation.ticket_ids, expectedTickets),
@@ -122,6 +150,11 @@ function gradePublication(plan, result, observation) {
     'every direct blocker was read back',
     haveExactUniqueMembers(observedBlockers, expectedBlockers),
     `expected=${expectedBlockers.join(',')} observed=${observedBlockers.join(',')}`,
+  ));
+  checks.push(check(
+    'every planned collision was read back',
+    haveExactUniqueMembers(observedCollisions, expectedCollisions),
+    `expected=${expectedCollisions.join(',')} observed=${observedCollisions.join(',')}`,
   ));
   checks.push(check(
     'published frontier matches validated plan',
