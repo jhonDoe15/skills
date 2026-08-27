@@ -45,7 +45,15 @@
   "global_order": [],
   "forbidden_patterns": [
     "Historical background: the legacy deployer used a weekly batch window that does not control this deployment\\.",
-    "concurrency limit\\s+(?:is|=)\\s*\\d+",
+    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*concurrency limit\\s+(?:is|=)\\s*\\d+",
+    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\"maxAttempts\"\\s*:\\s*(?!3\\s*[},])\\d+",
+    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b(?:cap|ceiling|maximum|max)\\s*(?:of|is|=|:)?\\s*\\d+\\b",
+    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\bno more than\\s+\\d+\\b",
+    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b(?:parallelism|concurrency)\\b.*\\b\\d+\\b",
+    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b(?:throttle|limit|restrict)\\b.*\\b\\d+\\b.*\\b(?:concurrent|parallel|at once)\\b",
+    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b\\d+\\s+(?:concurrent|in parallel|at once)\\b",
+    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\bbatch size\\s*(?:of|is|=|:)?\\s*\\d+\\b",
+    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b\\d+\\s+(?:deployments?\\s+)?in flight\\b",
     "\\b(?:customer-friendly|executive voice|Skill routing|fresh-context handoff)\\b"
   ],
   "judge": {

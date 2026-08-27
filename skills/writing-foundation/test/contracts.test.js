@@ -247,6 +247,47 @@ test('writing-foundation role evaluation grades every owned clause with line evi
   );
 });
 
+test('writing-foundation rejects conflicting literals and invented concurrency', () => {
+  const definition = readJson('evals/role.json');
+  const caseDefinition = definition.evals[0];
+  const validOutput = fs.readFileSync(
+    path.join(skillRoot, 'evals', 'fixtures', 'role-output.md'),
+    'utf8',
+  );
+  const grade = (output) => gradeDeterministicOutput({
+    definition,
+    caseDefinition,
+    output,
+  });
+
+  assert.equal(grade(validOutput).passed, true);
+  const adversarialOutputs = [
+    `${validOutput}\nFallback policy: {"maxAttempts":4}.`,
+    `${validOutput}\nFallback policy: {"maxAttempts": 7}.`,
+    `${validOutput}\nUntil the owner responds, use a cap of 8.`,
+    `${validOutput}\nRun no more than 12 at once.`,
+    `${validOutput}\nParallelism ceiling: 6.`,
+    `${validOutput}\nThrottle deployments to 9 concurrent tickets.`,
+    `${validOutput}\nUse a batch size of 5.`,
+    `${validOutput}\nAllow 7 deployments in flight.`,
+  ];
+  assert.deepEqual(
+    adversarialOutputs.map((output) => grade(output).passed),
+    adversarialOutputs.map(() => false),
+  );
+
+  const validNumberUses = [
+    `${validOutput}\nThe source contains 3 explicit requirements.`,
+    `${validOutput}\nDo not invent a concurrency cap of 8.`,
+    `${validOutput}\nNever set a batch size of 5 without an owner decision.`,
+  ];
+  assert.deepEqual(
+    validNumberUses.map((output) => grade(output).passed),
+    validNumberUses.map(() => true),
+    'unrelated or explicitly rejected numbers must remain valid',
+  );
+});
+
 test('writing-foundation trigger cases cover canonical reach and private false activation', () => {
   const definition = readJson('evals/trigger.json');
 

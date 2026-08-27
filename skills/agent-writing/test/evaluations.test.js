@@ -688,3 +688,50 @@ test('deterministic grading reports clause evidence and blocks blind judgment', 
     /deterministic gate failed before judging/,
   );
 });
+
+test('Agent Writing outcome rejects conflicting and polarity-reversed guidance', () => {
+  const definition = loadDefinition('agent-writing', 'outcome.json');
+  const caseDefinition = definition.evals[0];
+  const validOutput = fs.readFileSync(
+    path.join(skillRoot, 'evals', 'fixtures', 'outcome-output.md'),
+    'utf8',
+  );
+  const grade = (output) => gradeDeterministicOutput({
+    definition,
+    caseDefinition,
+    output,
+  });
+
+  assert.equal(grade(validOutput).passed, true);
+  const adversarialOutputs = [
+    `${validOutput}\nEmergency retries use {"maxAttempts":4}.`,
+    `${validOutput}\nEmergency retries use {"maxAttempts": 7}.`,
+    validOutput.replace(
+      'If validation is valid, report the `DAG frontier` with `{"maxAttempts":3}`.',
+      'If validation is valid, report the `DAG frontier` with `{"maxAttempts":3}` and consult the recovery guide.',
+    ),
+    `${validOutput}\nOn a passing validation, preload the rollback runbook.`,
+    `${validOutput}\nIf validation succeeds, follow the failure-handling steps.`,
+    `${validOutput}\nFor a successful result, open the incident repair notes.`,
+    `${validOutput}\nObtain the schema command from the environment and persist it for later runs.`,
+    `${validOutput}\nCache the environment-provided schema command in local state.`,
+    `${validOutput}\nWrite the schema command from the environment to a reusable settings file.`,
+    `${validOutput}\nRetain a local copy of the environment schema command.`,
+  ];
+  assert.deepEqual(
+    adversarialOutputs.map((output) => grade(output).passed),
+    adversarialOutputs.map(() => false),
+  );
+
+  const validPolarityOutputs = [
+    `${validOutput}\nOn invalid results, recovery material belongs in the failure branch.`,
+    `${validOutput}\nIf validation is valid, do not consult the recovery guide.`,
+    `${validOutput}\nDo not cache or persist the environment-provided schema command.`,
+    `${validOutput}\nNever write the environment schema command to disk.`,
+  ];
+  assert.deepEqual(
+    validPolarityOutputs.map((output) => grade(output).passed),
+    validPolarityOutputs.map(() => true),
+    'negative or failure-scoped guidance must remain valid',
+  );
+});

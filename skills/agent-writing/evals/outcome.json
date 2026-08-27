@@ -62,8 +62,12 @@
     ["aw-completion"]
   ],
   "forbidden_patterns": [
-    "\\b(?:valid|success|succeeds)\\b.*\\b(?:remediation|troubleshooting)\\b",
+    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b(?:if|when|on|for)\\b.*\\b(?:valid|success|successful|succeeds|succeeded|passing)\\b.*\\b(?:recovery|recover|rollback|repair|remediation|troubleshoot(?:ing)?|diagnostic|failure[- ](?:handling|steps|guide|playbook|procedure|instructions)|incident (?:repair|response))\\b",
+    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b(?:recovery|recover|rollback|repair|remediation|troubleshoot(?:ing)?|diagnostic|failure[- ](?:handling|steps|guide|playbook|procedure|instructions)|incident (?:repair|response))\\b.*\\b(?:if|when|on|for)\\b.*\\b(?:valid|success|successful|succeeds|succeeded|passing)\\b",
     "^(?!.*\\b(?:never|not|without|read-only)\\b).*\\b(?:modify|write|edit|replace|delete)\\b.*deploy-plan\\.json",
+    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b(?:cache|persist|store|save|write|copy)\\b.*\\b(?:environment|schema command)\\b",
+    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b(?:environment|schema command)\\b.*\\b(?:cache|persist|store|save|write|copy)\\b",
+    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\"maxAttempts\"\\s*:\\s*(?!3\\s*[},])\\d+",
     "schema command\\s*(?:is|=|:)\\s*`?[^`\\s]+"
   ],
   "judge": {
