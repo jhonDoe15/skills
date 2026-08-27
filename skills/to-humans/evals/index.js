@@ -145,7 +145,7 @@ function evidenceUnits(output) {
 
 function actionEvidenceUnits(output) {
   const clauses = contentUnits(output).flatMap((unit) => (
-    unit.split(/,\s+(?=(?:and|as)\b)/i)
+    unit.split(/,\s+(?=(?:(?:and|but)\s+)?then\b|(?:and|as)\b)/i)
   )).map((unit) => unit.trim()).filter(Boolean);
   return describeEvidenceUnits(clauses);
 }
@@ -211,6 +211,35 @@ function hasOnlyCoreConnectors(value, qualifierGroups, field) {
   }
   const connectors = new Set(['a', 'an', 'that', 'the', 'with']);
   return normalizedTokens(remainder).every((token) => connectors.has(token));
+}
+
+function qualifierIsBound(value, patterns, ownerSpan, actionSpan, sourceSpan, field) {
+  if (!Array.isArray(patterns) || patterns.length === 0) {
+    throw new TypeError(`${field} must be a non-empty pattern array`);
+  }
+  const ownerEnd = ownerSpan.index + ownerSpan[0].length;
+  const actionEnd = actionSpan.index + actionSpan[0].length;
+  const sourceEnd = sourceSpan.index + sourceSpan[0].length;
+  for (const [index, pattern] of patterns.entries()) {
+    const expression = compile(pattern, `${field}[${index}]`);
+    const matches = value.matchAll(new RegExp(expression.source, `${expression.flags}g`));
+    for (const match of matches) {
+      const qualifierEnd = match.index + match[0].length;
+      const overlapsSource = match.index < sourceEnd && qualifierEnd > sourceSpan.index;
+      const directlyPrefixed = qualifierEnd <= ownerSpan.index
+        && normalizedTokens(value.slice(qualifierEnd, ownerSpan.index))
+          .every((token) => ['a', 'an', 'the'].includes(token));
+      const insideActorAction = match.index >= ownerEnd && qualifierEnd <= actionSpan.index;
+      const insideActionObject = match.index >= actionEnd && qualifierEnd <= sourceSpan.index;
+      const directlyTrailing = match.index >= sourceEnd
+        && normalizedTokens(value.slice(sourceEnd, match.index)).length === 0;
+      if (overlapsSource || directlyPrefixed || insideActorAction
+          || insideActionObject || directlyTrailing) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function matchesOrderedGroups(value, groups, field) {
@@ -346,13 +375,6 @@ function gradeAccountableActions(output, expectations = []) {
           `accountable_actions[${index}].qualifier_groups must be non-empty`,
         );
       }
-      const qualifiers = qualifierGroups.every((patterns, groupIndex) => (
-        matchesAny(
-          unit.text,
-          patterns,
-          `accountable_actions[${index}].qualifier_groups[${groupIndex}]`,
-        )
-      ));
       const ownerSpan = matchingSpan(
         unit.text,
         expectation.owner_patterns,
@@ -369,6 +391,17 @@ function gradeAccountableActions(output, expectations = []) {
         expectation.source_patterns,
         `accountable_actions[${index}].source_patterns`,
       );
+      const qualifiers = ownerSpan && actionSpan && sourceSpan
+        && qualifierGroups.every((patterns, groupIndex) => (
+          qualifierIsBound(
+            unit.text,
+            patterns,
+            ownerSpan,
+            actionSpan,
+            sourceSpan,
+            `accountable_actions[${index}].qualifier_groups[${groupIndex}]`,
+          )
+        ));
       const ownerCount = expectations.filter((other, otherIndex) => (
         matchesAny(
           unit.text,

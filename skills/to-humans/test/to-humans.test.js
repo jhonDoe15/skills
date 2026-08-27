@@ -597,6 +597,18 @@ test('deterministic writing grader requires distinct accountable actions', () =>
       'Support prepares the customer notice before rollout.',
       'Before approval the project manager updates the agenda, and security verifies the exception expires Friday.',
     ],
+    [
+      'Start a staged rollout today.',
+      'At 14:00 the project manager updates the agenda, then at 15:00 the release lead stages the internal cohort.',
+      'Support prepares the customer notice before rollout.',
+      'Security verifies before approval that the exception expires Friday.',
+    ],
+    [
+      'Start a staged rollout today.',
+      'At 14:00, before the release lead stages the internal cohort, the project manager updates the agenda.',
+      'Support prepares the customer notice before rollout.',
+      'Security verifies before approval that the exception expires Friday.',
+    ],
   ];
   for (const [index, probe] of probes.entries()) {
     const result = grade(probe);
