@@ -555,6 +555,47 @@ test('completed handoff lifecycle includes every focused red-green pair', () => 
   }
 });
 
+test('completed handoff requires a successful mutation between red and green', () => {
+  const { validateImplementHandoff } = loadImplementEvaluation();
+  const greenBeforeMutation = successfulHandoff();
+  const [guidance, red, firstMutation, secondMutation, green, ...afterGreen]
+    = greenBeforeMutation.lifecycle;
+  greenBeforeMutation.lifecycle = [
+    guidance,
+    red,
+    green,
+    firstMutation,
+    secondMutation,
+    ...afterGreen,
+  ].map((event, index) => ({ ...event, sequence: index + 1 }));
+  assert.throws(
+    () => validateImplementHandoff(greenBeforeMutation),
+    /successful mutation between red and green/,
+  );
+
+  const mutationBeforeRed = successfulHandoff();
+  const [
+    guidanceBeforeRed,
+    redAfterMutations,
+    firstMutationBeforeRed,
+    secondMutationBeforeRed,
+    greenAfterRed,
+    ...afterGreenAfterMutations
+  ] = mutationBeforeRed.lifecycle;
+  mutationBeforeRed.lifecycle = [
+    guidanceBeforeRed,
+    firstMutationBeforeRed,
+    secondMutationBeforeRed,
+    redAfterMutations,
+    greenAfterRed,
+    ...afterGreenAfterMutations,
+  ].map((event, index) => ({ ...event, sequence: index + 1 }));
+  assert.throws(
+    () => validateImplementHandoff(mutationBeforeRed),
+    /successful mutation between red and green/,
+  );
+});
+
 test('completed handoff lifecycle includes every validation result', () => {
   const { validateImplementHandoff } = loadImplementEvaluation();
   const handoff = successfulHandoff();
@@ -564,6 +605,22 @@ test('completed handoff lifecycle includes every validation result', () => {
     () => validateImplementHandoff(handoff),
     /lifecycle validation evidence must match handoff.validation/,
   );
+});
+
+test('completed handoff requires canonical passing validation outcomes', () => {
+  const { validateImplementHandoff } = loadImplementEvaluation();
+  for (const outcome of ['failed', 'unknown']) {
+    const handoff = successfulHandoff();
+    handoff.validation[0].outcome = outcome;
+    handoff.lifecycle.find(({ kind }) => kind === 'validation').reference
+      = JSON.stringify(['node --test', outcome]);
+
+    assert.throws(
+      () => validateImplementHandoff(handoff),
+      /completed handoff validation outcome must be passed/,
+      outcome,
+    );
+  }
 });
 
 test('completed handoff lifecycle pins the exact implementation range', () => {
@@ -600,18 +657,23 @@ test('completed handoff lifecycle rejects test and validation contradictions', (
     );
   }
 
-  for (const [field, value] of [
-    ['command', 'node --test test/other-validation.test.js'],
-    ['outcome', 'skipped'],
-  ]) {
-    const handoff = successfulHandoff();
-    handoff.validation[0][field] = value;
-    assert.throws(
-      () => validateImplementHandoff(handoff),
-      /lifecycle validation evidence must match handoff.validation/,
-      field,
-    );
-  }
+  const commandContradiction = successfulHandoff();
+  commandContradiction.validation[0].command
+    = 'node --test test/other-validation.test.js';
+  assert.throws(
+    () => validateImplementHandoff(commandContradiction),
+    /lifecycle validation evidence must match handoff.validation/,
+    'command',
+  );
+
+  const outcomeContradiction = successfulHandoff();
+  outcomeContradiction.lifecycle.find(({ kind }) => kind === 'validation').reference
+    = JSON.stringify(['node --test', 'failed']);
+  assert.throws(
+    () => validateImplementHandoff(outcomeContradiction),
+    /lifecycle validation evidence must match handoff.validation/,
+    'outcome',
+  );
 });
 
 test('completed handoff lifecycle covers every changed file mutation', () => {

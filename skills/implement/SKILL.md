@@ -84,7 +84,8 @@ For each behavior:
 Keep test doubles at explicit effectful seams. Production and tests must use the
 same domain contracts and core execution path. A failed or unproven red-green
 cycle is a `test` failure, not a completed patch. Completion requires each focused
-behavior to record red and then green entries for the same command, in that order.
+behavior to record red, at least one successful mutation, and then green for the
+same command, in that order.
 
 ## Keep one scoped patch
 
@@ -131,7 +132,7 @@ artifact storage outside the committed patch. Use schema
 - `changed_behavior` and `changed_files`;
 - `tests`: paired red then green evidence for the same named behavior and exact
   focused command, with outcomes and observations;
-- `validation`: exact commands, outcomes, and observations;
+- `validation`: exact commands, canonical `passed` outcomes, and observations;
 - `unresolved_risks`;
 - `correction`: `ready` plus the next correction/review action for a completed
   patch, or `blocked` plus the first recovery action for a failed attempt; and
@@ -144,7 +145,8 @@ identities: test events encode `[behavior, command]`, validation events encode
 `[command, outcome]`, mutations use `operation:target`, and the final range event
 uses `base..head`. The lifecycle must match every test and validation entry, cover
 every changed file with a successful mutation target, and pin the exact
-implementation range.
+implementation range. Any failed or unknown required validation result produces a
+`validation` failure handoff rather than a completed handoff.
 
 For a failed handoff, lifecycle evidence must include the declared failed phase
 and no other failed phase kind. The failure stage is `before-mutation` for

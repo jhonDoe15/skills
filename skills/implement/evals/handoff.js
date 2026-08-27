@@ -6,6 +6,7 @@ const FAILURE_STAGES = new Map([
   ['validation', 'validation'],
   ['implementation', 'implementation'],
 ]);
+const SUCCESSFUL_VALIDATION_OUTCOME = 'passed';
 const DISPOSITIONS = new Set([
   'applicable-now',
   'applicable-later',
@@ -301,7 +302,32 @@ function validateCompletedLifecycle({
     testEntries,
     'lifecycle test evidence must match handoff.tests',
   );
+  const lifecycleTestIndexes = lifecycle.flatMap((event, index) => (
+    event.kind === 'test' ? [index] : []
+  ));
+  for (let index = 0; index < lifecycleTestIndexes.length; index += 2) {
+    const redIndex = lifecycleTestIndexes[index];
+    const greenIndex = lifecycleTestIndexes[index + 1];
+    const hasSuccessfulMutation = lifecycle
+      .slice(redIndex + 1, greenIndex)
+      .some((event) => (
+        event.kind === 'mutation' && event.status === 'succeeded'
+      ));
+    if (!hasSuccessfulMutation) {
+      throw new ImplementEvaluationError(
+        'completed handoff requires a successful mutation between red and green',
+      );
+    }
+  }
 
+  const hasNonPassingValidation = validation.some(
+    ({ outcome }) => outcome !== SUCCESSFUL_VALIDATION_OUTCOME,
+  );
+  if (hasNonPassingValidation) {
+    throw new ImplementEvaluationError(
+      'completed handoff validation outcome must be passed',
+    );
+  }
   const validationEntries = validation.map(({ command, outcome }) => ({
     status: 'completed',
     reference: JSON.stringify([command, outcome]),

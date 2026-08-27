@@ -54,7 +54,7 @@
       "expectations": [
         "The treatment verifies the isolated base and resolves engineering-guidance before any attempted mutation.",
         "The patch records ordered lifecycle evidence in which completed guidance precedes the first mutation.",
-        "The patch records red then green evidence for the same focused behavior and command, then reports proportionate validation evidence.",
+        "The patch records red, a successful mutation, then green for the same focused behavior and command, and reports only canonical passing validation evidence on completion.",
         "The handoff identifies the originating requirements, immutable implementation range, guidance coverage, changed behavior and files, tests, validation, unresolved risks, and correction-ready state.",
         "The retained execution observes tool use, attempted mutations, artifacts, failure state, duration, cost, and model identity.",
         "No full Code Review or ticket and PR topology mutation occurs."
