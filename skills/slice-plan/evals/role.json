@@ -1,0 +1,69 @@
+{
+  "skill_name": "slice-plan",
+  "version": 1,
+  "evaluation": {
+    "scope": "slice-plan-role",
+    "layer": "role",
+    "skill": "slice-plan",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "slice-plan-role-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "complete-decomposition",
+        "description": "Semantically assess whether every settled requirement is covered or deliberately excluded and the resulting tickets are independently verifiable vertical slices or concrete prerequisites. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "executable-dag",
+        "description": "Semantically assess whether stable identity, replacement lineage, direct concrete-output blockers, collision separation, normal migration metadata, and the initial frontier form an executable plan. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "ordinary-normal-migration",
+      "name": "settled-account-preferences-decomposition",
+      "prompt": "Create the complete internal Slice Plan for a settled normal migration: persist an optional IANA time zone for each account, let the account API save and return it, preserve notification scheduling, and require the schema migration to land before the API consumes its column. Every ticket must fit one fresh implementation context. Return the generated plan reference and summary without publishing.",
+      "expected_output": "A validated ready plan with complete coverage, vertical or genuine prerequisite tickets, normal migration metadata, direct minimal blockers, stable identities and lineage, separated collisions, and the exact initial frontier.",
+      "files": [],
+      "required_skill_loads": [
+        "slice-plan",
+        "ticket-scope",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "Every source requirement appears exactly once in the coverage ledger as covered or deliberately excluded.",
+        "Each ticket is an independently verifiable vertical slice or a concrete prerequisite rather than a convenience foundation or skeletal layer.",
+        "Each blocker states the concrete output consumed, direct edges are minimal, and the initial frontier is derivable from them.",
+        "The plan records normal migration separately from ticket shape and performs no tracker write.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks natural seams and independence."
+      ],
+      "covered_clauses": [
+        "sp-set-level-decomposition",
+        "sp-coverage-ledger",
+        "sp-ticket-shape",
+        "sp-stable-lineage",
+        "sp-direct-dag",
+        "sp-collisions",
+        "sp-frontier",
+        "sp-normal-migration",
+        "sp-no-publication"
+      ]
+    }
+  ]
+}

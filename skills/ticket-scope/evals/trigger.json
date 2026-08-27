@@ -1,0 +1,49 @@
+{
+  "skill_name": "ticket-scope",
+  "version": 1,
+  "evaluation": {
+    "scope": "ticket-scope-trigger",
+    "layer": "trigger",
+    "skill": "ticket-scope",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 5,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 1,
+    "randomization_seed": "ticket-scope-trigger-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "routing",
+        "description": "Uses Ticket Scope through its declared consumers and keeps the private dependency inactive for ambient user planning requests."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "declared-consumer-load",
+      "name": "slice-plan-consumer-load",
+      "prompt": "Slice Plan is evaluating one candidate and loads ticket-scope by canonical name for its bounded judgment.",
+      "expected_output": "The host records the declared Ticket Scope dependency load.",
+      "files": [],
+      "expectations": ["Ticket Scope loads by canonical name for its declared consumer."],
+      "covered_clauses": ["ts-declared-consumer-routing"],
+      "should_trigger": true
+    },
+    {
+      "id": "private-ambient-false-activation",
+      "name": "ambient-ticket-sizing-request",
+      "prompt": "Can you tell me whether this work item seems too broad?",
+      "expected_output": "Ticket Scope stays inactive because it is a private dependency and no declared consumer invoked it.",
+      "files": [],
+      "expectations": ["The host records no Ticket Scope selection or load."],
+      "covered_clauses": ["ts-private-false-activation"],
+      "should_trigger": false
+    }
+  ]
+}

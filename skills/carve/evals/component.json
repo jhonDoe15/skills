@@ -1,0 +1,52 @@
+{
+  "skill_name": "carve",
+  "version": 1,
+  "evaluation": {
+    "scope": "carve-to-slice-plan",
+    "layer": "component",
+    "skill": "carve",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment", "component-ablation"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "carve-slice-plan-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "plan-completeness",
+        "description": "Blindly compare whether the complete consumer returns a validated plan with exhaustive requirement coverage, independently verifiable tickets, direct minimal blockers, and the correct frontier. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "dependency-ownership",
+        "description": "Assess whether Slice Plan owns decomposition and graph construction while Carve retains public validation and publication authority. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "complete-carve-versus-slice-plan-ablation",
+      "name": "ordinary-planning-component",
+      "prompt": "Create a ready plan from settled account time-zone requirements using a normal migration. Include exhaustive coverage, independently verifiable tickets, direct blockers, collisions, and the initial frontier. Publication is not authorized.",
+      "expected_output": "The complete Carve consumer invokes Slice Plan and produces a materially more complete, valid plan than the dependency-ablated control without copying fallback decomposition behavior.",
+      "files": [],
+      "expectations": [
+        "Both arms receive the same neutral planning task; only the Slice Plan dependency load differs.",
+        "The complete consumer validates and presents the plan while Slice Plan owns set decomposition.",
+        "The ablated arm does not copy or emulate Slice Plan, and missing production dependency failure is not used as the control.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks complete plan quality."
+      ],
+      "covered_clauses": ["cv-slice-plan-edge"],
+      "ablated_dependency": "slice-plan"
+    }
+  ]
+}

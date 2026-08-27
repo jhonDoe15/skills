@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "scope": "carve-package-closure",
+  "owner": "carve",
+  "cases": [
+    {
+      "id": "missing-slice-plan",
+      "consumer": "carve",
+      "missing_dependency": "slice-plan",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"slice-plan\"",
+        "missingSkill": "slice-plan"
+      },
+      "covered_clauses": ["cv-missing-slice-plan"]
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "skill_name": "ticket-scope",
+  "version": 1,
+  "evaluation": {
+    "scope": "ticket-scope-role",
+    "layer": "role",
+    "skill": "ticket-scope",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "ticket-scope-role-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "bounded-judgment",
+        "description": "Semantically assess whether the response returns one fit, split, combine, or flag judgment for only the supplied candidate, with concrete boundary and verification. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "shape-and-relations",
+        "description": "Semantically assess whether shape is vertical or a genuine prerequisite, migration strategy stays separate, and blockers require direct consumption while collisions remain non-blocking. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "reject-convenience-foundation",
+      "name": "bounded-convenience-foundation-judgment",
+      "prompt": "Assess one candidate: \"Create shared service interfaces for a future account-preferences migration.\" The candidate has no independently observable behavior, no consumer in scope, and no validation beyond typechecking. The settled source requires storing and returning account time zones through the account API using a normal migration. Return the bounded Ticket Scope judgment only; do not redesign the ticket set.",
+      "expected_output": "One bounded judgment that rejects or reshapes the convenience foundation without taking ownership of set-level planning, distinguishes ticket shape from normal migration strategy, and gives a concrete next step.",
+      "files": [],
+      "required_skill_loads": ["ticket-scope"],
+      "expectations": [
+        "The response judges exactly one candidate and chooses fit, split, combine, or flag.",
+        "The response does not produce a complete ticket set, coverage ledger, DAG frontier, or tracker writes.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks whether the seam and recommendation are contextually sound."
+      ],
+      "covered_clauses": [
+        "ts-bounded-judgment",
+        "ts-shape",
+        "ts-migration-separation",
+        "ts-convenience-foundation",
+        "ts-set-level-exclusion"
+      ]
+    }
+  ]
+}
