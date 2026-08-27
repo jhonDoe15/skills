@@ -56,6 +56,7 @@
       "prompt": "Write a status reply for an experienced release lead. Rollback is verified, but peak demand remains untested. Recommend whether to start a staged rollout today. Preserve these separate requested actions: at 14:00 the release lead stages the internal cohort; before rollout the support owner prepares the customer notice; before approval the security owner verifies that the exception expires Friday.",
       "expected_output": "The answer appears first, all three source-grounded owner/action/qualifier propositions remain correct and distinct, the basis follows, and the prose is direct and easy to scan.",
       "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
       "expectations": [
         "Answer first: the opening states the rollout recommendation before supporting detail.",
         "Accountable owner evidence: the release lead stages the internal cohort at 14:00.",
@@ -84,6 +85,7 @@
       "prompt": "Recommend one of two deployment options to an engineering manager. A limited release has a verified rollback. It starts with a small first cohort, which contains exposure; a full deployment reaches everyone at once. Peak traffic remains untested. The noon load test passes when p95 latency stays under 200 ms; a passing result supports moving to full deployment, while a miss means keeping the limited release. Include the basis, material uncertainty, and the evidence that would change the recommendation.",
       "expected_output": "The response starts with one recommendation and gives distinct, source-grounded evidence for its basis, material uncertainty, and change condition.",
       "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
       "expectations": [
         "Answer first: the recommendation appears before supporting detail.",
         "The recommendation explicitly chooses a deployment option.",
@@ -102,6 +104,7 @@
       "prompt": "Record these supplied incident facts for a post-incident timeline: at 09:10 the release lead paused deployment; at 09:14 the security owner confirmed the signing key was unchanged; at 09:18 the support owner opened incident INC-42. Do not recommend remediation or add an opinion.",
       "expected_output": "The neutral record preserves every timestamped fact and accountable attribution without manufacturing a recommendation.",
       "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
       "expectations": [
         "Neutral record behavior: the output remains factual and does not manufacture a recommendation, remediation, or opinion.",
         "Source-grounded meaning preserves each timestamp, accountable owner, action, object, and INC-42.",
@@ -115,6 +118,7 @@
       "prompt": "Revise my first-person note to remove filler while retaining its candid voice and uneven sentence rhythm. Source note: \"I want us to move fast. I also don't trust the noon numbers yet, and honestly, that bothers me.\"",
       "expected_output": "The revision is direct but still sounds like a candid first-person note rather than a standardized corporate template.",
       "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
       "expectations": [
         "Contextual voice remains candid and first-person where that carries the author's meaning.",
         "Sentence rhythm is not mechanically regularized.",
@@ -131,6 +135,7 @@
       "prompt": "Explain the supplied artifacts to a person. Preserve each category between its marker lines exactly in your response.\n\nBEGIN PROTECTED CODE\nfunction retryCount(payload) {\n  return payload.retry_count;\n}\nEND PROTECTED CODE\n\nBEGIN PROTECTED SCHEMA\n{\"type\":\"integer\",\"minimum\":1}\nEND PROTECTED SCHEMA\n\nBEGIN PROTECTED DATA\n{\"retry-count\": 3, \"note\": \"keep—exact\"}\nEND PROTECTED DATA\n\nBEGIN PROTECTED QUOTE\n\"Quoted source — preserve this punctuation.\"\nEND PROTECTED QUOTE",
       "expected_output": "The explanation is human-facing prose while protected code, schema, data, and quoted source material remain byte-for-byte unchanged.",
       "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
       "expectations": [
         "Answer first: the explanation leads with what the reader should know.",
         "Every protected segment remains byte-for-byte unchanged.",

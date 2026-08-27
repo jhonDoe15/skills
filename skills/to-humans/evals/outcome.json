@@ -48,6 +48,7 @@
       "prompt": "Recommend a deployment approach to the release owner. A staged rollout has verified rollback. It starts with a limited first cohort, which contains exposure. Peak traffic remains untested. The noon load test passes when p95 latency stays under 200 ms; a passing result supports moving to full deployment, while a miss means keeping the staged rollout. Include the basis, the untested condition that matters, and what result would change the recommendation.",
       "expected_output": "The treatment provides a complete source-grounded human-facing decision, while the matched No-Skill control receives the same scenario without writing Skills.",
       "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
       "expectations": [
         "Answer first: the recommendation appears before supporting detail.",
         "The recommendation explicitly chooses a deployment approach.",

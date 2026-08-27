@@ -14,14 +14,15 @@ const DEFINITION_FILES = [
   'outcome.json',
   'trigger.json',
 ];
+const REPOSITORY_ROOT = path.resolve(__dirname, '..', '..', '..');
 
-function loadDefinitions() {
+function loadDefinitions(repositoryRoot = REPOSITORY_ROOT) {
   return DEFINITION_FILES.map((fileName) => {
     const evaluationDefinition = JSON.parse(fs.readFileSync(
       path.join(__dirname, fileName),
       'utf8',
     ));
-    validateEvaluationDefinition(evaluationDefinition);
+    validateEvaluationDefinition(evaluationDefinition, repositoryRoot);
     evaluationDefinition.evals.forEach(validateMechanicalCase);
     return evaluationDefinition;
   });

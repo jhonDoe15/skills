@@ -14,6 +14,7 @@ const {
   loadCanonicalSuite,
 } = require('../../../suite');
 const {
+  createBlindComparison,
   createCampaignManifest,
   gradeTriggerResult,
   runComponentEvaluation,
@@ -151,6 +152,7 @@ function definitionFor(definitions, layer) {
 
 function manifestFor(definition, host = 'claude-code') {
   return createCampaignManifest({
+    repositoryRoot,
     definition,
     packageRevision: 'db26f9d7410b982995a8f7b5a50ef045238a4fd4',
     cells: [{ host, model: 'test-model' }],
@@ -302,7 +304,10 @@ test('owner-local definitions cover every To Humans contract layer', () => {
     ['component', 'outcome', 'role', 'trigger'],
   );
   definitions.forEach((definition) => {
-    assert.strictEqual(validateEvaluationDefinition(definition), definition);
+    assert.strictEqual(
+      validateEvaluationDefinition(definition, repositoryRoot),
+      definition,
+    );
     assert.deepEqual(definition.evaluation.hosts, ['claude-code', 'cursor']);
   });
 
@@ -347,6 +352,16 @@ test('owner-local definitions cover every To Humans contract layer', () => {
       .required_skill_loads,
     ['writing-foundation', 'agent-writing', 'take-it-offline'],
   );
+
+  for (const layer of ['role', 'outcome']) {
+    const evaluationDefinition = definitionFor(definitions, layer);
+    evaluationDefinition.evals.forEach((caseDefinition) => {
+      assert.deepEqual(caseDefinition.required_skill_loads, [
+        'to-humans',
+        'writing-foundation',
+      ]);
+    });
+  }
 
   const exactTriggerCoverage = {
     'non-prose-false-activation': ['non-prose-fidelity'],
@@ -810,4 +825,124 @@ test('complete outcome retains a matched No-Skill control', async (t) => {
     JSON.stringify(evidence[1].deterministic, null, 2),
   );
   assert.equal(evidence[0].arm.pairing_id, evidence[1].arm.pairing_id);
+});
+
+test('complete outcome gates judging on exact successful closure loads', async (t) => {
+  const outcome = definitionFor(loadDefinitions(), 'outcome');
+  const caseDefinition = outcome.evals[0];
+  const manifest = manifestFor(outcome);
+  const packageRoot = createPackageFixture(t);
+  assert.strictEqual(
+    validateEvaluationDefinition(outcome, repositoryRoot),
+    outcome,
+  );
+
+  const outsideClosure = structuredClone(outcome);
+  outsideClosure.evals[0].required_skill_loads.push('engineering-guidance');
+  assert.throws(
+    () => validateEvaluationDefinition(outsideClosure, repositoryRoot),
+    /outside trusted canonical closure/,
+  );
+
+  async function runWith(skillEvents) {
+    let treatmentGrades = 0;
+    const records = await runMatchedEvaluation({
+      repositoryRoot: packageRoot,
+      manifest,
+      caseDefinition,
+      cell: manifest.cells[0],
+      repetition: 1,
+      async executeArm({ arm, cell }) {
+        const treatment = arm === 'treatment';
+        return normalizedResult({
+          model: cell.model,
+          packageSkills: treatment
+            ? ['to-humans', 'writing-foundation']
+            : [],
+          resolvedSkills: treatment
+            ? ['writing-foundation', 'to-humans']
+            : [],
+          skillEvents: treatment ? skillEvents : [],
+          output: treatment
+            ? 'Use a staged rollout today.'
+            : 'There are several options to consider.',
+        });
+      },
+      gradeOutput({ arm, output }) {
+        if (arm === 'treatment') treatmentGrades += 1;
+        return arm === 'treatment'
+          ? gradeMechanicalOutput({
+            evaluationDefinition: outcome,
+            caseDefinition,
+            output,
+          })
+          : { passed: true, status: 'baseline', checks: [] };
+      },
+    });
+    return {
+      control: records.find(({ arm }) => arm.kind === 'no-skill'),
+      treatment: records.find(({ arm }) => arm.kind === 'treatment'),
+      treatmentGrades,
+    };
+  }
+
+  const targetOnly = await runWith([fixtureSkillEvent('to-humans')]);
+  assert.equal(targetOnly.treatmentGrades, 0);
+  assert.equal(targetOnly.treatment.deterministic.passed, false);
+  assert.throws(
+    () => createBlindComparison({
+      manifest,
+      definition: outcome,
+      caseDefinition,
+      repetition: 1,
+      control: targetOnly.control,
+      treatment: targetOnly.treatment,
+      judgeModel: 'judge-model',
+    }),
+    /required Skill load gate failed.*writing-foundation/,
+  );
+
+  for (const [label, skillEvents] of [
+    ['wrong Foundation', [
+      fixtureSkillEvent('to-humans'),
+      fixtureSkillEvent('engineering-guidance'),
+    ]],
+    ['failed Foundation', [
+      fixtureSkillEvent('to-humans'),
+      fixtureSkillEvent('writing-foundation', { status: 'failed' }),
+    ]],
+  ]) {
+    const rejected = await runWith(skillEvents);
+    assert.equal(rejected.treatmentGrades, 0, label);
+    assert.equal(rejected.treatment.deterministic.passed, false, label);
+    assert.throws(
+      () => createBlindComparison({
+        manifest,
+        definition: outcome,
+        caseDefinition,
+        repetition: 1,
+        control: rejected.control,
+        treatment: rejected.treatment,
+        judgeModel: 'judge-model',
+      }),
+      /required Skill load gate failed/,
+      label,
+    );
+  }
+
+  const complete = await runWith([
+    fixtureSkillEvent('to-humans'),
+    fixtureSkillEvent('writing-foundation'),
+  ]);
+  assert.equal(complete.treatmentGrades, 1);
+  assert.equal(complete.treatment.deterministic.passed, true);
+  assert.doesNotThrow(() => createBlindComparison({
+    manifest,
+    definition: outcome,
+    caseDefinition,
+    repetition: 1,
+    control: complete.control,
+    treatment: complete.treatment,
+    judgeModel: 'judge-model',
+  }));
 });
