@@ -501,6 +501,16 @@ test('deterministic writing grader requires distinct accountable actions', () =>
       'Support prepares the customer notice before rollout.',
       'Security verifies that the exception expires Friday before approval.',
     ],
+    [
+      'The release lead, scheduled for 14:00, stages the internal cohort.',
+      'Support, prior to rollout, prepares the customer notice.',
+      'Security, prior to approval, verifies that the exception expires Friday.',
+    ],
+    [
+      'The release lead stages the internal cohort at 2:00 PM.',
+      'Support prepares the customer notice ahead of rollout.',
+      'Security verifies that the exception expires Friday prior to approval.',
+    ],
   ];
   for (const [index, actions] of qualifierPlacements.entries()) {
     const placement = grade(['Start a staged rollout.', ...actions]);
@@ -606,6 +616,24 @@ test('deterministic writing grader requires distinct accountable actions', () =>
     [
       'Start a staged rollout today.',
       'At 14:00, before the release lead stages the internal cohort, the project manager updates the agenda.',
+      'Support prepares the customer notice before rollout.',
+      'Security verifies before approval that the exception expires Friday.',
+    ],
+    [
+      'Start a staged rollout today.',
+      'Not at 14:00, the release lead stages the internal cohort.',
+      'Support prepares the customer notice before rollout.',
+      'Security verifies before approval that the exception expires Friday.',
+    ],
+    [
+      'Start a staged rollout today.',
+      'After 14:00, the release lead stages the internal cohort.',
+      'Support prepares the customer notice before rollout.',
+      'Security verifies before approval that the exception expires Friday.',
+    ],
+    [
+      'Start a staged rollout today.',
+      'The release lead, no longer at 14:00, stages the internal cohort.',
       'Support prepares the customer notice before rollout.',
       'Security verifies before approval that the exception expires Friday.',
     ],

@@ -87,9 +87,15 @@
               "\\b(?:internal (?:group|cohort)|first cohort)\\b"
             ],
             "qualifier_groups": [
-              [
-                "\\b(?:at )?(?:14:00|2\\s*(?:p\\.?m\\.?|pm)|two in the afternoon)\\b"
-              ]
+              {
+                "positive_patterns": [
+                  "\\b(?:at|scheduled for) (?:14:00|2(?::00)?\\s*(?:p\\.?m\\.?|pm)|two in the afternoon)\\b"
+                ],
+                "negative_patterns": [
+                  "\\b(?:not|never|no longer) (?:at|scheduled for) (?:14:00|2(?::00)?\\s*(?:p\\.?m\\.?|pm)|two in the afternoon)\\b",
+                  "\\b(?:before|after|earlier than|later than) (?:14:00|2(?::00)?\\s*(?:p\\.?m\\.?|pm)|two in the afternoon)\\b"
+                ]
+              }
             ]
           },
           {
@@ -104,9 +110,15 @@
               "\\b(?:customer notice|customer message|support notice)\\b"
             ],
             "qualifier_groups": [
-              [
-                "\\b(?:before|prior to|ahead of) (?:the )?(?:staged )?rollout\\b"
-              ]
+              {
+                "positive_patterns": [
+                  "\\b(?:before|prior to|ahead of) (?:the )?(?:staged )?rollout\\b"
+                ],
+                "negative_patterns": [
+                  "\\b(?:not|never|no longer) (?:before|prior to|ahead of) (?:the )?(?:staged )?rollout\\b",
+                  "\\b(?:after|following) (?:the )?(?:staged )?rollout\\b"
+                ]
+              }
             ]
           },
           {
@@ -121,12 +133,23 @@
               "\\b(?:exception expires Friday|exception's expiry is Friday|exception expiration is Friday|exception expiration Friday)\\b"
             ],
             "qualifier_groups": [
-              [
-                "\\bFriday\\b"
-              ],
-              [
-                "\\b(?:before|prior to) approval\\b"
-              ]
+              {
+                "positive_patterns": [
+                  "\\bFriday\\b"
+                ],
+                "negative_patterns": [
+                  "\\b(?:not Friday|Monday|Tuesday|Wednesday|Thursday|Saturday|Sunday)\\b"
+                ]
+              },
+              {
+                "positive_patterns": [
+                  "\\b(?:before|prior to) approval\\b"
+                ],
+                "negative_patterns": [
+                  "\\b(?:not|never|no longer) (?:before|prior to) approval\\b",
+                  "\\b(?:after|following) approval\\b"
+                ]
+              }
             ]
           }
         ],

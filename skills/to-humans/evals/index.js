@@ -196,13 +196,30 @@ function matchingSpan(value, patterns, field, { nonnegated = false } = {}) {
   return earliest;
 }
 
+function qualifierPatternSets(group, field) {
+  if (!group || typeof group !== 'object' || Array.isArray(group)) {
+    throw new TypeError(`${field} must define qualifier polarity`);
+  }
+  if (!Array.isArray(group.positive_patterns) || group.positive_patterns.length === 0) {
+    throw new TypeError(`${field}.positive_patterns must be non-empty`);
+  }
+  if (group.negative_patterns && !Array.isArray(group.negative_patterns)) {
+    throw new TypeError(`${field}.negative_patterns must be an array`);
+  }
+  return {
+    negative: group.negative_patterns || [],
+    positive: group.positive_patterns,
+  };
+}
+
 function hasOnlyCoreConnectors(value, qualifierGroups, field) {
   let remainder = value;
-  for (const [groupIndex, patterns] of qualifierGroups.entries()) {
-    if (!Array.isArray(patterns) || patterns.length === 0) {
-      throw new TypeError(`${field}[${groupIndex}] must be a non-empty pattern array`);
-    }
-    for (const [patternIndex, pattern] of patterns.entries()) {
+  for (const [groupIndex, group] of qualifierGroups.entries()) {
+    const { negative, positive } = qualifierPatternSets(
+      group,
+      `${field}[${groupIndex}]`,
+    );
+    for (const [patternIndex, pattern] of [...negative, ...positive].entries()) {
       remainder = remainder.replace(
         compile(pattern, `${field}[${groupIndex}][${patternIndex}]`),
         ' ',
@@ -240,6 +257,27 @@ function qualifierIsBound(value, patterns, ownerSpan, actionSpan, sourceSpan, fi
     }
   }
   return false;
+}
+
+function qualifierGroupIsBound(value, group, ownerSpan, actionSpan, sourceSpan, field) {
+  const { negative, positive } = qualifierPatternSets(group, field);
+  const positiveBound = qualifierIsBound(
+    value,
+    positive,
+    ownerSpan,
+    actionSpan,
+    sourceSpan,
+    `${field}.positive_patterns`,
+  );
+  const negativeBound = negative.length > 0 && qualifierIsBound(
+    value,
+    negative,
+    ownerSpan,
+    actionSpan,
+    sourceSpan,
+    `${field}.negative_patterns`,
+  );
+  return positiveBound && !negativeBound;
 }
 
 function matchesOrderedGroups(value, groups, field) {
@@ -392,10 +430,10 @@ function gradeAccountableActions(output, expectations = []) {
         `accountable_actions[${index}].source_patterns`,
       );
       const qualifiers = ownerSpan && actionSpan && sourceSpan
-        && qualifierGroups.every((patterns, groupIndex) => (
-          qualifierIsBound(
+        && qualifierGroups.every((group, groupIndex) => (
+          qualifierGroupIsBound(
             unit.text,
-            patterns,
+            group,
             ownerSpan,
             actionSpan,
             sourceSpan,
