@@ -153,7 +153,7 @@ function matchingText(value, patterns, field) {
 
 function hasPredicateLocalNegation(value, predicateIndex) {
   const prefix = value.slice(Math.max(0, predicateIndex - 48), predicateIndex);
-  return /(?:\b(?:no|not|never|without)\b|\b(?:declines|fails|refuses)\s+to)\s*$/i.test(
+  return /(?:\b(?:no|not|never|without)\b|\b(?:declines|fails|refuses)\s+to|\b(?:avoid(?:s|ed|ing)?|stop(?:s|ped|ping)?)(?:\s+and)?)\s*$/i.test(
     prefix,
   );
 }
@@ -233,7 +233,12 @@ function matchesProposition(value, proposition, field) {
   if (!Array.isArray(orderedGroups) || orderedGroups.length === 0) {
     throw new TypeError(`${field}.ordered_groups must contain relationship alternatives`);
   }
-  return requiredGroups.every((patterns, index) => (
+  const positive = !proposition.positive_patterns || matchingNonnegatedText(
+    value,
+    proposition.positive_patterns,
+    `${field}.positive_patterns`,
+  );
+  return Boolean(positive) && requiredGroups.every((patterns, index) => (
     matchesAny(value, patterns, `${field}.required_groups[${index}]`)
   )) && orderedGroups.some((groups, index) => (
     matchesOrderedGroups(value, groups, `${field}.ordered_groups[${index}]`)
@@ -303,6 +308,11 @@ function gradeAccountableActions(output, expectations = []) {
         expectation.predicate_object_patterns,
         `accountable_actions[${index}].predicate_object_patterns`,
       );
+      const proposition = matchingNonnegatedText(
+        unit.text,
+        expectation.proposition_patterns,
+        `accountable_actions[${index}].proposition_patterns`,
+      );
       const ownerCount = expectations.filter((other, otherIndex) => (
         matchesAny(
           unit.text,
@@ -327,7 +337,8 @@ function gradeAccountableActions(output, expectations = []) {
         `accountable_actions[${index}].owner_predicate_object`,
       );
       const pair = owner && action ? `${owner}\0${action}` : null;
-      if (!owner || !action || !source || !qualifier || !predicateObject || !relationship
+      if (!owner || !action || !source || !qualifier || !predicateObject
+          || !proposition || !relationship
           || conflictingSource || ownerCount !== 1 || usedPairs.has(pair)) {
         return false;
       }

@@ -473,6 +473,13 @@ test('deterministic writing grader requires distinct accountable actions', () =>
     true,
     JSON.stringify(unrelatedNegation, null, 2),
   );
+  const paraphrase = grade([
+    'Start a staged rollout.',
+    'Release engineering will stage the first cohort at 2 p.m.',
+    'Ahead of rollout, customer support will publish the customer message.',
+    'Prior to approval, security will confirm the exception expiration Friday.',
+  ]);
+  assert.equal(paraphrase.passed, true, JSON.stringify(paraphrase, null, 2));
 
   const probes = [
     [
@@ -529,6 +536,36 @@ test('deterministic writing grader requires distinct accountable actions', () =>
       'At 14:00 the release lead never stages the internal cohort.',
       'Support does not prepare the customer notice before rollout.',
       'Security never verifies before approval that the exception expires Friday.',
+    ],
+    [
+      'Start a staged rollout today.',
+      'At 14:00 the release lead watches while the project manager stages the internal cohort.',
+      'Before rollout the support owner watches as the project manager prepares the customer notice.',
+      'Before approval the security owner watches as the project manager verifies the exception expires Friday.',
+    ],
+    [
+      'Start a staged rollout today.',
+      'At 14:00 the project manager updates the agenda, and the release lead stages the internal cohort.',
+      'Support prepares the customer notice before rollout.',
+      'Security verifies before approval that the exception expires Friday.',
+    ],
+    [
+      'Start a staged rollout today.',
+      'At 14:00 the release lead stages the internal cohort.',
+      'Support prepares the customer notice before rollout.',
+      'Before approval security verifies the exception expires Monday, with Friday reserved for review.',
+    ],
+    [
+      'Start a staged rollout today.',
+      'At 14:00 the release lead stages the internal cohort.',
+      'Support prepares the customer notice before rollout.',
+      'Security verifies that the exception expires Friday.',
+    ],
+    [
+      'Start a staged rollout today.',
+      'At 14:00 the release lead stages the internal cohort.',
+      'Support prepares the customer notice before rollout.',
+      'Before approval the project manager updates the agenda, and security verifies the exception expires Friday.',
     ],
   ];
   for (const [index, probe] of probes.entries()) {
@@ -668,6 +705,30 @@ test('decision gates accept unlabeled alternate prose and reject hollow probes',
       'An unverified rollback and a small first cohort contain exposure.',
       'Peak traffic remains untested.',
       'Move to full deployment when the noon load test passes.',
+    ],
+    [
+      'Use a limited release today.',
+      'A small first cohort contains exposure, and rollback is verified.',
+      'Peak traffic remains untested.',
+      'Do not move to full deployment if the load test passes.',
+    ],
+    [
+      'Use a limited release today.',
+      'A small first cohort contains exposure, and rollback is verified.',
+      'Peak traffic remains untested.',
+      'Move away from full deployment when the load test passes.',
+    ],
+    [
+      'Use a limited release today.',
+      'A small first cohort contains exposure, and rollback is verified.',
+      'Peak traffic remains untested.',
+      'Never switch to full deployment when the load test passes.',
+    ],
+    [
+      'Use a limited release today.',
+      'A small first cohort contains exposure, and rollback is verified.',
+      'Peak traffic remains untested.',
+      'Stop and move to full deployment if the load test passes.',
     ],
   ];
   for (const [index, lines] of contradictionProbes.entries()) {

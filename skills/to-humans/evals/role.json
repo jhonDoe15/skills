@@ -91,6 +91,10 @@
             ],
             "predicate_object_patterns": [
               "\\b(?:starts|stages|deploys|rolls out|will (?:start|stage|deploy|roll out)|must (?:start|stage|deploy|roll out)) (?:with )?(?:the )?(?:internal (?:group|cohort)|first cohort)\\b"
+            ],
+            "proposition_patterns": [
+              "\\b(?:at )?(?:14:00|2\\s*(?:p\\.?m\\.?|pm)|two in the afternoon)[,:]? (?:the )?release(?: engineering| lead| owner)? (?:starts|stages|deploys|rolls out|will (?:start|stage|deploy|roll out)|must (?:start|stage|deploy|roll out)) (?:with )?(?:the )?(?:internal (?:group|cohort)|first cohort)\\b",
+              "\\b(?:the )?release(?: engineering| lead| owner)? (?:starts|stages|deploys|rolls out|will (?:start|stage|deploy|roll out)|must (?:start|stage|deploy|roll out)) (?:with )?(?:the )?(?:internal (?:group|cohort)|first cohort) (?:at |by )?(?:14:00|2\\s*(?:p\\.?m\\.?|pm)|two in the afternoon)\\b"
             ]
           },
           {
@@ -109,6 +113,10 @@
             ],
             "predicate_object_patterns": [
               "\\b(?:prepares|publishes|notifies|will (?:prepare|publish|notify)|must (?:prepare|publish|notify)) (?:the )?(?:customer notice|customer message|support notice)\\b"
+            ],
+            "proposition_patterns": [
+              "\\b(?:before|prior to|ahead of) (?:the )?(?:staged )?rollout[,:]? (?:the )?(?:customer )?support(?: team| lead| owner)? (?:prepares|publishes|notifies|will (?:prepare|publish|notify)|must (?:prepare|publish|notify)) (?:the )?(?:customer notice|customer message|support notice)\\b",
+              "\\b(?:the )?(?:customer )?support(?: team| lead| owner)? (?:prepares|publishes|notifies|will (?:prepare|publish|notify)|must (?:prepare|publish|notify)) (?:the )?(?:customer notice|customer message|support notice) (?:before|prior to|ahead of) (?:the )?(?:staged )?rollout\\b"
             ]
           },
           {
@@ -127,6 +135,11 @@
             ],
             "predicate_object_patterns": [
               "\\b(?:verifies|reviews|confirms|will (?:verify|review|confirm)|must (?:verify|review|confirm))(?: before approval| prior to approval)? (?:that )?(?:the )?(?:exception (?:expires|expiry)|exception's expiry|exception expiration)\\b"
+            ],
+            "proposition_patterns": [
+              "\\b(?:before|prior to) approval[,:]? (?:the )?security(?: team| lead| owner)? (?:verifies|reviews|confirms|will (?:verify|review|confirm)|must (?:verify|review|confirm)) (?:that )?(?:the )?(?:exception expires Friday|exception's expiry is Friday|exception expiration is Friday|exception expiration Friday)\\b",
+              "\\b(?:the )?security(?: team| lead| owner)? (?:verifies|reviews|confirms|will (?:verify|review|confirm)|must (?:verify|review|confirm)) (?:before|prior to) approval (?:that )?(?:the )?(?:exception expires Friday|exception's expiry is Friday|exception expiration is Friday|exception expiration Friday)\\b",
+              "\\b(?:the )?security(?: team| lead| owner)? (?:verifies|reviews|confirms|will (?:verify|review|confirm)|must (?:verify|review|confirm)) (?:that )?(?:the )?(?:exception expires Friday|exception's expiry is Friday|exception expiration is Friday|exception expiration Friday) (?:before|prior to) approval\\b"
             ]
           }
         ],
@@ -192,6 +205,9 @@
                 "forbidden_patterns": [
                   "\\b(?:fails|misses|exceeds|above|over)\\b"
                 ],
+                "positive_patterns": [
+                  "\\b(?:(?:move|switch) to (?:a |the )?full(?: deployment| rollout| release)?|proceed with (?:a |the )?full(?: deployment| rollout| release)?|deploy (?:to )?everyone|expand to (?:a |the )?full(?: deployment| rollout| release)?)\\b"
+                ],
                 "required_groups": [
                   ["\\b(?:if|when|only when)\\b"],
                   ["\\b(?:noon )?load test\\b"],
@@ -216,6 +232,10 @@
               {
                 "forbidden_patterns": [
                   "\\b(?:passes|meets|under|below|at most)\\b"
+                ],
+                "positive_patterns": [
+                  "\\b(?:keep|hold) (?:the )?(?:limited|staged) (?:release|rollout|deployment)\\b",
+                  "\\b(?:remain|stay) with (?:the )?(?:limited|staged) (?:release|rollout|deployment)\\b"
                 ],
                 "required_groups": [
                   ["\\b(?:if|when)\\b"],

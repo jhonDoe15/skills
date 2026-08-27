@@ -102,6 +102,9 @@
                 "forbidden_patterns": [
                   "\\b(?:fails|misses|exceeds|above|over)\\b"
                 ],
+                "positive_patterns": [
+                  "\\b(?:(?:move|switch) to (?:a |the )?full(?: deployment| rollout| release)?|proceed with (?:a |the )?full(?: deployment| rollout| release)?|deploy (?:to )?everyone|expand to (?:a |the )?full(?: deployment| rollout| release)?)\\b"
+                ],
                 "required_groups": [
                   ["\\b(?:if|when|only when)\\b"],
                   ["\\b(?:noon )?load test\\b"],
@@ -126,6 +129,10 @@
               {
                 "forbidden_patterns": [
                   "\\b(?:passes|meets|under|below|at most)\\b"
+                ],
+                "positive_patterns": [
+                  "\\b(?:keep|hold) (?:the )?(?:limited|staged) (?:release|rollout|deployment)\\b",
+                  "\\b(?:remain|stay) with (?:the )?(?:limited|staged) (?:release|rollout|deployment)\\b"
                 ],
                 "required_groups": [
                   ["\\b(?:if|when)\\b"],
