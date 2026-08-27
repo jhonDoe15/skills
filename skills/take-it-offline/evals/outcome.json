@@ -108,6 +108,11 @@
         "The matched No-Skill control uses the same scenario but omits continuation-specific contract coverage.",
         "To Humans remains inactive because the artifact reader is an agent."
       ],
+      "required_skill_loads": [
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
       "requires_verified_references": true
     }
   ]

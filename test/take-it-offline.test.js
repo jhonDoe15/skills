@@ -113,11 +113,15 @@ function hash(value) {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
-function fixtureSkillEvent(name, index) {
+function fixtureSkillEvent(
+  name,
+  index,
+  { operation = 'load', status = 'succeeded' } = {},
+) {
   return {
     name,
-    operation: 'load',
-    status: 'succeeded',
+    operation,
+    status,
     trigger: 'model',
     callId: `take-it-offline-fixture-${index}`,
     provenance: {
@@ -131,6 +135,12 @@ function fixtureSkillEvent(name, index) {
   };
 }
 
+function fixtureSkillEvents(names, optionsByName = {}) {
+  return names.map((name, index) => (
+    fixtureSkillEvent(name, index, optionsByName[name])
+  ));
+}
+
 function normalizedResult({
   skill = 'take-it-offline',
   model,
@@ -140,7 +150,7 @@ function normalizedResult({
   loadedSkills = resolvedSkills,
   hostAvailableSkills = null,
   preExecutionSkills = packageSkills,
-  skillEvents = loadedSkills.map(fixtureSkillEvent),
+  skillEvents = fixtureSkillEvents(loadedSkills),
   artifacts = [],
   toolUses = [],
 }) {
@@ -187,8 +197,9 @@ function normalizedResult({
 function manifestFor(definition, cells = [
   { host: 'claude-code', model: 'test-model' },
   { host: 'cursor', model: 'test-model' },
-]) {
+], definitionRepositoryRoot = repositoryRoot) {
   return createCampaignManifest({
+    repositoryRoot: definitionRepositoryRoot,
     definition,
     packageRevision,
     cells,
@@ -382,7 +393,10 @@ test('owner-local definitions cover every required evaluation layer', () => {
   ));
 
   for (const [index, definition] of definitions.entries()) {
-    assert.equal(validateEvaluationDefinition(definition), definition);
+    assert.equal(
+      validateEvaluationDefinition(definition, repositoryRoot),
+      definition,
+    );
     assert.equal(definition.evaluation.layer, expectedLayers[index]);
     assert.deepEqual(definition.evaluation.hosts, ['claude-code', 'cursor']);
     assert.equal(definition.evaluation.skill, 'take-it-offline');
@@ -567,10 +581,123 @@ test('component evaluation observes Agent Writing and its test-only ablation', a
   assert.equal(records[1].arm.ablated_dependency, 'agent-writing');
 });
 
+test('matched outcome gates the complete canonical Skill load closure', async (t) => {
+  const definition = readJson(path.join(evaluationRoot, 'outcome.json'));
+  const caseDefinition = definition.evals[0];
+  const packageRoot = createCompletePackage(t);
+  const manifest = manifestFor(definition, [
+    { host: 'claude-code', model: 'test-model' },
+  ], packageRoot);
+  assert.equal(
+    validateEvaluationDefinition(definition, packageRoot),
+    definition,
+  );
+  assert.deepEqual(manifest.cases[0].required_skill_loads, [
+    'take-it-offline',
+    'agent-writing',
+    'writing-foundation',
+  ]);
+  const canonicalSkillLoads = manifest.skill_load_authority.resolved_skills;
+  assert.deepEqual(canonicalSkillLoads, [
+    'writing-foundation',
+    'agent-writing',
+    'take-it-offline',
+  ]);
+  const complete = createContinuationArtifact(
+    t,
+    readFixture('continuations/complete.md'),
+  );
+  const { gradeTakeItOfflineResult } = loadGrader();
+
+  async function runVariant(skillEvents) {
+    let treatmentGrades = 0;
+    const records = await runMatchedEvaluation({
+      repositoryRoot: packageRoot,
+      manifest,
+      caseDefinition,
+      cell: manifest.cells[0],
+      repetition: 1,
+      async executeArm({ arm, provisioning }) {
+        const treatment = arm === 'treatment';
+        const packageSkills = provisioning.packageDefinition.skills
+          .map(({ name }) => name);
+        return normalizedResult({
+          model: 'test-model',
+          output: treatment ? complete.response : 'Independent control.',
+          packageSkills,
+          resolvedSkills: provisioning.installedSkills,
+          loadedSkills: [],
+          preExecutionSkills: packageSkills,
+          skillEvents: treatment ? skillEvents : [],
+          artifacts: treatment ? [complete.artifact] : [],
+        });
+      },
+      gradeOutput({ arm, result }) {
+        if (arm !== 'treatment') return baselineGrade();
+        treatmentGrades += 1;
+        return gradeTakeItOfflineResult({
+          definition,
+          caseDefinition,
+          result,
+          resolveArtifact: continuationArtifactResolver,
+          resolveReference: referenceResolver,
+        });
+      },
+    });
+    return {
+      treatment: records.find(({ arm }) => arm.kind === 'treatment'),
+      treatmentGrades,
+    };
+  }
+
+  const targetOnly = await runVariant(fixtureSkillEvents(['take-it-offline']));
+  assert.equal(targetOnly.treatmentGrades, 0);
+  assert.equal(targetOnly.treatment.deterministic.passed, false);
+
+  const completeLoads = await runVariant(
+    fixtureSkillEvents(canonicalSkillLoads),
+  );
+  assert.equal(completeLoads.treatmentGrades, 1);
+  assert.equal(completeLoads.treatment.deterministic.passed, true);
+
+  const invalidDependencies = [
+    [
+      'wrong',
+      fixtureSkillEvents([
+        'writing-foundation',
+        'skill-mechanics',
+        'take-it-offline',
+      ]),
+    ],
+    ...['failed', 'rejected', 'cancelled'].map((status) => [
+      status,
+      fixtureSkillEvents(canonicalSkillLoads, {
+        'agent-writing': {
+          operation: status === 'rejected' ? 'select' : 'load',
+          status,
+        },
+      }),
+    ]),
+  ];
+  for (const [label, skillEvents] of invalidDependencies) {
+    const invalid = await runVariant(skillEvents);
+    assert.equal(invalid.treatmentGrades, 0, label);
+    assert.equal(invalid.treatment.deterministic.passed, false, label);
+    assert.equal(
+      invalid.treatment.deterministic.checks[0].name,
+      'required Skill loads',
+      label,
+    );
+  }
+});
+
 test('complete outcome beats its matched No-Skill control on both hosts', async (t) => {
   const definition = readJson(path.join(evaluationRoot, 'outcome.json'));
-  const manifest = manifestFor(definition);
   const packageRoot = createCompletePackage(t);
+  const manifest = manifestFor(definition, [
+    { host: 'claude-code', model: 'test-model' },
+    { host: 'cursor', model: 'test-model' },
+  ], packageRoot);
   const completeOutput = readFixture('continuations/complete.md');
   const controlOutput = readFixture('continuations/no-skill.md');
   const complete = createContinuationArtifact(t, completeOutput);
