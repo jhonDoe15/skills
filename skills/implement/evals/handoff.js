@@ -1,10 +1,10 @@
 'use strict';
 
-const FAILURE_KINDS = new Set([
-  'guidance',
-  'test',
-  'validation',
-  'implementation',
+const FAILURE_STAGES = new Map([
+  ['guidance', 'before-mutation'],
+  ['test', 'test'],
+  ['validation', 'validation'],
+  ['implementation', 'implementation'],
 ]);
 const DISPOSITIONS = new Set([
   'applicable-now',
@@ -339,6 +339,26 @@ function validateCompletedLifecycle({
   }
 }
 
+function validateFailedLifecycle({ failure, lifecycle }) {
+  const { kind, stage } = failure;
+  const failedKinds = lifecycle
+    .filter((event) => event.status === 'failed' && FAILURE_STAGES.has(event.kind))
+    .map((event) => event.kind);
+  if (!failedKinds.includes(kind)) {
+    throw new ImplementEvaluationError(
+      'lifecycle must include the declared failure kind',
+    );
+  }
+  if (failedKinds.some((failedKind) => failedKind !== kind)) {
+    throw new ImplementEvaluationError(
+      'lifecycle contains conflicting failure kinds',
+    );
+  }
+  if (stage !== FAILURE_STAGES.get(kind)) {
+    throw new ImplementEvaluationError('failure stage does not match its kind');
+  }
+}
+
 function validateImplementHandoff(handoff) {
   requireExactFields(handoff, HANDOFF_FIELDS, 'handoff');
   if (handoff.schema !== 'implement-handoff/v2') {
@@ -413,11 +433,12 @@ function validateImplementHandoff(handoff) {
     ['kind', 'stage', 'message'],
     'handoff.failure',
   );
-  if (!FAILURE_KINDS.has(handoff.failure.kind)) {
+  if (!FAILURE_STAGES.has(handoff.failure.kind)) {
     throw new ImplementEvaluationError('handoff.failure.kind is invalid');
   }
   requireString(handoff.failure.stage, 'handoff.failure.stage');
   requireString(handoff.failure.message, 'handoff.failure.message');
+  validateFailedLifecycle(handoff);
   if (handoff.correction.state !== 'blocked') {
     throw new ImplementEvaluationError('failed handoff must be blocked');
   }

@@ -455,6 +455,52 @@ test('handoff validation distinguishes every failure phase from completion', () 
   );
 });
 
+test('failed handoff lifecycle matches the declared failure kind', () => {
+  const { validateImplementHandoff } = loadImplementEvaluation();
+  const handoff = failedHandoff('test');
+  handoff.lifecycle[0].kind = 'validation';
+
+  assert.throws(
+    () => validateImplementHandoff(handoff),
+    /lifecycle must include the declared failure kind/,
+  );
+});
+
+test('failed handoff lifecycle rejects conflicting failure kinds', () => {
+  const { validateImplementHandoff } = loadImplementEvaluation();
+  const handoff = failedHandoff('test');
+  handoff.lifecycle.push({
+    sequence: 2,
+    kind: 'validation',
+    status: 'failed',
+    reference: 'validation-failure',
+  });
+
+  assert.throws(
+    () => validateImplementHandoff(handoff),
+    /lifecycle contains conflicting failure kinds/,
+  );
+});
+
+test('failed handoff stage matches its declared failure kind', () => {
+  const { validateImplementHandoff } = loadImplementEvaluation();
+  for (const [kind, stage] of [
+    ['guidance', 'before-mutation'],
+    ['test', 'test'],
+    ['validation', 'validation'],
+    ['implementation', 'implementation'],
+  ]) {
+    const handoff = failedHandoff(kind);
+    handoff.failure.stage = stage === 'test' ? 'validation' : 'test';
+
+    assert.throws(
+      () => validateImplementHandoff(handoff),
+      /failure stage does not match its kind/,
+      kind,
+    );
+  }
+});
+
 test('completed handoff rejects mutation before completed guidance', () => {
   const { validateImplementHandoff } = loadImplementEvaluation();
   const handoff = successfulHandoff();

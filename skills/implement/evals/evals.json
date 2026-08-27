@@ -94,7 +94,7 @@
       "files": [],
       "required_skill_loads": ["implement", "engineering-guidance"],
       "expectations": [
-        "Guidance, test, validation, and implementation failures remain mechanically distinguishable.",
+        "Guidance, test, validation, and implementation failures remain mechanically distinguishable, with matching lifecycle failure evidence and stage.",
         "No failed attempt contains a completed status or correction-ready immutable range.",
         "Each artifact preserves observed commands, mutations, and the first recovery action that applies."
       ],

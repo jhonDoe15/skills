@@ -146,6 +146,11 @@ uses `base..head`. The lifecycle must match every test and validation entry, cov
 every changed file with a successful mutation target, and pin the exact
 implementation range.
 
+For a failed handoff, lifecycle evidence must include the declared failed phase
+and no other failed phase kind. The failure stage is `before-mutation` for
+`guidance`, and otherwise exactly matches `test`, `validation`, or
+`implementation`.
+
 Return the artifact reference. The normalized host result separately retains
 Skill lifecycle evidence, tool use, attempted mutations, artifact descriptors,
 duration, cost, and requested and resolved model identity.
