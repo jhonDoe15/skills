@@ -1,6 +1,6 @@
 # skills
 
-One Claude Code plugin with six agent skills:
+One Claude Code plugin with seven agent skills:
 
 - **Lean** — model-invoked writing guidance for response density and shape.
 - **`ticket-scope`** — internal model-invoked evaluation of cohesive, independently verifiable ticket and PR units.
@@ -8,9 +8,10 @@ One Claude Code plugin with six agent skills:
 - **`pr-carver`** — model-invoked PR size and structure guidance for parallel and stacked pull requests.
 - **`/dispatch-work`** — explicitly invoked to run an already-sized tracker in parallel and carry each piece through implementation, review, and PR approval.
 - **`/incident-investigation`** — explicitly invoked, investigation-only guidance for evidence-led production incident and hard-to-localize bug analysis.
+- **`agents-file-writer`** — model-invoked guidance for private and project-scoped agent files.
 
-Lean, ticket-scope, and pr-carver are selected automatically by the model when
-their descriptions match the work. Carve, dispatch-work, and
+Lean, ticket-scope, pr-carver, and agents-file-writer are selected automatically
+by the model when their descriptions match the work. Carve, dispatch-work, and
 incident-investigation run only when the user invokes them.
 
 ## Install
@@ -72,6 +73,13 @@ Ticket-scope is the shared internal evaluator used by carve and pr-carver. It
 checks outcome, seam, shape, acceptance, validation, uncertainty, risk,
 breadth, blockers, and collisions. Vertical slices are preferred; constrained
 layered slices are valid when a real contract or migration order requires them.
+
+## `agents-file-writer` — scoped agent guidance
+
+Agents-file-writer creates, migrates, and refines private or project-scoped
+agent guidance. It derives rules from observed failures, preserves
+non-derivable facts during migrations, and moves subject-specific detail behind
+triggered references so broad instruction files stay focused.
 
 ## `/carve` — size the work
 
