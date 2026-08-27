@@ -1,7 +1,7 @@
 {
   "name": "lean",
-  "version": "0.1.0",
-  "description": "Six agent skills: Lean shapes responses; ticket-scope evaluates shared base units; carve sizes ticket sets; pr-carver sizes and structures pull requests; dispatch-work runs sized ticket sets; incident-investigation guides explicit, read-only incident analysis. Lean, ticket-scope, and pr-carver are model-invoked; carve, dispatch-work, and incident-investigation are explicit.",
+  "version": "0.1.1",
+  "description": "Seven agent skills: Lean shapes responses; agents-file-writer creates scoped agent guidance; ticket-scope evaluates shared base units; carve sizes ticket sets; pr-carver structures pull requests; dispatch-work runs ticket sets; incident-investigation guides read-only incident analysis. Lean, agents-file-writer, ticket-scope, and pr-carver are model-invoked; carve, dispatch-work, and incident-investigation are explicit.",
   "keywords": [
     "efficiency",
     "response-style",
@@ -13,6 +13,8 @@
     "pull-requests",
     "stacked-pull-requests",
     "model-invocation",
+    "agent-instructions",
+    "agents-md",
     "incident-investigation",
     "incident-response",
     "root-cause-analysis",
