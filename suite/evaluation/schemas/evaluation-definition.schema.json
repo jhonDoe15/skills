@@ -99,7 +99,7 @@
             "uniqueItems": true,
             "items": {
               "type": "string",
-              "minLength": 1
+              "pattern": "^[a-z0-9-]+$"
             }
           },
           "canonical_invocation": {
@@ -118,6 +118,35 @@
     }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {
+          "evaluation": {
+            "properties": {
+              "layer": {
+                "enum": [
+                  "role",
+                  "outcome"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "evals": {
+            "items": {
+              "properties": {
+                "required_skill_loads": {
+                  "minItems": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     {
       "if": {
         "properties": {

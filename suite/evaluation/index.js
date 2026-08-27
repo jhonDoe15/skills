@@ -19,6 +19,8 @@ const { executeTest } = require('../testing');
 const SCHEMA_VERSION = 2;
 const VALID_LAYERS = new Set(['role', 'component', 'outcome', 'trigger']);
 const VALID_ARMS = new Set(['no-skill', 'treatment', 'component-ablation']);
+const trustedCampaignManifests = new WeakSet();
+const internalManifestValidation = Symbol('internal manifest validation');
 
 class EvaluationContractError extends Error {
   constructor(message) {
@@ -70,6 +72,38 @@ function validateStringArray(value, field) {
   requireArray(value, field, true);
   value.forEach((item, index) => requireString(item, `${field}[${index}]`));
   assertUnique(value, field);
+}
+
+function validateCanonicalSkillNames(value, field, allowEmpty = true) {
+  requireArray(value, field, allowEmpty);
+  value.forEach((name, index) => {
+    requireString(name, `${field}[${index}]`);
+    if (!/^[a-z0-9-]+$/.test(name)) {
+      throw new EvaluationContractError(
+        `${field}[${index}] is not canonical: "${name}"`,
+      );
+    }
+  });
+  assertUnique(value, field);
+}
+
+function normalizedMatchedRequiredSkillLoads({
+  layer,
+  skill,
+  caseDefinition,
+  field,
+  requireExplicit = false,
+}) {
+  if (!['role', 'outcome'].includes(layer)) return null;
+  const declared = caseDefinition.required_skill_loads;
+  if (declared === undefined && !requireExplicit) return [skill];
+  validateCanonicalSkillNames(declared, field, false);
+  if (!declared.includes(skill)) {
+    throw new EvaluationContractError(
+      `${field} must contain evaluated target "${skill}"`,
+    );
+  }
+  return [...declared];
 }
 
 function validateObjectItems(value, fields, field) {
@@ -282,7 +316,7 @@ function deterministicCheck(name, passed, details) {
 }
 
 function gradeDeterministicOutput({ definition, caseDefinition, output }) {
-  validateEvaluationDefinition(definition);
+  validateEvaluationDefinitionStructure(definition);
   requireObject(caseDefinition, 'caseDefinition');
   if (typeof output !== 'string') {
     throw new EvaluationContractError('output must be a string');
@@ -381,7 +415,7 @@ function deepFreeze(value) {
   return Object.freeze(value);
 }
 
-function validateEvaluationDefinition(definition) {
+function validateEvaluationDefinitionStructure(definition) {
   requireObject(definition, 'definition');
   requireString(definition.skill_name, 'definition.skill_name');
   requireObject(definition.evaluation, 'definition.evaluation');
@@ -462,6 +496,12 @@ function validateEvaluationDefinition(definition) {
       evaluation.expectations,
       `definition.evals[${index}].expectations`,
     );
+    normalizedMatchedRequiredSkillLoads({
+      layer: metadata.layer,
+      skill: metadata.skill,
+      caseDefinition: evaluation,
+      field: `definition.evals[${index}].required_skill_loads`,
+    });
     if (metadata.layer === 'component') {
       requireString(
         evaluation.ablated_dependency,
@@ -539,6 +579,38 @@ function validateEvaluationDefinition(definition) {
   return definition;
 }
 
+function validateEvaluationDefinition(definition, repositoryRoot = null) {
+  validateEvaluationDefinitionStructure(definition);
+  const { layer, skill } = definition.evaluation;
+  if (!['role', 'outcome'].includes(layer)) return definition;
+  if (typeof repositoryRoot !== 'string' || repositoryRoot.length === 0) {
+    throw new EvaluationContractError(
+      'repository context is required for canonical definition validation',
+    );
+  }
+  const trustedClosure = canonicalSkillClosure(
+    repositoryRoot,
+    skill,
+  ).resolvedSkills;
+  for (const [index, evaluation] of definition.evals.entries()) {
+    const requiredLoads = normalizedMatchedRequiredSkillLoads({
+      layer,
+      skill,
+      caseDefinition: evaluation,
+      field: `definition.evals[${index}].required_skill_loads`,
+    });
+    const outsideClosure = requiredLoads.find(
+      (name) => !trustedClosure.includes(name),
+    );
+    if (outsideClosure) {
+      throw new EvaluationContractError(
+        `required_skill_loads contains "${outsideClosure}" outside trusted canonical closure`,
+      );
+    }
+  }
+  return definition;
+}
+
 function validateSchemaDocument(schema, field) {
   requireObject(schema, field);
   if (schema.$schema !== 'https://json-schema.org/draft/2020-12/schema') {
@@ -586,10 +658,132 @@ function manifestContents(manifest) {
   return contents;
 }
 
-function campaignCase(evaluation, layer) {
+function authorityContents(authority) {
+  const contents = { ...authority };
+  delete contents.fingerprint;
+  return contents;
+}
+
+function canonicalSkillClosure(repositoryRoot, skill) {
+  requireString(repositoryRoot, 'repositoryRoot');
+  const suite = loadCanonicalSuite(repositoryRoot);
+  const resolution = resolvePackageDependencies(
+    suite,
+    {
+      skills: suite.inventory.map(({ name }) => ({ name })),
+    },
+    skill,
+  );
+  if (resolution.missingSkill) {
+    throw new EvaluationContractError(
+      `cannot establish canonical load authority for "${skill}"`,
+    );
+  }
+  return {
+    resolvedSkills: [...resolution.resolved],
+    suite,
+  };
+}
+
+function canonicalSkillLoadAuthority(repositoryRoot, skill, packageRevision) {
+  const closure = canonicalSkillClosure(repositoryRoot, skill);
+  const authority = {
+    target: skill,
+    package_revision: packageRevision,
+    resolved_skills: closure.resolvedSkills,
+    suite_fingerprint: fingerprintValue(closure.suite),
+  };
+  authority.fingerprint = fingerprintValue(authority);
+  return authority;
+}
+
+function validateSkillLoadAuthority(
+  manifest,
+  repositoryRoot,
+  requireTrustedAuthority,
+) {
+  if (!['role', 'outcome'].includes(manifest.layer)) return;
+  requireObject(
+    manifest.skill_load_authority,
+    'manifest.skill_load_authority',
+  );
+  const authority = manifest.skill_load_authority;
+  requireString(authority.target, 'manifest.skill_load_authority.target');
+  requireString(
+    authority.package_revision,
+    'manifest.skill_load_authority.package_revision',
+  );
+  validateCanonicalSkillNames(
+    authority.resolved_skills,
+    'manifest.skill_load_authority.resolved_skills',
+    false,
+  );
+  requireString(
+    authority.suite_fingerprint,
+    'manifest.skill_load_authority.suite_fingerprint',
+  );
+  requireString(
+    authority.fingerprint,
+    'manifest.skill_load_authority.fingerprint',
+  );
+  if (authority.fingerprint !== fingerprintValue(authorityContents(authority))) {
+    throw new EvaluationContractError('load authority fingerprint mismatch');
+  }
+  if (authority.target !== manifest.skill) {
+    throw new EvaluationContractError('load authority target mismatch');
+  }
+  if (authority.package_revision !== manifest.package_revision) {
+    throw new EvaluationContractError(
+      'load authority package revision mismatch',
+    );
+  }
+  if (!authority.resolved_skills.includes(manifest.skill)) {
+    throw new EvaluationContractError(
+      'load authority omits the evaluated target',
+    );
+  }
+  for (const evaluation of manifest.cases) {
+    const outsideAuthority = evaluation.required_skill_loads.find(
+      (name) => !authority.resolved_skills.includes(name),
+    );
+    if (outsideAuthority) {
+      throw new EvaluationContractError(
+        `required_skill_loads contains "${outsideAuthority}" outside trusted canonical closure`,
+      );
+    }
+  }
+  if (!requireTrustedAuthority || trustedCampaignManifests.has(manifest)) return;
+  if (typeof repositoryRoot !== 'string' || repositoryRoot.length === 0) {
+    throw new EvaluationContractError(
+      'repository context is required to validate retained load authority',
+    );
+  }
+  const expected = canonicalSkillLoadAuthority(
+    repositoryRoot,
+    manifest.skill,
+    manifest.package_revision,
+  );
+  if (!fingerprintsMatch(authority, expected)) {
+    throw new EvaluationContractError(
+      'trusted canonical load authority mismatch',
+    );
+  }
+}
+
+function campaignCase(evaluation, layer, skill) {
   return {
     id: String(evaluation.id),
     name: evaluation.name,
+    ...(['role', 'outcome'].includes(layer)
+      ? {
+        required_skill_loads: normalizedMatchedRequiredSkillLoads({
+          layer,
+          skill,
+          caseDefinition: evaluation,
+          field: 'evaluation.required_skill_loads',
+        }),
+      }
+      : {}),
     ...(layer === 'component'
       ? { ablated_dependency: evaluation.ablated_dependency }
       : {}),
@@ -597,6 +791,7 @@ function campaignCase(evaluation, layer) {
 }
 
 function createCampaignManifest({
+  repositoryRoot,
   definition,
   packageRevision,
   cells,
@@ -605,7 +800,7 @@ function createCampaignManifest({
   limitations,
   controlPolicy = null,
 }) {
-  validateEvaluationDefinition(definition);
+  validateEvaluationDefinition(definition, repositoryRoot);
   requireString(packageRevision, 'packageRevision');
   requireArray(cells, 'cells');
   const normalizedCells = cells.map((cell, index) => ({
@@ -631,6 +826,22 @@ function createCampaignManifest({
     requireString(limitation, `limitations[${index}]`);
   });
 
+  const skillLoadAuthority = ['role', 'outcome'].includes(
+    definition.evaluation.layer,
+  )
+    ? canonicalSkillLoadAuthority(
+      repositoryRoot,
+      definition.evaluation.skill,
+      packageRevision,
+    )
+    : null;
+  const cases = definition.evals.map((evaluation) => (
+    campaignCase(
+      evaluation,
+      definition.evaluation.layer,
+      definition.evaluation.skill,
+    )
+  ));
   const manifest = {
     schema_version: SCHEMA_VERSION,
     kind: 'skill-evaluation-campaign',
@@ -642,9 +853,10 @@ function createCampaignManifest({
     cells: normalizedCells,
     repetitions,
     execution_configuration: structuredClone(executionConfiguration),
-    cases: definition.evals.map((evaluation) => (
-      campaignCase(evaluation, definition.evaluation.layer)
-    )),
+    cases,
+    ...(skillLoadAuthority
+      ? { skill_load_authority: skillLoadAuthority }
+      : {}),
     arms: [...definition.evaluation.arms],
     thresholds: {
       minimum_treatment_pass_rate:
@@ -660,10 +872,17 @@ function createCampaignManifest({
     ),
   };
   manifest.fingerprint = fingerprintValue(manifest);
-  return deepFreeze(manifest);
+  const trustedManifest = deepFreeze(manifest);
+  trustedCampaignManifests.add(trustedManifest);
+  return trustedManifest;
 }
 
-function validateCampaignManifest(manifest, definition = null) {
+function validateCampaignManifest(
+  manifest,
+  definition = null,
+  repositoryRoot = null,
+  validationMode = null,
+) {
   requireObject(manifest, 'manifest');
   if (manifest.schema_version !== SCHEMA_VERSION) {
     throw new EvaluationContractError('incompatible campaign schema version');
@@ -682,6 +901,13 @@ function validateCampaignManifest(manifest, definition = null) {
     requireObject(evaluation, `manifest.cases[${index}]`);
     requireString(evaluation.id, `manifest.cases[${index}].id`);
     requireString(evaluation.name, `manifest.cases[${index}].name`);
+    normalizedMatchedRequiredSkillLoads({
+      layer: manifest.layer,
+      skill: manifest.skill,
+      caseDefinition: evaluation,
+      field: `manifest.cases[${index}].required_skill_loads`,
+      requireExplicit: true,
+    });
     if (manifest.layer === 'component') {
       requireString(
         evaluation.ablated_dependency,
@@ -719,7 +945,7 @@ function validateCampaignManifest(manifest, definition = null) {
     );
   }
   if (definition) {
-    validateEvaluationDefinition(definition);
+    validateEvaluationDefinitionStructure(definition);
     if (manifest.definition_fingerprint !== fingerprintValue(definition)) {
       throw new EvaluationContractError('stale definition fingerprint');
     }
@@ -746,12 +972,21 @@ function validateCampaignManifest(manifest, definition = null) {
     }
     if (JSON.stringify(manifest.cases) !== JSON.stringify(
       definition.evals.map((evaluation) => (
-        campaignCase(evaluation, definition.evaluation.layer)
+        campaignCase(
+          evaluation,
+          definition.evaluation.layer,
+          definition.evaluation.skill,
+        )
       )),
     )) {
       throw new EvaluationContractError('manifest cases do not match definition');
     }
   }
+  validateSkillLoadAuthority(
+    manifest,
+    repositoryRoot,
+    validationMode !== internalManifestValidation,
+  );
   return manifest;
 }
 
@@ -767,6 +1002,44 @@ function manifestCaseFor(manifest, caseDefinition) {
     );
   }
   return retainedCase;
+}
+
+function requiredSkillLoadsFor(
+  manifest,
+  caseDefinition,
+  resolvedSkills = null,
+) {
+  const retainedCase = manifestCaseFor(manifest, caseDefinition);
+  const retainedLoads = normalizedMatchedRequiredSkillLoads({
+    layer: manifest.layer,
+    skill: manifest.skill,
+    caseDefinition: retainedCase,
+    field: 'manifest case required_skill_loads',
+    requireExplicit: true,
+  });
+  if (retainedLoads === null) return null;
+  const currentLoads = normalizedMatchedRequiredSkillLoads({
+    layer: manifest.layer,
+    skill: manifest.skill,
+    caseDefinition,
+    field: 'caseDefinition.required_skill_loads',
+  });
+  if (!arraysEqual(retainedLoads, currentLoads)) {
+    throw new EvaluationContractError(
+      'case required_skill_loads do not match campaign definition',
+    );
+  }
+  if (resolvedSkills) {
+    const outsideClosure = retainedLoads.find(
+      (name) => !resolvedSkills.includes(name),
+    );
+    if (outsideClosure) {
+      throw new EvaluationContractError(
+        `required_skill_loads contains "${outsideClosure}" outside the resolved closure`,
+      );
+    }
+  }
+  return retainedLoads;
 }
 
 function componentAblationFor(manifest, caseDefinition) {
@@ -905,7 +1178,12 @@ function createRunEvidence({
   deterministicGrade,
   controlPolicy = null,
 }) {
-  validateCampaignManifest(manifest);
+  validateCampaignManifest(
+    manifest,
+    null,
+    null,
+    internalManifestValidation,
+  );
   validateCell(cell, 'cell');
   if (!Number.isInteger(repetition) || repetition < 1) {
     throw new EvaluationContractError('repetition must be a positive integer');
@@ -1008,6 +1286,12 @@ function validateRunEvidence({
   arm,
   record,
 }) {
+  validateCampaignManifest(
+    manifest,
+    null,
+    null,
+    internalManifestValidation,
+  );
   requireObject(record, 'run evidence');
   if (record.schema_version !== SCHEMA_VERSION) {
     throw new EvaluationContractError('incompatible schema version');
@@ -1145,6 +1429,14 @@ function validateRunEvidence({
       resolved: record.model.resolved,
     },
   });
+  if (expectedArm.kind === 'treatment'
+    && ['role', 'outcome'].includes(manifest.layer)) {
+    requiredSkillLoadsFor(
+      manifest,
+      caseDefinition,
+      record.execution.routing.resolved_skills,
+    );
+  }
   if (expectedArm.kind === 'no-skill') {
     requireObject(
       record.execution.control_contamination,
@@ -1231,6 +1523,7 @@ function validateRunEvidence({
 }
 
 function assessReusableEvidence({
+  repositoryRoot = null,
   manifest,
   definition,
   caseDefinition,
@@ -1244,7 +1537,7 @@ function assessReusableEvidence({
     return { reusable: false, reason: 'incompatible schema version' };
   }
   try {
-    validateCampaignManifest(manifest, definition);
+    validateCampaignManifest(manifest, definition, repositoryRoot);
     validateRunEvidence({
       manifest,
       caseDefinition,
@@ -1255,6 +1548,24 @@ function assessReusableEvidence({
     });
     if (record.execution.status !== 'succeeded') {
       return { reusable: false, reason: 'execution not successful' };
+    }
+    if (record.arm.kind === 'treatment' && manifest.layer !== 'trigger') {
+      const requiredLoads = manifest.layer === 'component'
+        ? [manifest.skill, componentAblationFor(manifest, caseDefinition).dependency]
+        : requiredSkillLoadsFor(
+          manifest,
+          caseDefinition,
+          record.execution.routing.resolved_skills,
+        );
+      if (missingSuccessfulLoads(
+        record.execution.skill_events,
+        requiredLoads,
+      ).length > 0) {
+        return {
+          reusable: false,
+          reason: 'activation evidence not successful',
+        };
+      }
     }
     const recomputed = manifest.layer === 'trigger'
       ? triggerGradeFromObservation({
@@ -1276,16 +1587,6 @@ function assessReusableEvidence({
     if (record.arm.kind === 'no-skill') {
       if (!record.execution.control_contamination.clean) {
         return { reusable: false, reason: 'No-Skill control contaminated' };
-      }
-    } else if (record.arm.kind === 'treatment' && manifest.layer !== 'trigger') {
-      const requiredLoads = manifest.layer === 'component'
-        ? [manifest.skill, componentAblationFor(manifest, caseDefinition).dependency]
-        : [manifest.skill];
-      if (!requiredLoads.every((name) => recordLoadedSkill(record, name))) {
-        return {
-          reusable: false,
-          reason: 'activation evidence not successful',
-        };
       }
     }
   } catch (error) {
@@ -1337,7 +1638,7 @@ async function runMatchedEvaluation({
   executeArm,
   gradeOutput,
 }) {
-  validateCampaignManifest(manifest);
+  validateCampaignManifest(manifest, null, repositoryRoot);
   if (manifest.layer === 'component') {
     throw new EvaluationContractError(
       'component evaluations must use runComponentEvaluation',
@@ -1350,6 +1651,11 @@ async function runMatchedEvaluation({
   }
   const closure = packageClosure(repositoryRoot, manifest.skill);
   const frozenCase = deepFreeze(structuredClone(caseDefinition));
+  const requiredLoads = requiredSkillLoadsFor(
+    manifest,
+    frozenCase,
+    closure.resolvedSkills,
+  );
   const sharedContext = {
     caseDefinition: frozenCase,
     cell: deepFreeze({ ...cell }),
@@ -1380,12 +1686,17 @@ async function runMatchedEvaluation({
       provisioning,
     }));
     validateResult(result);
-    const grade = gradeOutput({
-      arm,
-      output: outputFromResult(result),
-      result,
-      caseDefinition: frozenCase,
-    });
+    const missingLoads = treatment
+      ? missingSuccessfulLoads(result.observations.skillEvents, requiredLoads)
+      : [];
+    const grade = missingLoads.length > 0
+      ? requiredLoadGateGrade(requiredLoads, missingLoads)
+      : gradeOutput({
+        arm,
+        output: outputFromResult(result),
+        result,
+        caseDefinition: frozenCase,
+      });
     records.push(createRunEvidence({
       manifest,
       caseDefinition: frozenCase,
@@ -1516,7 +1827,7 @@ function triggerGradeFromObservation({
 }
 
 function gradeTriggerResult({ definition, caseDefinition, result }) {
-  validateEvaluationDefinition(definition);
+  validateEvaluationDefinitionStructure(definition);
   if (definition.evaluation.layer !== 'trigger') {
     throw new EvaluationContractError(
       'gradeTriggerResult requires a trigger definition',
@@ -1582,12 +1893,35 @@ function seededTreatmentPlacement(seed, caseDefinition, repetition) {
   return digest[0] % 2 === 0 ? 'A' : 'B';
 }
 
-function recordLoadedSkill(record, name) {
-  return record.execution.skill_events.some((event) => (
-    event.name === name
-      && event.operation === 'load'
-      && event.status === 'succeeded'
+function eventShowsSuccessfulLoad(event, name) {
+  return event.name === name
+    && event.operation === 'load'
+    && event.status === 'succeeded';
+}
+
+function missingSuccessfulLoads(skillEvents, requiredLoads) {
+  return requiredLoads.filter((name) => (
+    !skillEvents.some((event) => eventShowsSuccessfulLoad(event, name))
   ));
+}
+
+function requiredLoadGateGrade(requiredLoads, missingLoads) {
+  return {
+    passed: false,
+    checks: [
+      deterministicCheck(
+        'required Skill loads',
+        false,
+        `required=${requiredLoads.join(',')} missing=${missingLoads.join(',')}`,
+      ),
+    ],
+  };
+}
+
+function recordLoadedSkill(record, name) {
+  return record.execution.skill_events.some(
+    (event) => eventShowsSuccessfulLoad(event, name),
+  );
 }
 
 function recordAttemptedSkill(record, name) {
@@ -1642,8 +1976,20 @@ function assertPairLifecycleGates(manifest, caseDefinition, control, treatment) 
     if (!contamination.clean) {
       throw new EvaluationContractError('No-Skill control contamination gate failed');
     }
-    if (!recordLoadedSkill(treatment, manifest.skill)) {
-      throw new EvaluationContractError('treatment activation gate failed');
+    const requiredLoads = requiredSkillLoadsFor(
+      manifest,
+      caseDefinition,
+      treatment.execution.routing.resolved_skills,
+    );
+    const missingLoads = missingSuccessfulLoads(
+      treatment.execution.skill_events,
+      requiredLoads,
+    );
+    if (missingLoads.length > 0) {
+      throw new EvaluationContractError(
+        'treatment activation gate failed: required Skill load gate failed; '
+          + `missing ${missingLoads.join(', ')}`,
+      );
     }
     return;
   }
@@ -1664,6 +2010,7 @@ function assertPairLifecycleGates(manifest, caseDefinition, control, treatment) 
 }
 
 function createBlindComparison({
+  repositoryRoot = null,
   manifest,
   definition,
   caseDefinition,
@@ -1672,7 +2019,7 @@ function createBlindComparison({
   treatment,
   judgeModel,
 }) {
-  validateCampaignManifest(manifest, definition);
+  validateCampaignManifest(manifest, definition, repositoryRoot);
   requireString(judgeModel, 'judgeModel');
   const cell = {
     host: treatment.host,
@@ -2051,8 +2398,14 @@ function thresholdSummary(judgments, thresholds) {
   };
 }
 
-function replayCampaign({ manifest, definition, runs, judgments }) {
-  validateCampaignManifest(manifest, definition);
+function replayCampaign({
+  repositoryRoot = null,
+  manifest,
+  definition,
+  runs,
+  judgments,
+}) {
+  validateCampaignManifest(manifest, definition, repositoryRoot);
   requireArray(runs, 'runs', true);
   requireArray(judgments, 'judgments', true);
   const casesById = new Map(
@@ -2135,22 +2488,6 @@ function replayCampaign({ manifest, definition, runs, judgments }) {
           arm: 'treatment',
           record: treatment,
         });
-        const controlGrade = gradeDeterministicOutput({
-          definition,
-          caseDefinition,
-          output: control.execution.output,
-        });
-        const treatmentGrade = gradeDeterministicOutput({
-          definition,
-          caseDefinition,
-          output: treatment.execution.output,
-        });
-        if (!fingerprintsMatch(
-          control.deterministic.checks,
-          controlGrade.checks,
-        ) || !fingerprintsMatch(treatment.deterministic, treatmentGrade)) {
-          throw new EvaluationContractError('deterministic grade mismatch');
-        }
         if (control.arm.pairing_id !== treatment.arm.pairing_id) {
           throw new EvaluationContractError('pairing mismatch');
         }
@@ -2174,6 +2511,28 @@ function replayCampaign({ manifest, definition, runs, judgments }) {
               ? 'no-skill-contamination'
               : 'treatment-activation',
           );
+        }
+        const controlGrade = gradeDeterministicOutput({
+          definition,
+          caseDefinition,
+          output: control.execution.output,
+        });
+        if (!fingerprintsMatch(
+          control.deterministic.checks,
+          controlGrade.checks,
+        )) {
+          throw new EvaluationContractError('deterministic grade mismatch');
+        }
+        let treatmentGrade = null;
+        if (lowerGatePassed) {
+          treatmentGrade = gradeDeterministicOutput({
+            definition,
+            caseDefinition,
+            output: treatment.execution.output,
+          });
+          if (!fingerprintsMatch(treatment.deterministic, treatmentGrade)) {
+            throw new EvaluationContractError('deterministic grade mismatch');
+          }
         }
         if (control.execution.status !== 'succeeded') {
           lowerGatePassed = false;
@@ -2517,6 +2876,7 @@ module.exports = {
   runTriggerEvaluation,
   validateCampaignManifest,
   validateEvaluationDefinition,
+  validateEvaluationDefinitionStructure,
   validateEvaluationSchemas,
   validateJudgmentEvidence,
   validateRunEvidence,
