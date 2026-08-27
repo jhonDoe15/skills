@@ -15,7 +15,6 @@ const {
 } = require('../../../suite');
 const {
   createCampaignManifest,
-  gradeDeterministicOutput,
   gradeTriggerResult,
   runComponentEvaluation,
   runMatchedEvaluation,
@@ -27,6 +26,7 @@ const {
   executeTest,
 } = require('../../../suite/testing');
 const {
+  gradeMechanicalOutput,
   loadDefinitions,
   protectedSegmentsFromPrompt,
 } = require('../evals');
@@ -405,8 +405,8 @@ test('shared mechanical grading does not judge semantic prose', () => {
         'Concise valid prose with freely chosen wording.',
         'Recommendation. Basis. Material uncertainty. Change condition.',
       ]) {
-        const grade = gradeDeterministicOutput({
-          definition,
+        const grade = gradeMechanicalOutput({
+          evaluationDefinition: definition,
           caseDefinition,
           output,
         });
@@ -481,14 +481,13 @@ test('shared mechanical grader preserves protected non-prose exactly', () => {
   const role = definitionFor(loadDefinitions(), 'role');
   const caseDefinition = role.evals.find(({ id }) => id === 'protected-content');
   const protectedSegments = protectedSegmentsFromPrompt(caseDefinition.prompt);
-  assert.equal(Object.hasOwn(caseDefinition, 'protected_segments'), false);
   assert.deepEqual(
-    protectedSegments.map(({ category }) => category),
-    ['code', 'schema', 'data', 'quote'],
+    caseDefinition.protected_segments,
+    protectedSegments.map((segment) => ({
+      ...segment,
+      occurrence_count: 1,
+    })),
   );
-  protectedSegments.forEach(({ content }) => {
-    assert.equal(caseDefinition.prompt.includes(content), true);
-  });
   const output = [
     'Use the supplied artifacts unchanged.',
     '',
@@ -496,30 +495,67 @@ test('shared mechanical grader preserves protected non-prose exactly', () => {
     '',
     'Owner: API maintainers verify the sample before publication.',
   ].join('\n');
-  const grade = gradeDeterministicOutput({
-    definition: role,
+  const grade = gradeMechanicalOutput({
+    evaluationDefinition: role,
     caseDefinition,
     output,
   });
   assert.equal(grade.passed, true, JSON.stringify(grade, null, 2));
 
+  const code = protectedSegments.find(({ category }) => category === 'code').content;
   const corruptions = [
-    ['code declaration', 'retryCount(payload)', 'retry_count(payload)', 'protected_code_declaration'],
-    ['code indentation', '  return payload.retry_count;', ' return payload.retry_count;', 'protected_code_return'],
-    ['code closing brace', '\n}\n', '\n};\n', 'protected_code_close'],
-    ['schema', '"minimum":1', '"minimum":0', 'protected_schema'],
-    ['data', '"retry-count": 3', '"retryCount": 3', 'protected_data'],
-    ['quote', 'preserve this punctuation.', 'change this punctuation!', 'protected_quote'],
+    ['reversed lines', code, code.split('\n').reverse().join('\n'), 'code'],
+    ['case mutation', 'function retryCount', 'Function retryCount', 'code'],
+    ['whitespace mutation', '  return payload.retry_count;', ' return payload.retry_count;', 'code'],
+    ['missing segment', protectedSegments[1].content, '', 'schema'],
+    ['truncated segment', protectedSegments[2].content, '{"retry-count": 3}', 'data'],
+    ['quote mutation', 'preserve this punctuation.', 'change this punctuation!', 'quote'],
   ];
-  for (const [category, before, after, signal] of corruptions) {
-    const failed = gradeDeterministicOutput({
-      definition: role,
+  for (const [probe, before, after, category] of corruptions) {
+    const failed = gradeMechanicalOutput({
+      evaluationDefinition: role,
       caseDefinition,
       output: output.replace(before, after),
     });
-    assert.equal(failed.passed, false, category);
-    assertFailedCheck(failed, `signal ${signal}`);
+    assert.equal(failed.passed, false, probe);
+    assertFailedCheck(failed, `protected ${category} byte fidelity`);
   }
+
+  const duplicated = gradeMechanicalOutput({
+    evaluationDefinition: role,
+    caseDefinition,
+    output: `${output}\n${protectedSegments[0].content}`,
+  });
+  assert.equal(duplicated.passed, false);
+  assertFailedCheck(duplicated, 'protected code byte fidelity');
+
+  const reordered = gradeMechanicalOutput({
+    evaluationDefinition: role,
+    caseDefinition,
+    output: output.replace(
+      `${protectedSegments[0].content}\n${protectedSegments[1].content}`,
+      `${protectedSegments[1].content}\n${protectedSegments[0].content}`,
+    ),
+  });
+  assert.equal(reordered.passed, false);
+  assertFailedCheck(reordered, 'protected segment order');
+
+  const proseEmDash = gradeMechanicalOutput({
+    evaluationDefinition: role,
+    caseDefinition,
+    output: output.replace(
+      'Use the supplied artifacts unchanged.',
+      'Use the supplied artifacts — unchanged.',
+    ),
+  });
+  assert.equal(proseEmDash.passed, false);
+  assertFailedCheck(proseEmDash, 'no em dash in prose');
+
+  assert.equal(
+    output.includes('keep—exact') && output.includes('Quoted source — preserve'),
+    true,
+  );
+  assert.equal(grade.passed, true, 'protected em dashes must remain accepted');
 });
 
 test('exact v2 trigger grader uses explicit lifecycle contract fixtures', () => {
@@ -756,8 +792,8 @@ test('complete outcome retains a matched No-Skill control', async (t) => {
           checks: [],
         };
       }
-      return gradeDeterministicOutput({
-        definition: outcome,
+      return gradeMechanicalOutput({
+        evaluationDefinition: outcome,
         caseDefinition,
         output: result.observations.responses.map(({ text }) => text).join('\n\n'),
       });

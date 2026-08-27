@@ -45,26 +45,7 @@
       }
     ]
   },
-  "signals": {
-    "protected_code_declaration": [
-      "^function retryCount\\(payload\\) \\{$"
-    ],
-    "protected_code_return": [
-      "^  return payload\\.retry_count;$"
-    ],
-    "protected_code_close": [
-      "^\\}$"
-    ],
-    "protected_schema": [
-      "^\\{\"type\":\"integer\",\"minimum\":1\\}$"
-    ],
-    "protected_data": [
-      "^\\{\"retry-count\": 3, \"note\": \"keep—exact\"\\}$"
-    ],
-    "protected_quote": [
-      "^\"Quoted source — preserve this punctuation\\.\"$"
-    ]
-  },
+  "signals": {},
   "global_required_signals": [],
   "global_order": [],
   "forbidden_patterns": [],
@@ -165,14 +146,29 @@
         "answer-first",
         "no-em-dash"
       ],
-      "required_signals": [
-        "protected_code_declaration",
-        "protected_code_return",
-        "protected_code_close",
-        "protected_schema",
-        "protected_data",
-        "protected_quote"
-      ]
+      "protected_segments": [
+        {
+          "category": "code",
+          "content": "function retryCount(payload) {\n  return payload.retry_count;\n}",
+          "occurrence_count": 1
+        },
+        {
+          "category": "schema",
+          "content": "{\"type\":\"integer\",\"minimum\":1}",
+          "occurrence_count": 1
+        },
+        {
+          "category": "data",
+          "content": "{\"retry-count\": 3, \"note\": \"keep—exact\"}",
+          "occurrence_count": 1
+        },
+        {
+          "category": "quote",
+          "content": "\"Quoted source — preserve this punctuation.\"",
+          "occurrence_count": 1
+        }
+      ],
+      "no_em_dash": true
     }
   ]
 }

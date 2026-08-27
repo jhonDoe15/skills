@@ -21,15 +21,20 @@ The shared v2 trigger grader consumes exact normalized Skill lifecycle events.
 Package inventory, resolved dependency closure, generic tool use, output prose,
 and case identifiers cannot satisfy activation.
 
-The shared default grader is limited to mechanical facts represented in JSON:
-exact protected code, schema, data, and quote lines, plus exact forbidden
-characters where the case makes that unambiguous. It does not grade sentence
-meaning. Answer-first ordering, accountable owner/action relationships,
-recommendation, basis, material uncertainty, change condition, proposition
-polarity and direction, clarity, contextual voice, neutral-record behavior,
-and non-hollow prose are explicit case expectations and blind-judge
-dimensions. Every assertion or dimension pass must quote or reference specific
-output evidence. Sampled human review checks the outputs and grades in context.
+The shared default grader is limited to mechanical facts represented in JSON.
+The small owner-local `gradeMechanicalOutput` checker composes that grader with
+declared protected-segment checks. It compares UTF-8 content with exact casing,
+whitespace, order, contiguity, and occurrence counts. It then masks only the
+exact matched byte spans before checking surrounding prose for an em dash, so
+protected non-prose and quoted punctuation remain untouched.
+
+Neither mechanical grader judges sentence meaning. Answer-first ordering,
+accountable owner/action relationships, recommendation, basis, material
+uncertainty, change condition, proposition polarity and direction, clarity,
+contextual voice, neutral-record behavior, and non-hollow prose are explicit
+case expectations and blind-judge dimensions. Every assertion or dimension
+pass must quote or reference specific output evidence. Sampled human review
+checks the outputs and grades in context.
 
 The fixture under `test/fixtures/` is a dependency tracer only. It contains no
 production behavior, is not named `SKILL.md`, and enters only temporary test
@@ -37,11 +42,13 @@ packages. Explicit normalized lifecycle fixtures test the v2 grader and
 Adapter contract. They do not prove semantic prompt routing. That evidence
 requires later adoption campaigns through real hosts.
 
-The owner-local `evals/index.js` only loads definitions and extracts protected
-fixture segments; it is not a custom grader. Content-addressed replay of custom
-JavaScript graders is deferred and is not a dependency. Generated run
-directories, grading payloads, reports, benchmark data, and viewer output stay
-uncommitted.
+The owner-local evaluation callback uses `gradeMechanicalOutput`; tests and
+evaluation runs share the same path. This checker handles bytes and exact
+characters only, not natural-language semantics. Offline content-addressed
+replay of owner-local JavaScript remains deferred and is not a dependency;
+retained results record the mechanical grade produced during the run.
+Generated run directories, grading payloads, reports, benchmark data, and
+viewer output stay uncommitted.
 
 Run the local contract tests with:
 
