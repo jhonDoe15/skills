@@ -17,6 +17,7 @@
   "judge": {
     "score_range": [0, 2],
     "minimum_dimension_score": 1,
+    "evidence_requirement": "For every assertion and dimension, the blind judge must quote or reference specific output or lifecycle evidence.",
     "dimensions": [
       {
         "id": "shared_behavior",

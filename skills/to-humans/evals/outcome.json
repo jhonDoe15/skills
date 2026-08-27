@@ -17,38 +17,47 @@
   "judge": {
     "score_range": [0, 2],
     "minimum_dimension_score": 1,
+    "evidence_requirement": "For every assertion and dimension, the blind judge must quote or reference specific output evidence. Labels or unsupported conclusions are not evidence.",
     "dimensions": [
       {
         "id": "decision_quality",
-        "description": "Includes a recommendation, basis, material uncertainty, and evidence that could change it."
+        "description": "Checks a distinct recommendation, basis, material uncertainty, and change condition with source-correct proposition meaning."
       },
       {
         "id": "reader_effort",
-        "description": "Presents the answer before detail and supports scanning without dropping requested content."
+        "description": "Checks answer-first ordering, clarity, scan structure, and non-hollow prose without requiring fixed headings."
       },
       {
         "id": "fidelity",
-        "description": "Preserves facts, evidence, uncertainty, requested breadth, and non-prose work products."
+        "description": "Checks source-grounded facts, polarity, direction, uncertainty, requested breadth, and non-prose work products."
       },
       {
         "id": "natural_voice",
-        "description": "Removes filler and artificial patterns without standardizing contextual voice."
+        "description": "Checks contextual voice without filler, token stuffing, or standardized prose."
       }
     ]
   },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
   "evals": [
     {
       "id": "complete-human-decision",
       "name": "complete human-facing deployment decision",
       "prompt": "Recommend a deployment approach to the release owner. A staged rollout has verified rollback. It starts with a limited first cohort, which contains exposure. Peak traffic remains untested. The noon load test passes when p95 latency stays under 200 ms; a passing result supports moving to full deployment, while a miss means keeping the staged rollout. Include the basis, the untested condition that matters, and what result would change the recommendation.",
-      "expected_output": "The treatment provides a complete human-facing decision with its canonical dependency, while the matched No-Skill control receives the same scenario without writing Skills.",
+      "expected_output": "The treatment provides a complete source-grounded human-facing decision, while the matched No-Skill control receives the same scenario without writing Skills.",
       "files": [],
       "expectations": [
-        "The recommendation appears before supporting detail.",
-        "The basis is concrete.",
-        "Material uncertainty remains visible.",
-        "The output says what could change the recommendation.",
-        "The treatment retains all requested elements and contains no em dash."
+        "Answer first: the recommendation appears before supporting detail.",
+        "The recommendation explicitly chooses a deployment approach.",
+        "The basis correctly links verified rollback and contained exposure to the staged rollout and limited first cohort.",
+        "Material uncertainty clearly states that peak traffic remains untested.",
+        "The change condition preserves the supplied pass/fail, under/over 200 ms, and staged/full deployment direction.",
+        "Recommendation, basis, material uncertainty, and change condition each have distinct substantive evidence.",
+        "Source-grounded proposition meaning remains correct under alternate wording.",
+        "Clarity is non-hollow and free of repeated tokens, keyword soup, or field labels without substance.",
+        "The treatment contains no em dash."
       ],
       "covers": [
         "matched-no-skill-control",
@@ -57,110 +66,7 @@
         "requested-breadth",
         "no-em-dash"
       ],
-      "deterministic": {
-        "answer_first": {
-          "topic_patterns": [
-            "\\b(?:staged|limited|full) (?:release|rollout|deployment)\\b"
-          ],
-          "answer_patterns": [
-            "\\b(?:recommend|choose|prefer|use|start|proceed|safer|safest|hold|delay)\\b"
-          ]
-        },
-        "decision_support": {
-          "recommendation": {
-            "claim_patterns": [
-              "\\b(?:recommend|choose|prefer|use|start|proceed with) (?:a |the )?(?:limited|staged) (?:release|rollout|deployment)\\b",
-              "\\b(?:limited|staged) (?:release|rollout|deployment) (?:is|looks|remains) (?:safer|safest|best|preferred|recommended)\\b"
-            ]
-          },
-          "basis": {
-            "all_of": [
-              {
-                "claim_patterns": [
-                  "\\bverified rollback\\b",
-                  "\\brollback (?:is|was|has been) verified\\b"
-                ]
-              },
-              {
-                "claim_patterns": [
-                  "\\b(?:small|limited) first cohort (?:contains|caps|limits|reduces) (?:the )?(?:exposure|risk|blast radius)\\b",
-                  "\\b(?:exposure|risk|blast radius) (?:is |stays )?(?:contained|capped|limited|reduced) (?:by|with|through) (?:the )?(?:small|limited) first cohort\\b"
-                ]
-              }
-            ]
-          },
-          "material_uncertainty": {
-            "allow_negation": true,
-            "claim_patterns": [
-              "\\bpeak (?:traffic|demand|load) (?:remains|is) untested\\b",
-              "\\b(?:have|has) not (?:yet )?(?:tested|exercised) peak (?:traffic|demand|load)\\b"
-            ]
-          },
-          "change_condition": {
-            "alternatives": [
-              {
-                "forbidden_patterns": [
-                  "\\b(?:fails|misses|exceeds|above|over)\\b"
-                ],
-                "positive_patterns": [
-                  "\\b(?:(?:move|switch) to (?:a |the )?full(?: deployment| rollout| release)?|proceed with (?:a |the )?full(?: deployment| rollout| release)?|deploy (?:to )?everyone|expand to (?:a |the )?full(?: deployment| rollout| release)?)\\b"
-                ],
-                "required_groups": [
-                  ["\\b(?:if|when|only when)\\b"],
-                  ["\\b(?:noon )?load test\\b"],
-                  ["\\b(?:passes|meets (?:its )?(?:p95 )?latency (?:target|threshold)|(?:keeps|reports|shows) (?:p95 )?latency (?:under|below|at most) 200\\s*ms)\\b"],
-                  ["\\b(?:move|switch|proceed|deploy)(?:\\s+\\w+){0,3}\\s+(?:full(?: deployment| rollout| release)?|everyone)\\b"]
-                ],
-                "ordered_groups": [
-                  [
-                    ["\\b(?:move|switch|proceed|deploy)(?:\\s+\\w+){0,3}\\s+(?:full(?: deployment| rollout| release)?|everyone)\\b"],
-                    ["\\b(?:if|when|only when)\\b"],
-                    ["\\b(?:noon )?load test\\b"],
-                    ["\\b(?:passes|meets (?:its )?(?:p95 )?latency (?:target|threshold)|(?:keeps|reports|shows) (?:p95 )?latency (?:under|below|at most) 200\\s*ms)\\b"]
-                  ],
-                  [
-                    ["\\b(?:if|when|only when)\\b"],
-                    ["\\b(?:noon )?load test\\b"],
-                    ["\\b(?:passes|meets (?:its )?(?:p95 )?latency (?:target|threshold)|(?:keeps|reports|shows) (?:p95 )?latency (?:under|below|at most) 200\\s*ms)\\b"],
-                    ["\\b(?:move|switch|proceed|deploy)(?:\\s+\\w+){0,3}\\s+(?:full(?: deployment| rollout| release)?|everyone)\\b"]
-                  ]
-                ]
-              },
-              {
-                "forbidden_patterns": [
-                  "\\b(?:passes|meets|under|below|at most)\\b"
-                ],
-                "positive_patterns": [
-                  "\\b(?:keep|hold) (?:the )?(?:limited|staged) (?:release|rollout|deployment)\\b",
-                  "\\b(?:remain|stay) with (?:the )?(?:limited|staged) (?:release|rollout|deployment)\\b"
-                ],
-                "required_groups": [
-                  ["\\b(?:if|when)\\b"],
-                  ["\\b(?:noon )?load test\\b"],
-                  ["\\b(?:fails|misses|exceeds|(?:p95 )?latency (?:is |stays )?(?:above|over) 200\\s*ms)\\b"],
-                  ["\\b(?:keep|hold|remain with|stay with)(?:\\s+\\w+){0,2}\\s+(?:limited|staged) (?:release|rollout|deployment)\\b"]
-                ],
-                "ordered_groups": [
-                  [
-                    ["\\b(?:keep|hold|remain with|stay with)(?:\\s+\\w+){0,2}\\s+(?:limited|staged) (?:release|rollout|deployment)\\b"],
-                    ["\\b(?:if|when)\\b"],
-                    ["\\b(?:noon )?load test\\b"],
-                    ["\\b(?:fails|misses|exceeds|(?:p95 )?latency (?:is |stays )?(?:above|over) 200\\s*ms)\\b"]
-                  ],
-                  [
-                    ["\\b(?:if|when)\\b"],
-                    ["\\b(?:noon )?load test\\b"],
-                    ["\\b(?:fails|misses|exceeds|(?:p95 )?latency (?:is |stays )?(?:above|over) 200\\s*ms)\\b"],
-                    ["\\b(?:keep|hold|remain with|stay with)(?:\\s+\\w+){0,2}\\s+(?:limited|staged) (?:release|rollout|deployment)\\b"]
-                  ]
-                ]
-              }
-            ]
-          }
-        },
-        "forbidden_patterns": [],
-        "no_em_dash": true
-      }
+      "forbidden_patterns": ["—"]
     }
   ]
 }

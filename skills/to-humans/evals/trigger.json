@@ -17,6 +17,7 @@
   "judge": {
     "score_range": [0, 2],
     "minimum_dimension_score": 1,
+    "evidence_requirement": "For every assertion and dimension, the judge must quote or reference exact Skill lifecycle evidence; contract fixtures do not prove semantic routing.",
     "dimensions": [
       {
         "id": "reader_routing",

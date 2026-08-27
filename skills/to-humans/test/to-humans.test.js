@@ -15,6 +15,7 @@ const {
 } = require('../../../suite');
 const {
   createCampaignManifest,
+  gradeDeterministicOutput,
   gradeTriggerResult,
   runComponentEvaluation,
   runMatchedEvaluation,
@@ -26,7 +27,6 @@ const {
   executeTest,
 } = require('../../../suite/testing');
 const {
-  gradeHumanWritingResult,
   loadDefinitions,
   protectedSegmentsFromPrompt,
 } = require('../evals');
@@ -395,52 +395,64 @@ test('owner-local definitions cover every To Humans contract layer', () => {
   }
 });
 
-test('deterministic writing grader accepts alternate wording and keeps hard gates', () => {
-  const role = definitionFor(loadDefinitions(), 'role');
-  const caseDefinition = role.evals.find(({ id }) => id === 'human-status');
-  const result = normalizedResult({
-    output: [
-      'A limited rollout is the safest move today.',
-      '',
-      '- At 14:00, release engineering starts with the internal group.',
-      '- Customer support prepares the customer notice before rollout.',
-      '- Security verifies before approval that the exception expires Friday.',
-      '',
-      'This keeps the rollback window open while peak demand remains untested.',
-    ].join('\n'),
-  });
-
-  const grade = gradeHumanWritingResult({
-    evaluationDefinition: role,
-    caseDefinition,
-    result,
-  });
-  assert.equal(grade.passed, true, JSON.stringify(grade, null, 2));
-
-  const incomplete = structuredClone(result);
-  incomplete.observations.responses[0].text = [
-    'The staged rollout could proceed today \u2014 details follow.',
-    '',
-    'Release owner: start with the internal group.',
-  ].join('\n');
-  const failed = gradeHumanWritingResult({
-    evaluationDefinition: role,
-    caseDefinition,
-    result: incomplete,
-  });
-  assert.equal(failed.passed, false);
-  assertFailedCheck(failed, 'requested item security');
-  assertFailedCheck(failed, 'no em dash in prose');
+test('shared mechanical grading does not judge semantic prose', () => {
+  const definitions = loadDefinitions();
+  for (const layer of ['role', 'outcome']) {
+    const definition = definitionFor(definitions, layer);
+    const semanticCases = definition.evals.filter(({ id }) => id !== 'protected-content');
+    for (const caseDefinition of semanticCases) {
+      for (const output of [
+        'Concise valid prose with freely chosen wording.',
+        'Recommendation. Basis. Material uncertainty. Change condition.',
+      ]) {
+        const grade = gradeDeterministicOutput({
+          definition,
+          caseDefinition,
+          output,
+        });
+        assert.equal(
+          grade.passed,
+          true,
+          `${layer}/${caseDefinition.id} should defer semantics`,
+        );
+      }
+    }
+  }
 });
 
-test('deterministic writing grader requires distinct accountable actions', () => {
-  const role = definitionFor(loadDefinitions(), 'role');
-  const caseDefinition = role.evals.find(({ id }) => id === 'human-status');
-  const grade = (lines) => gradeHumanWritingResult({
-    evaluationDefinition: role,
-    caseDefinition,
-    result: normalizedResult({ output: lines.join('\n') }),
-  });
+test('semantic cases define evidence-bearing blind-judge assertions', () => {
+  const definitions = loadDefinitions();
+  for (const definition of definitions) {
+    assert.match(definition.judge.evidence_requirement, /quote|reference/i);
+    assert.match(definition.judge.evidence_requirement, /output|lifecycle/i);
+  }
+
+  const role = definitionFor(definitions, 'role');
+  const semanticContract = [
+    ...role.judge.dimensions.map(({ description }) => description),
+    ...role.evals.flatMap(({ expectations }) => expectations),
+  ].join(' ').toLocaleLowerCase('en');
+  for (const requiredMeaning of [
+    'answer first',
+    'accountable owner',
+    'recommendation',
+    'basis',
+    'material uncertainty',
+    'change condition',
+    'source-grounded',
+    'clarity',
+    'contextual voice',
+    'neutral record',
+    'non-hollow',
+  ]) {
+    assert.equal(
+      semanticContract.includes(requiredMeaning),
+      true,
+      `missing semantic judge coverage for ${requiredMeaning}`,
+    );
+  }
+
+  const status = role.evals.find(({ id }) => id === 'human-status');
   for (const sourceFact of [
     '14:00',
     'internal cohort',
@@ -449,448 +461,23 @@ test('deterministic writing grader requires distinct accountable actions', () =>
     'exception expires Friday',
     'before approval',
   ]) {
-    assert.equal(
-      caseDefinition.prompt.includes(sourceFact),
-      true,
-      `scenario must supply ${sourceFact}`,
-    );
-  }
-  const concise = grade([
-    'Start a staged rollout.',
-    'At 14:00, the release lead stages the internal cohort.',
-    'Support prepares the customer notice before rollout.',
-    'Security verifies before approval that the exception expires Friday.',
-  ]);
-  assert.equal(concise.passed, true, JSON.stringify(concise, null, 2));
-  const unrelatedNegation = grade([
-    'Start a staged rollout.',
-    'Although the deadline is not flexible, at 14:00 the release lead stages the internal cohort.',
-    'Support prepares the customer notice before rollout, not the incident report.',
-    'Security verifies before approval that the exception expires Friday, without delay.',
-  ]);
-  assert.equal(
-    unrelatedNegation.passed,
-    true,
-    JSON.stringify(unrelatedNegation, null, 2),
-  );
-  const paraphrase = grade([
-    'Start a staged rollout.',
-    'Release engineering will stage the first cohort at 2 p.m.',
-    'Ahead of rollout, customer support will publish the customer message.',
-    'Prior to approval, security will confirm the exception expiration Friday.',
-  ]);
-  assert.equal(paraphrase.passed, true, JSON.stringify(paraphrase, null, 2));
-  const qualifierPlacements = [
-    [
-      'At 14:00, the release lead stages the internal cohort.',
-      'Before rollout, support prepares the customer notice.',
-      'Before approval, security verifies that the exception expires Friday.',
-    ],
-    [
-      'The release lead, at 14:00, stages the internal cohort.',
-      'Support, before rollout, prepares the customer notice.',
-      'Security, before approval, verifies that the exception expires Friday.',
-    ],
-    [
-      'The release lead stages at 14:00 the internal cohort.',
-      'Support prepares before rollout the customer notice.',
-      'Security verifies before approval that the exception expires Friday.',
-    ],
-    [
-      'The release lead stages the internal cohort at 14:00.',
-      'Support prepares the customer notice before rollout.',
-      'Security verifies that the exception expires Friday before approval.',
-    ],
-    [
-      'The release lead, scheduled for 14:00, stages the internal cohort.',
-      'Support, prior to rollout, prepares the customer notice.',
-      'Security, prior to approval, verifies that the exception expires Friday.',
-    ],
-    [
-      'The release lead stages the internal cohort at 2:00 PM.',
-      'Support prepares the customer notice ahead of rollout.',
-      'Security verifies that the exception expires Friday prior to approval.',
-    ],
-  ];
-  for (const [index, actions] of qualifierPlacements.entries()) {
-    const placement = grade(['Start a staged rollout.', ...actions]);
-    assert.equal(
-      placement.passed,
-      true,
-      `qualifier placement ${index + 1}: ${JSON.stringify(placement, null, 2)}`,
-    );
+    assert.equal(status.prompt.includes(sourceFact), true, sourceFact);
   }
 
-  const probes = [
-    [
-      'Start a staged rollout today.',
-      'Release.',
-      'Support.',
-      'Security.',
-      'Rollback is verified. Peak traffic is untested.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'Release owner starts starts.',
-      'Support owner confirms confirms.',
-      'Security owner verifies verifies.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'Release owner starts the internal group and starts the internal group.',
-      'Support owner prepares the customer notice and prepares the customer notice.',
-      'Security owner reviews the exception expiry and reviews the exception expiry.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'Release owner starts internal group release owner starts internal group.',
-      'Support owner prepares customer notice support owner prepares customer notice.',
-      'Security owner reviews exception expiry security owner reviews exception expiry.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'Release support security starts confirms verifies internal group customer notice exception expiry.',
-      'Release support security starts confirms verifies internal group customer notice exception expiry.',
-      'Release support security starts confirms verifies internal group customer notice exception expiry.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'At 14:00 internal cohort release lead stages.',
-      'Before rollout customer notice support prepares.',
-      'Before approval exception expires Friday security verifies.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'At 14:00 the release lead starts the customer notice and mentions the internal cohort.',
-      'Before rollout support prepares the exception and mentions the customer notice.',
-      'Before approval security reviews the internal cohort and mentions the exception expiry Friday.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'At 14:00 the release lead stages the agenda, noting the internal cohort.',
-      'Support prepares no customer notice before rollout.',
-      'Before approval security verifies the checklist, noting the exception expires Friday.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'At 14:00 the release lead never stages the internal cohort.',
-      'Support does not prepare the customer notice before rollout.',
-      'Security never verifies before approval that the exception expires Friday.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'At 14:00 the release lead watches while the project manager stages the internal cohort.',
-      'Before rollout the support owner watches as the project manager prepares the customer notice.',
-      'Before approval the security owner watches as the project manager verifies the exception expires Friday.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'At 14:00 the project manager updates the agenda, and the release lead stages the internal cohort.',
-      'Support prepares the customer notice before rollout.',
-      'Security verifies before approval that the exception expires Friday.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'At 14:00 the release lead stages the internal cohort.',
-      'Support prepares the customer notice before rollout.',
-      'Before approval security verifies the exception expires Monday, with Friday reserved for review.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'At 14:00 the release lead stages the internal cohort.',
-      'Support prepares the customer notice before rollout.',
-      'Security verifies that the exception expires Friday.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'At 14:00 the release lead stages the internal cohort.',
-      'Support prepares the customer notice before rollout.',
-      'Before approval the project manager updates the agenda, and security verifies the exception expires Friday.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'At 14:00 the project manager updates the agenda, then at 15:00 the release lead stages the internal cohort.',
-      'Support prepares the customer notice before rollout.',
-      'Security verifies before approval that the exception expires Friday.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'At 14:00, before the release lead stages the internal cohort, the project manager updates the agenda.',
-      'Support prepares the customer notice before rollout.',
-      'Security verifies before approval that the exception expires Friday.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'Not at 14:00, the release lead stages the internal cohort.',
-      'Support prepares the customer notice before rollout.',
-      'Security verifies before approval that the exception expires Friday.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'After 14:00, the release lead stages the internal cohort.',
-      'Support prepares the customer notice before rollout.',
-      'Security verifies before approval that the exception expires Friday.',
-    ],
-    [
-      'Start a staged rollout today.',
-      'The release lead, no longer at 14:00, stages the internal cohort.',
-      'Support prepares the customer notice before rollout.',
-      'Security verifies before approval that the exception expires Friday.',
-    ],
-  ];
-  for (const [index, probe] of probes.entries()) {
-    const result = grade(probe);
-    assert.equal(result.passed, false, `hollow action probe ${index + 1}`);
-    assert.equal(
-      result.checks.some(({ name, passed }) => (
-        name.startsWith('accountable action ') && !passed
-      )),
-      true,
-      `hollow action probe ${index + 1} needs an action failure`,
-    );
-  }
-});
-
-test('decision gates accept unlabeled alternate prose and reject hollow probes', () => {
-  const role = definitionFor(loadDefinitions(), 'role');
-  const caseDefinition = role.evals.find(({ id }) => id === 'decision-support');
+  const decision = role.evals.find(({ id }) => id === 'decision-support');
   for (const sourceFact of [
     'verified rollback',
     'small first cohort, which contains exposure',
+    'Peak traffic remains untested',
     'p95 latency stays under 200 ms',
     'passing result supports moving to full deployment',
     'miss means keeping the limited release',
   ]) {
-    assert.equal(
-      caseDefinition.prompt.includes(sourceFact),
-      true,
-      `decision scenario must supply ${sourceFact}`,
-    );
-  }
-  const alternate = normalizedResult({
-    output: [
-      'Use a limited release today.',
-      '',
-      'Rollback has been verified, and a small first cohort contains exposure.',
-      '',
-      'We have not yet exercised peak traffic.',
-      '',
-      'Move to a full deployment only when the noon load test meets its latency target.',
-    ].join('\n'),
-  });
-
-  const passing = gradeHumanWritingResult({
-    evaluationDefinition: role,
-    caseDefinition,
-    result: alternate,
-  });
-  assert.equal(passing.passed, true, JSON.stringify(passing, null, 2));
-
-  const concise = structuredClone(alternate);
-  concise.observations.responses[0].text = [
-    'Use a staged rollout; a small first cohort limits exposure and rollback is verified; '
-      + 'peak traffic is untested; switch to full if the load test passes.',
-  ].join('');
-  const conciseGrade = gradeHumanWritingResult({
-    evaluationDefinition: role,
-    caseDefinition,
-    result: concise,
-  });
-  assert.equal(conciseGrade.passed, true, JSON.stringify(conciseGrade, null, 2));
-
-  const detailFirst = structuredClone(alternate);
-  detailFirst.observations.responses[0].text = [
-    'Rollback has been verified, and a small first cohort contains exposure.',
-    '',
-    'Use a limited release today.',
-    '',
-    'We have not yet exercised peak traffic.',
-    '',
-    'Move to a full deployment only when the noon load test meets its latency target.',
-  ].join('\n');
-  const detailFirstGrade = gradeHumanWritingResult({
-    evaluationDefinition: role,
-    caseDefinition,
-    result: detailFirst,
-  });
-  assert.equal(detailFirstGrade.passed, false);
-  assertFailedCheck(detailFirstGrade, 'answer first');
-
-  const validParaphrases = [
-    [
-      'Prefer a staged rollout.',
-      'A limited first cohort caps exposure, and rollback was verified.',
-      'Peak demand remains untested.',
-      'Proceed with full deployment if the noon load test keeps p95 latency below 200 ms.',
-    ],
-    [
-      'Use a limited release.',
-      'Exposure stays contained through the small first cohort, and verified rollback is available.',
-      'We have not yet exercised peak traffic.',
-      'Keep the limited release when the noon load test exceeds 200 ms.',
-    ],
-  ];
-  for (const [index, lines] of validParaphrases.entries()) {
-    const paraphrase = structuredClone(alternate);
-    paraphrase.observations.responses[0].text = lines.join('\n');
-    const paraphraseGrade = gradeHumanWritingResult({
-      evaluationDefinition: role,
-      caseDefinition,
-      result: paraphrase,
-    });
-    assert.equal(
-      paraphraseGrade.passed,
-      true,
-      `valid decision paraphrase ${index + 1}: ${JSON.stringify(paraphraseGrade, null, 2)}`,
-    );
-  }
-
-  const contradictionProbes = [
-    [
-      'Use a limited release today.',
-      'Verified rollback limits exposure.',
-      'Peak traffic remains untested.',
-      'Move to full deployment when the noon load test passes.',
-    ],
-    [
-      'Use a limited release today.',
-      'A small first cohort contains exposure, and rollback is verified.',
-      'Peak traffic remains untested.',
-      'Move to full deployment when the noon load test fails.',
-    ],
-    [
-      'Use a limited release today.',
-      'A small first cohort contains exposure, and rollback is verified.',
-      'Peak traffic remains untested.',
-      'Deploy to everyone if the noon load test exceeds 200 ms.',
-    ],
-    [
-      'Use a full deployment today.',
-      'A small first cohort contains exposure, and rollback is verified.',
-      'Peak traffic remains untested.',
-      'Keep the limited release when the noon load test exceeds 200 ms.',
-    ],
-    [
-      'Use a limited release today.',
-      'An unverified rollback and a small first cohort contain exposure.',
-      'Peak traffic remains untested.',
-      'Move to full deployment when the noon load test passes.',
-    ],
-    [
-      'Use a limited release today.',
-      'A small first cohort contains exposure, and rollback is verified.',
-      'Peak traffic remains untested.',
-      'Do not move to full deployment if the load test passes.',
-    ],
-    [
-      'Use a limited release today.',
-      'A small first cohort contains exposure, and rollback is verified.',
-      'Peak traffic remains untested.',
-      'Move away from full deployment when the load test passes.',
-    ],
-    [
-      'Use a limited release today.',
-      'A small first cohort contains exposure, and rollback is verified.',
-      'Peak traffic remains untested.',
-      'Never switch to full deployment when the load test passes.',
-    ],
-    [
-      'Use a limited release today.',
-      'A small first cohort contains exposure, and rollback is verified.',
-      'Peak traffic remains untested.',
-      'Stop and move to full deployment if the load test passes.',
-    ],
-  ];
-  for (const [index, lines] of contradictionProbes.entries()) {
-    const contradiction = structuredClone(alternate);
-    contradiction.observations.responses[0].text = lines.join('\n');
-    const contradictionGrade = gradeHumanWritingResult({
-      evaluationDefinition: role,
-      caseDefinition,
-      result: contradiction,
-    });
-    assert.equal(
-      contradictionGrade.passed,
-      false,
-      `source contradiction ${index + 1}`,
-    );
-  }
-
-  const hollowProbes = [
-    [
-      'Recommendation.',
-      'Basis.',
-      'Material uncertainty.',
-      'Change condition.',
-    ],
-    [
-      'Recommendation limited release use.',
-      'Basis exposure verified rollback contains.',
-      'Material uncertainty untested peak traffic.',
-      'Change condition load test move when latency target.',
-    ],
-    [
-      'Limited release today use.',
-      'Contains exposure verified rollback.',
-      'Peak traffic unknown untested remains.',
-      'Load test move only when latency target.',
-    ],
-    [
-      'Use limited release use use.',
-      'Verified rollback contain contain contain exposure.',
-      'Peak traffic untested untested untested now.',
-      'When load test move move move to deployment.',
-    ],
-    [
-      'Use limited release today use limited release today.',
-      'Verified rollback limits exposure verified rollback limits exposure.',
-      'Peak traffic remains untested peak traffic remains untested.',
-      'Switch when load test reports latency switch when load test reports latency.',
-    ],
-    Array(4).fill(
-      'Use a limited release because verified rollback contains exposure '
-      + 'while peak traffic remains untested and when the load test reports '
-      + 'latency move to a full deployment.',
-    ),
-  ];
-  for (const [index, lines] of hollowProbes.entries()) {
-    const hollow = structuredClone(alternate);
-    hollow.observations.responses[0].text = lines.join('\n');
-    const hollowGrade = gradeHumanWritingResult({
-      evaluationDefinition: role,
-      caseDefinition,
-      result: hollow,
-    });
-    assert.equal(hollowGrade.passed, false, `hollow decision probe ${index + 1}`);
-    assert.equal(
-      hollowGrade.checks.some(({ name, passed }) => (
-        name.startsWith('decision ') && !passed
-      )),
-      true,
-      `hollow decision probe ${index + 1} needs a decision-field failure`,
-    );
+    assert.equal(decision.prompt.includes(sourceFact), true, sourceFact);
   }
 });
 
-test('neutral records remain factual without a manufactured decision', () => {
-  const role = definitionFor(loadDefinitions(), 'role');
-  const caseDefinition = role.evals.find(({ id }) => id === 'neutral-record');
-  const result = normalizedResult({
-    output: [
-      '09:10: The release lead paused deployment.',
-      '09:14: The security owner confirmed the signing key was unchanged.',
-      '09:18: The support owner opened incident INC-42.',
-    ].join('\n'),
-  });
-  const grade = gradeHumanWritingResult({
-    evaluationDefinition: role,
-    caseDefinition,
-    result,
-  });
-  assert.equal(grade.passed, true, JSON.stringify(grade, null, 2));
-});
-
-test('deterministic writing grader preserves protected non-prose exactly', () => {
+test('shared mechanical grader preserves protected non-prose exactly', () => {
   const role = definitionFor(loadDefinitions(), 'role');
   const caseDefinition = role.evals.find(({ id }) => id === 'protected-content');
   const protectedSegments = protectedSegmentsFromPrompt(caseDefinition.prompt);
@@ -909,33 +496,29 @@ test('deterministic writing grader preserves protected non-prose exactly', () =>
     '',
     'Owner: API maintainers verify the sample before publication.',
   ].join('\n');
-  const result = normalizedResult({
-    output,
-  });
-
-  const grade = gradeHumanWritingResult({
-    evaluationDefinition: role,
+  const grade = gradeDeterministicOutput({
+    definition: role,
     caseDefinition,
-    result,
+    output,
   });
   assert.equal(grade.passed, true, JSON.stringify(grade, null, 2));
 
-  const corruptions = {
-    code: ['return payload.retry_count;', 'return payload.retryCount;'],
-    schema: ['"minimum":1', '"minimum":0'],
-    data: ['"retry-count": 3', '"retryCount": 3'],
-    quote: ['preserve this punctuation.', 'change this punctuation!'],
-  };
-  for (const [category, [before, after]] of Object.entries(corruptions)) {
-    const changed = structuredClone(result);
-    changed.observations.responses[0].text = output.replace(before, after);
-    const failed = gradeHumanWritingResult({
-      evaluationDefinition: role,
+  const corruptions = [
+    ['code declaration', 'retryCount(payload)', 'retry_count(payload)', 'protected_code_declaration'],
+    ['code indentation', '  return payload.retry_count;', ' return payload.retry_count;', 'protected_code_return'],
+    ['code closing brace', '\n}\n', '\n};\n', 'protected_code_close'],
+    ['schema', '"minimum":1', '"minimum":0', 'protected_schema'],
+    ['data', '"retry-count": 3', '"retryCount": 3', 'protected_data'],
+    ['quote', 'preserve this punctuation.', 'change this punctuation!', 'protected_quote'],
+  ];
+  for (const [category, before, after, signal] of corruptions) {
+    const failed = gradeDeterministicOutput({
+      definition: role,
       caseDefinition,
-      result: changed,
+      output: output.replace(before, after),
     });
     assert.equal(failed.passed, false, category);
-    assertFailedCheck(failed, `protected ${category} unchanged`);
+    assertFailedCheck(failed, `signal ${signal}`);
   }
 });
 
@@ -1173,10 +756,10 @@ test('complete outcome retains a matched No-Skill control', async (t) => {
           checks: [],
         };
       }
-      return gradeHumanWritingResult({
-        evaluationDefinition: outcome,
+      return gradeDeterministicOutput({
+        definition: outcome,
         caseDefinition,
-        result,
+        output: result.observations.responses.map(({ text }) => text).join('\n\n'),
       });
     },
   });
