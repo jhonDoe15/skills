@@ -141,10 +141,16 @@ test('writing-foundation exposes its private audience-independent Interface', (t
 test('writing-foundation separates mechanical gates from semantic adoption', () => {
   const definition = readJson('evals/role.json');
   const caseDefinition = definition.evals[0];
-  assert.equal(validateEvaluationDefinition(definition), definition);
+  assert.equal(
+    validateEvaluationDefinition(definition, repositoryRoot),
+    definition,
+  );
   assert.equal(definition.evaluation.layer, 'role');
   assert.deepEqual(definition.evaluation.hosts, ['claude-code', 'cursor']);
   assert.deepEqual(caseDefinition.covered_clauses, foundationClauses);
+  assert.deepEqual(caseDefinition.required_skill_loads, [
+    'writing-foundation',
+  ]);
 
   const validOutput = fs.readFileSync(
     path.join(skillRoot, 'evals', 'fixtures', 'role-output.md'),

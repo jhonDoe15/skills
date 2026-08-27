@@ -13,6 +13,7 @@ const {
   gradeDeterministicOutput,
   gradeTriggerResult,
   runComponentEvaluation,
+  runMatchedEvaluation,
   validateEvaluationDefinition,
 } = require('../../../suite/evaluation');
 const { defineTestAdapter } = require('../../../suite/testing');
@@ -73,7 +74,10 @@ function loadDefinition(owner, fileName) {
     'evals',
     fileName,
   ));
-  assert.equal(validateEvaluationDefinition(definition), definition);
+  assert.equal(
+    validateEvaluationDefinition(definition, repositoryRoot),
+    definition,
+  );
   definitions.set(definition.evaluation.scope, definition);
   return definition;
 }
@@ -172,6 +176,7 @@ function normalizedResult({
   output,
   invokedSkills,
   packageSkills = invokedSkills,
+  observedSkillEvents = invokedSkills.map((name) => skillEvent(name)),
 }) {
   return {
     status: 'succeeded',
@@ -189,7 +194,7 @@ function normalizedResult({
         packageDigest: '0'.repeat(64),
         truncated: false,
       },
-      skillEvents: invokedSkills.map((name) => skillEvent(name)),
+      skillEvents: observedSkillEvents,
       routing: {
         requestedSkill: 'agent-writing',
         resolvedSkills: invokedSkills,
@@ -254,6 +259,132 @@ test('owner-local definitions isolate roles, the dependency edge, and the public
   }
 });
 
+test('outcome load declaration gates matched judging on exact successful events', async (t) => {
+  const definition = loadDefinition('agent-writing', 'outcome.json');
+  const caseDefinition = definition.evals[0];
+  assert.deepEqual(caseDefinition.required_skill_loads, [
+    'agent-writing',
+    'writing-foundation',
+  ]);
+  assert.equal(
+    validateEvaluationDefinition(definition, repositoryRoot),
+    definition,
+  );
+  const manifest = createCampaignManifest({
+    repositoryRoot,
+    definition,
+    packageRevision: 'issue-16-required-loads',
+    cells: [{ host: 'claude-code', model: 'test-model' }],
+    repetitions: 1,
+    executionConfiguration: { timeout_ms: 1000, tools: [] },
+    limitations: ['Owner-local lifecycle gate regression; no model execution.'],
+    controlPolicy: {
+      target: 'agent-writing',
+      dependencies: ['writing-foundation'],
+      aliases: [],
+      conflictingOwners: [],
+    },
+  });
+  assert.deepEqual(manifest.cases[0].required_skill_loads, [
+    'agent-writing',
+    'writing-foundation',
+  ]);
+  assert.deepEqual(manifest.skill_load_authority.resolved_skills, [
+    'writing-foundation',
+    'agent-writing',
+  ]);
+
+  const fixtureRoot = createPackageFixture(t);
+  const output = fs.readFileSync(
+    path.join(skillRoot, 'evals', 'fixtures', 'outcome-output.md'),
+    'utf8',
+  );
+  async function runWith(skillEvents) {
+    let treatmentGrades = 0;
+    const records = await runMatchedEvaluation({
+      repositoryRoot: fixtureRoot,
+      manifest,
+      caseDefinition,
+      cell: manifest.cells[0],
+      repetition: 1,
+      async executeArm({ arm }) {
+        const treatment = arm === 'treatment';
+        return normalizedResult({
+          output: treatment ? output : 'Independent control.',
+          invokedSkills: treatment
+            ? ['writing-foundation', 'agent-writing']
+            : [],
+          packageSkills: treatment
+            ? ['agent-writing', 'writing-foundation']
+            : [],
+          observedSkillEvents: treatment ? skillEvents : [],
+        });
+      },
+      gradeOutput({ arm, output: resultOutput }) {
+        const grade = gradeDeterministicOutput({
+          definition,
+          caseDefinition,
+          output: resultOutput,
+        });
+        if (arm === 'treatment') treatmentGrades += 1;
+        return arm === 'treatment'
+          ? grade
+          : { ...grade, passed: true, status: 'baseline' };
+      },
+    });
+    return {
+      treatmentGrades,
+      control: records.find(({ arm }) => arm.kind === 'no-skill'),
+      treatment: records.find(({ arm }) => arm.kind === 'treatment'),
+    };
+  }
+
+  for (const [label, events] of [
+    ['target only', [skillEvent('agent-writing')]],
+    ['wrong dependency', [
+      skillEvent('agent-writing'),
+      skillEvent('skill-mechanics'),
+    ]],
+    ['failed dependency', [
+      skillEvent('agent-writing'),
+      skillEvent('writing-foundation', { status: 'failed' }),
+    ]],
+  ]) {
+    const run = await runWith(events);
+    assert.equal(run.treatmentGrades, 0, label);
+    assert.equal(run.treatment.deterministic.passed, false, label);
+    assert.throws(
+      () => createBlindComparison({
+        manifest,
+        definition,
+        caseDefinition,
+        repetition: 1,
+        control: run.control,
+        treatment: run.treatment,
+        judgeModel: 'judge-model',
+      }),
+      /required Skill load gate failed/,
+      label,
+    );
+  }
+
+  const complete = await runWith([
+    skillEvent('agent-writing'),
+    skillEvent('writing-foundation'),
+  ]);
+  assert.equal(complete.treatmentGrades, 1);
+  assert.equal(complete.treatment.deterministic.passed, true);
+  assert.doesNotThrow(() => createBlindComparison({
+    manifest,
+    definition,
+    caseDefinition,
+    repetition: 1,
+    control: complete.control,
+    treatment: complete.treatment,
+    judgeModel: 'judge-model',
+  }));
+});
+
 test('component orchestration sends one neutral task and owns Foundation ablation', async (t) => {
   const definition = loadDefinition('agent-writing', 'component.json');
   const caseDefinition = definition.evals[0];
@@ -273,6 +404,7 @@ test('component orchestration sends one neutral task and owns Foundation ablatio
   );
 
   const manifest = createCampaignManifest({
+    repositoryRoot,
     definition,
     packageRevision: 'issue-16-component-regression',
     cells: [{ host: 'claude-code', model: 'test-model' }],
@@ -563,6 +695,7 @@ test('Agent Writing outcome keeps only unambiguous deterministic gates', () => {
   );
 
   const manifest = createCampaignManifest({
+    repositoryRoot,
     definition,
     packageRevision: 'db26f9d7410b982995a8f7b5a50ef045238a4fd4',
     cells: [{ host: 'claude-code', model: 'test-model' }],

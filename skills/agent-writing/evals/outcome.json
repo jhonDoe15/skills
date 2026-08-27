@@ -51,6 +51,10 @@
       "prompt": "Create an agent-facing procedure from the supplied `evals/fixtures/deploy-plan-source.json` for validating `deploy-plan.json`. Activate when the file path is supplied. Preserve the canonical `DAG frontier` term and the JSON literal `{\"maxAttempts\":3}`. Read the current schema command from the environment. On valid input, report the frontier; on invalid input, disclose failure-only remediation reference. Never modify the input. Complete after reporting the observed validation result and branch. Return the procedure; headings and labels are optional.",
       "expected_output": "A complete host-neutral Agent Writing outcome that invokes Writing Foundation and exposes the accepted context, activation, outcome, branches, ordered steps, conditional reference, co-located authority, instruction form, context choices, exact semantics, failure path, pruning, and completion.",
       "files": ["evals/fixtures/deploy-plan-source.json"],
+      "required_skill_loads": [
+        "agent-writing",
+        "writing-foundation"
+      ],
       "expectations": [
         "The deterministic gate establishes only deploy-plan.json, DAG frontier, the exact JSON literal {\"maxAttempts\":3}, read-only, and environment.",
         "Exact lifecycle evidence establishes writing-foundation and agent-writing activation; output wording is not used as trigger evidence.",

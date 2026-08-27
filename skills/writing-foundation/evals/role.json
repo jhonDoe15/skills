@@ -47,6 +47,9 @@
       "prompt": "Revise the supplied `evals/fixtures/deployment-note-source.md` without choosing an audience-specific voice. Preserve the exact domain term `DAG frontier`, the JSON value `{\"maxAttempts\":3}`, and all three requirements: deploy only unblocked tickets, retain the unresolved concurrency limit, and remove the duplicated background paragraph. Return the revised note; headings and labels are optional.",
       "expected_output": "A purpose-shaped record that accounts for every requirement, grounds claims, keeps the concurrency limit unresolved, preserves the exact term and JSON value, removes only the duplicate, and exposes a checkable completion result.",
       "files": ["evals/fixtures/deployment-note-source.md"],
+      "required_skill_loads": [
+        "writing-foundation"
+      ],
       "expectations": [
         "The deterministic gate establishes only the exact DAG frontier term, exact JSON literal {\"maxAttempts\":3}, and removal of the duplicated source paragraph.",
         "The blind judge verifies that every requested requirement and exclusion has an explicit, source-grounded disposition, including deployment of unblocked tickets only.",
