@@ -844,7 +844,10 @@ test('matched role and outcome cases canonicalize required Skill loads', () => {
       'skill-mechanics',
       'skill-evaluation',
     ];
-    assert.equal(validateEvaluationDefinition(definition), definition);
+    assert.equal(
+      validateEvaluationDefinition(definition, repositoryRoot),
+      definition,
+    );
     assert.deepEqual(
       createManifest(definition).cases[0].required_skill_loads,
       definition.evals[0].required_skill_loads,
@@ -1267,6 +1270,11 @@ test('matched load authority rejects self-consistent unrelated Skill evidence', 
     'agent-writing',
     'engineering-guidance',
   ];
+  definition.trusted_required_skill_closure = [
+    'writing-foundation',
+    'engineering-guidance',
+    'agent-writing',
+  ];
   const manifest = structuredClone(validManifest);
   manifest.definition_fingerprint = hash(definition);
   manifest.cases[0].required_skill_loads = [
@@ -1351,6 +1359,10 @@ test('matched load authority rejects self-consistent unrelated Skill evidence', 
   });
 
   assert.throws(
+    () => validateEvaluationDefinition(definition),
+    /repository context is required for canonical definition validation/,
+  );
+  assert.throws(
     () => validateEvaluationDefinition(definition, repositoryRoot),
     /outside trusted canonical closure/,
   );
@@ -1408,6 +1420,10 @@ test('matched load authority rejects stale revision and closure digests', () => 
     'agent-writing',
     'writing-foundation',
   ];
+  assert.equal(
+    validateEvaluationDefinition(definition, repositoryRoot),
+    definition,
+  );
   const manifest = createManifest(definition);
   assert.deepEqual(manifest.skill_load_authority?.resolved_skills, [
     'writing-foundation',
@@ -1434,6 +1450,28 @@ test('matched load authority rejects stale revision and closure digests', () => 
   assert.throws(
     () => validateCampaignManifest(retainedManifest, definition),
     /repository context is required/,
+  );
+});
+
+test('rootless matched validation is explicitly structural and target-only', () => {
+  const evaluation = require('../suite/evaluation');
+  assert.equal(
+    typeof evaluation.validateEvaluationDefinitionStructure,
+    'function',
+  );
+  const definition = testDefinition();
+
+  assert.equal(
+    evaluation.validateEvaluationDefinitionStructure(definition),
+    definition,
+  );
+  assert.throws(
+    () => validateEvaluationDefinition(definition),
+    /repository context is required for canonical definition validation/,
+  );
+  assert.equal(
+    validateEvaluationDefinition(definition, repositoryRoot),
+    definition,
   );
 });
 
@@ -1567,7 +1605,10 @@ test('shared schemas accept the normalized Incident Investigation definition', (
     'evals.json',
   ));
 
-  assert.equal(validateEvaluationDefinition(incidentDefinition), incidentDefinition);
+  assert.equal(
+    validateEvaluationDefinition(incidentDefinition, repositoryRoot),
+    incidentDefinition,
+  );
   assert.deepEqual(validateEvaluationSchemas(repositoryRoot), {
     definition: true,
     retainedEvidence: true,

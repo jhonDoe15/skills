@@ -316,7 +316,7 @@ function deterministicCheck(name, passed, details) {
 }
 
 function gradeDeterministicOutput({ definition, caseDefinition, output }) {
-  validateEvaluationDefinition(definition);
+  validateEvaluationDefinitionStructure(definition);
   requireObject(caseDefinition, 'caseDefinition');
   if (typeof output !== 'string') {
     throw new EvaluationContractError('output must be a string');
@@ -415,7 +415,7 @@ function deepFreeze(value) {
   return Object.freeze(value);
 }
 
-function validateEvaluationDefinition(definition, repositoryRoot = null) {
+function validateEvaluationDefinitionStructure(definition) {
   requireObject(definition, 'definition');
   requireString(definition.skill_name, 'definition.skill_name');
   requireObject(definition.evaluation, 'definition.evaluation');
@@ -576,27 +576,36 @@ function validateEvaluationDefinition(definition, repositoryRoot = null) {
     dimensionIds.push(dimension.id);
   }
   assertUnique(dimensionIds, 'definition.judge.dimensions');
-  if (repositoryRoot !== null
-    && ['role', 'outcome'].includes(metadata.layer)) {
-    const trustedClosure = canonicalSkillClosure(
-      repositoryRoot,
-      metadata.skill,
-    ).resolvedSkills;
-    for (const [index, evaluation] of definition.evals.entries()) {
-      const requiredLoads = normalizedMatchedRequiredSkillLoads({
-        layer: metadata.layer,
-        skill: metadata.skill,
-        caseDefinition: evaluation,
-        field: `definition.evals[${index}].required_skill_loads`,
-      });
-      const outsideClosure = requiredLoads.find(
-        (name) => !trustedClosure.includes(name),
+  return definition;
+}
+
+function validateEvaluationDefinition(definition, repositoryRoot = null) {
+  validateEvaluationDefinitionStructure(definition);
+  const { layer, skill } = definition.evaluation;
+  if (!['role', 'outcome'].includes(layer)) return definition;
+  if (typeof repositoryRoot !== 'string' || repositoryRoot.length === 0) {
+    throw new EvaluationContractError(
+      'repository context is required for canonical definition validation',
+    );
+  }
+  const trustedClosure = canonicalSkillClosure(
+    repositoryRoot,
+    skill,
+  ).resolvedSkills;
+  for (const [index, evaluation] of definition.evals.entries()) {
+    const requiredLoads = normalizedMatchedRequiredSkillLoads({
+      layer,
+      skill,
+      caseDefinition: evaluation,
+      field: `definition.evals[${index}].required_skill_loads`,
+    });
+    const outsideClosure = requiredLoads.find(
+      (name) => !trustedClosure.includes(name),
+    );
+    if (outsideClosure) {
+      throw new EvaluationContractError(
+        `required_skill_loads contains "${outsideClosure}" outside trusted canonical closure`,
       );
-      if (outsideClosure) {
-        throw new EvaluationContractError(
-          `required_skill_loads contains "${outsideClosure}" outside trusted canonical closure`,
-        );
-      }
     }
   }
   return definition;
@@ -936,7 +945,7 @@ function validateCampaignManifest(
     );
   }
   if (definition) {
-    validateEvaluationDefinition(definition);
+    validateEvaluationDefinitionStructure(definition);
     if (manifest.definition_fingerprint !== fingerprintValue(definition)) {
       throw new EvaluationContractError('stale definition fingerprint');
     }
@@ -1818,7 +1827,7 @@ function triggerGradeFromObservation({
 }
 
 function gradeTriggerResult({ definition, caseDefinition, result }) {
-  validateEvaluationDefinition(definition);
+  validateEvaluationDefinitionStructure(definition);
   if (definition.evaluation.layer !== 'trigger') {
     throw new EvaluationContractError(
       'gradeTriggerResult requires a trigger definition',
@@ -2867,6 +2876,7 @@ module.exports = {
   runTriggerEvaluation,
   validateCampaignManifest,
   validateEvaluationDefinition,
+  validateEvaluationDefinitionStructure,
   validateEvaluationSchemas,
   validateJudgmentEvidence,
   validateRunEvidence,
