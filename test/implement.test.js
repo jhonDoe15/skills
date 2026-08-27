@@ -78,7 +78,7 @@ function invocation() {
 
 function successfulHandoff() {
   return {
-    schema: 'implement-handoff/v1',
+    schema: 'implement-handoff/v2',
     status: 'completed',
     requirements: {
       references: ['issue://41'],
@@ -102,13 +102,62 @@ function successfulHandoff() {
       })),
       unresolved_gaps: [],
     },
+    lifecycle: [
+      {
+        sequence: 1,
+        kind: 'guidance',
+        status: 'completed',
+        reference: 'engineering-guidance',
+      },
+      {
+        sequence: 2,
+        kind: 'test',
+        status: 'red',
+        reference: 'bounded-rule',
+      },
+      {
+        sequence: 3,
+        kind: 'mutation',
+        status: 'succeeded',
+        reference: 'write:src/bounded-change.js',
+      },
+      {
+        sequence: 4,
+        kind: 'test',
+        status: 'green',
+        reference: 'bounded-rule',
+      },
+      {
+        sequence: 5,
+        kind: 'validation',
+        status: 'completed',
+        reference: 'node --test',
+      },
+      {
+        sequence: 6,
+        kind: 'range',
+        status: 'pinned',
+        reference: 'b'.repeat(40),
+      },
+    ],
     changed_behavior: ['The bounded fixture behavior is implemented.'],
     changed_files: ['src/bounded-change.js', 'test/bounded-change.test.js'],
-    tests: [{
-      command: 'node --test test/bounded-change.test.js',
-      outcome: 'passed',
-      evidence: '1 test passed.',
-    }],
+    tests: [
+      {
+        behavior: 'bounded-rule',
+        phase: 'red',
+        command: 'node --test test/bounded-change.test.js',
+        outcome: 'failed-as-expected',
+        evidence: 'The missing validation rule caused the expected assertion failure.',
+      },
+      {
+        behavior: 'bounded-rule',
+        phase: 'green',
+        command: 'node --test test/bounded-change.test.js',
+        outcome: 'passed',
+        evidence: '1 test passed.',
+      },
+    ],
     validation: [{
       command: 'node --test',
       outcome: 'passed',
@@ -126,7 +175,7 @@ function successfulHandoff() {
 function failedHandoff(kind) {
   const guidanceFailure = kind === 'guidance';
   return {
-    schema: 'implement-handoff/v1',
+    schema: 'implement-handoff/v2',
     status: 'failed',
     requirements: {
       references: ['issue://41'],
@@ -142,6 +191,12 @@ function failedHandoff(kind) {
       concerns: [],
       unresolved_gaps: ['The required phase did not complete.'],
     },
+    lifecycle: [{
+      sequence: 1,
+      kind,
+      status: 'failed',
+      reference: `${kind}-failure`,
+    }],
     changed_behavior: [],
     changed_files: [],
     tests: [],
@@ -379,6 +434,70 @@ test('handoff validation distinguishes every failure phase from completion', () 
     () => validateImplementHandoff(mislabeled),
     /completed handoff cannot contain a failure/,
   );
+});
+
+test('completed handoff rejects mutation before completed guidance', () => {
+  const { validateImplementHandoff } = loadImplementEvaluation();
+  const handoff = successfulHandoff();
+  const [guidance, redTest, mutation, ...remainingEvents] = handoff.lifecycle;
+  handoff.lifecycle = [
+    mutation,
+    guidance,
+    redTest,
+    ...remainingEvents,
+  ].map((event, index) => ({
+    ...event,
+    sequence: index + 1,
+  }));
+
+  assert.throws(
+    () => validateImplementHandoff(handoff),
+    /completed guidance must precede the first mutation/,
+  );
+});
+
+test('completed handoff requires red evidence before matching green evidence', () => {
+  const { validateImplementHandoff } = loadImplementEvaluation();
+  const missingRed = successfulHandoff();
+  missingRed.tests = missingRed.tests.filter(({ phase }) => phase !== 'red');
+  assert.throws(
+    () => validateImplementHandoff(missingRed),
+    /tests require ordered red then green evidence/,
+  );
+
+  const reversed = successfulHandoff();
+  reversed.tests.reverse();
+  assert.throws(
+    () => validateImplementHandoff(reversed),
+    /tests require ordered red then green evidence/,
+  );
+});
+
+test('result grading rejects topology and unknown mutation operations', (t) => {
+  const { gradeImplementResult } = loadImplementEvaluation();
+  for (const operation of ['issue-create', 'unknown-mutation']) {
+    const artifact = createArtifact(t, successfulHandoff());
+    const context = {
+      packageSkills: ['engineering-guidance', 'implement'],
+      resolvedSkills: ['engineering-guidance', 'implement'],
+    };
+    const result = normalizedResult(invocation(), context, artifact, 'succeeded');
+    result.observations.attemptedMutations.push({
+      operation,
+      target: 'issue://42',
+      outcome: 'succeeded',
+    });
+
+    const grade = gradeImplementResult({ result, resolveArtifact });
+    assert.equal(grade.passed, false, operation);
+    assert.equal(
+      grade.checks.some(({ name, passed }) => (
+        name === 'only scoped patch mutations' && passed === false
+      )),
+      true,
+      operation,
+    );
+  }
 });
 
 test('evaluation catalog covers role, component, outcome, and trigger separately', () => {

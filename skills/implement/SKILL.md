@@ -57,6 +57,11 @@ Record a `guidance` failure and attempted mutations of zero. Never select a test
 Adapter in production, copy guidance into this Skill, infer missing dispositions,
 or continue with a local fallback.
 
+Start the handoff's ordered lifecycle evidence with completed guidance. Record
+each later mutation in that same sequence. If completed guidance does not precede
+the first attempted mutation, fail closed with a `guidance` failure rather than
+completing the patch.
+
 Use the resolved concern coverage as input to the patch. Revisit a deferred
 disposition if the changed paths or implementation approach make it applicable.
 The implementation handoff owns the compact coverage record; Engineering Guidance
@@ -78,7 +83,8 @@ For each behavior:
 
 Keep test doubles at explicit effectful seams. Production and tests must use the
 same domain contracts and core execution path. A failed or unproven red-green
-cycle is a `test` failure, not a completed patch.
+cycle is a `test` failure, not a completed patch. Completion requires each focused
+behavior to record red and then green entries for the same command, in that order.
 
 ## Keep one scoped patch
 
@@ -112,7 +118,7 @@ reorder pull requests, alter ticket dependencies, or close tickets.
 
 Write one JSON artifact with media type `application/json` to host-provided
 artifact storage outside the committed patch. Use schema
-`implement-handoff/v1` and these fields:
+`implement-handoff/v2` and these fields:
 
 - `status`: `completed` or `failed`;
 - `requirements`: durable `references` and a bounded `summary`;
@@ -120,8 +126,11 @@ artifact storage outside the committed patch. Use schema
   completed patch is pinned;
 - `guidance_coverage`: canonical dependency name, authorities, concern
   dispositions with source references, and unresolved gaps;
+- `lifecycle`: a contiguous ordered sequence covering completed guidance,
+  attempted mutations, focused tests, validation, and the pinned range;
 - `changed_behavior` and `changed_files`;
-- `tests`: red-green evidence with exact commands, outcomes, and observations;
+- `tests`: paired red then green evidence for the same named behavior and exact
+  focused command, with outcomes and observations;
 - `validation`: exact commands, outcomes, and observations;
 - `unresolved_risks`;
 - `correction`: `ready` plus the next correction/review action for a completed
