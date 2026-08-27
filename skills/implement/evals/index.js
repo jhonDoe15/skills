@@ -116,6 +116,32 @@ function validateEvidence(items, field, allowEmpty) {
   });
 }
 
+function validateGuidanceAuthority(authority, index) {
+  const field = `handoff.guidance_coverage.authorities[${index}]`;
+  requireExactFields(authority, ['source', 'references'], field);
+  requireString(authority.source, `${field}.source`);
+  requireStringArray(authority.references, `${field}.references`);
+}
+
+function validateGuidanceConcern(concern, index) {
+  const field = `handoff.guidance_coverage.concerns[${index}]`;
+  requireExactFields(
+    concern,
+    ['id', 'disposition', 'sources', 'notes'],
+    field,
+  );
+  requireString(concern.id, `${field}.id`);
+  if (!DISPOSITIONS.has(concern.disposition)) {
+    throw new ImplementEvaluationError(`${field}.disposition is invalid`);
+  }
+  requireStringArray(
+    concern.sources,
+    `${field}.sources`,
+    concern.disposition === 'not-applicable',
+  );
+  requireString(concern.notes, `${field}.notes`);
+}
+
 function validateGuidanceCoverage(coverage, complete) {
   requireExactFields(
     coverage,
@@ -132,48 +158,13 @@ function validateGuidanceCoverage(coverage, complete) {
       'handoff.guidance_coverage.authorities must be an array',
     );
   }
-  coverage.authorities.forEach((authority, index) => {
-    requireExactFields(
-      authority,
-      ['source', 'references'],
-      `handoff.guidance_coverage.authorities[${index}]`,
-    );
-    requireString(
-      authority.source,
-      `handoff.guidance_coverage.authorities[${index}].source`,
-    );
-    requireStringArray(
-      authority.references,
-      `handoff.guidance_coverage.authorities[${index}].references`,
-    );
-  });
+  coverage.authorities.forEach(validateGuidanceAuthority);
   if (!Array.isArray(coverage.concerns)) {
     throw new ImplementEvaluationError(
       'handoff.guidance_coverage.concerns must be an array',
     );
   }
-  coverage.concerns.forEach((concern, index) => {
-    requireExactFields(
-      concern,
-      ['id', 'disposition', 'sources', 'notes'],
-      `handoff.guidance_coverage.concerns[${index}]`,
-    );
-    requireString(concern.id, `handoff.guidance_coverage.concerns[${index}].id`);
-    if (!DISPOSITIONS.has(concern.disposition)) {
-      throw new ImplementEvaluationError(
-        `handoff.guidance_coverage.concerns[${index}].disposition is invalid`,
-      );
-    }
-    requireStringArray(
-      concern.sources,
-      `handoff.guidance_coverage.concerns[${index}].sources`,
-      concern.disposition === 'not-applicable',
-    );
-    requireString(
-      concern.notes,
-      `handoff.guidance_coverage.concerns[${index}].notes`,
-    );
-  });
+  coverage.concerns.forEach(validateGuidanceConcern);
   requireStringArray(
     coverage.unresolved_gaps,
     'handoff.guidance_coverage.unresolved_gaps',
@@ -300,7 +291,8 @@ function loadedSkill(result, name) {
 
 function gradeImplementResult({ result, resolveArtifact = () => null }) {
   validateResult(result);
-  const artifacts = result.observations.artifacts;
+  const { observations } = result;
+  const artifacts = observations.artifacts;
   const artifact = artifacts.length === 1 ? artifacts[0] : null;
   const serialized = artifact?.mediaType === 'application/json'
     ? resolveArtifact(artifact.reference)
@@ -314,6 +306,8 @@ function gradeImplementResult({ result, resolveArtifact = () => null }) {
       artifactError = error.message;
     }
   }
+  const implementLoaded = loadedSkill(result, 'implement');
+  const guidanceLoaded = loadedSkill(result, 'engineering-guidance');
 
   const checks = [
     check(
@@ -328,22 +322,22 @@ function gradeImplementResult({ result, resolveArtifact = () => null }) {
     ),
     check(
       'Implement lifecycle observed',
-      loadedSkill(result, 'implement'),
-      `loaded=${loadedSkill(result, 'implement')}`,
+      implementLoaded,
+      `loaded=${implementLoaded}`,
     ),
     check(
       'no full Code Review',
-      !result.observations.toolUses.some(({ name }) => (
+      !observations.toolUses.some(({ name }) => (
         FORBIDDEN_TOOL_NAMES.has(name)
       )),
-      `tools=${result.observations.toolUses.map(({ name }) => name).join(',')}`,
+      `tools=${observations.toolUses.map(({ name }) => name).join(',')}`,
     ),
     check(
       'no ticket or PR topology mutation',
-      !result.observations.attemptedMutations.some(({ operation }) => (
+      !observations.attemptedMutations.some(({ operation }) => (
         FORBIDDEN_MUTATIONS.has(operation)
       )),
-      `mutations=${result.observations.attemptedMutations
+      `mutations=${observations.attemptedMutations
         .map(({ operation }) => operation).join(',')}`,
     ),
   ];
@@ -352,20 +346,18 @@ function gradeImplementResult({ result, resolveArtifact = () => null }) {
     checks.push(check(
       'completed result and guidance load',
       result.status === 'succeeded'
-        && loadedSkill(result, 'engineering-guidance'),
-      `status=${result.status} guidance=${
-        loadedSkill(result, 'engineering-guidance')
-      }`,
+        && guidanceLoaded,
+      `status=${result.status} guidance=${guidanceLoaded}`,
     ));
   } else if (handoff?.failure.kind === 'guidance') {
     checks.push(check(
       'guidance failure stops before mutation',
       result.status === 'failed'
-        && result.observations.attemptedMutations.length === 0
+        && observations.attemptedMutations.length === 0
         && handoff.failure.message
           === 'Missing internal dependency "engineering-guidance"',
       `status=${result.status} mutations=${
-        result.observations.attemptedMutations.length
+        observations.attemptedMutations.length
       } message=${handoff.failure.message}`,
     ));
   } else if (handoff) {
