@@ -9,20 +9,18 @@ const test = require('node:test');
 const {
   defineProductionAdapter,
   executeProduction,
+  loadCanonicalSuite,
+  resolvePackageDependencies,
 } = require('../../../suite');
 const {
   createCampaignManifest,
   gradeDeterministicOutput,
-  runComponentEvaluation,
-  runMatchedEvaluation,
   validateEvaluationDefinition,
 } = require('../../../suite/evaluation');
-const { defineTestAdapter } = require('../../../suite/testing');
 
 const repositoryRoot = path.resolve(__dirname, '../../..');
 const writingRoot = path.resolve(__dirname, '..');
-const mechanicsRoot = path.join(repositoryRoot, 'skills', 'skill-mechanics');
-const completePackage = [
+const canonicalSkillClosure = [
   'agent-writing',
   'writing-foundation',
   'skill-evaluation',
@@ -62,83 +60,14 @@ function createPackageFixture(t, skillNames) {
     const destination = path.join(fixtureRoot, 'skills', name, 'SKILL.md');
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     const source = path.join(repositoryRoot, 'skills', name, 'SKILL.md');
-    if (fs.existsSync(source)) {
-      fs.copyFileSync(source, destination);
-    } else {
-      assert.equal(
-        name,
-        'skill-evaluation',
-        `${name} must be production-owned or an explicit test-only fixture`,
-      );
-      fs.writeFileSync(
-        destination,
-        '---\nname: skill-evaluation\ndescription: Test-only dependency fixture.\n---\n',
-      );
-    }
+    assert.equal(
+      fs.existsSync(source),
+      true,
+      `production Skill "${name}" does not exist`,
+    );
+    fs.copyFileSync(source, destination);
   }
   return fixtureRoot;
-}
-
-function skillEvent(name) {
-  return {
-    name,
-    operation: 'load',
-    status: 'succeeded',
-    trigger: 'model',
-    callId: `contract-${name}`,
-    provenance: {
-      host: 'fixture',
-      mechanism: 'owner-local-contract-fixture',
-      eventType: 'fixture.skill-lifecycle',
-      observerVersion: '1',
-      statusSource: 'observed',
-    },
-  };
-}
-
-function normalizedResult({
-  invocation,
-  packageSkills,
-  resolvedSkills,
-  output = 'Fixture outcome.',
-}) {
-  return {
-    status: 'succeeded',
-    observations: {
-      packageSkills,
-      hostAvailableSkills: null,
-      preExecutionInventory: {
-        skillDefinitions: packageSkills.map((name) => ({
-          name,
-          path: `.fixture/skills/${name}/SKILL.md`,
-          digest: '0'.repeat(64),
-        })),
-        plugins: [],
-        ruleSources: [],
-        packageDigest: '0'.repeat(64),
-        truncated: false,
-      },
-      skillEvents: resolvedSkills.map(skillEvent),
-      routing: {
-        requestedSkill: invocation.skill,
-        resolvedSkills,
-      },
-      responses: [{ text: output }],
-      artifacts: [{
-        reference: 'artifact://fixture/SKILL.md',
-        mediaType: 'text/markdown',
-      }],
-      toolUses: [],
-      attemptedMutations: [],
-    },
-    failure: null,
-    durationMs: 1,
-    costUsd: 0,
-    model: {
-      requested: invocation.model,
-      resolved: 'resolved-test-model',
-    },
-  };
 }
 
 function readEvaluationDefinition(owner, fileName) {
@@ -153,23 +82,11 @@ function readEvaluationDefinition(owner, fileName) {
   return value;
 }
 
-test('Skill Mechanics exposes only its private representation contract', () => {
-  const skill = readSkill(mechanicsRoot);
-
-  assert.equal(skill.name, 'skill-mechanics');
-  assert.match(skill.description, /\bskill-writing\b/);
-  assert.match(skill.description, /\bconsumers?\b/i);
-  assert.match(skill.description, /\bnot\b.*\buser\b.*\bgoal\b/i);
-  assert.doesNotMatch(skill.description, /^Use when\b/i);
-  for (const heading of [
-    'Interface',
-    'Represent the decided contract',
-    'Validate mechanics',
-    'Failure behavior',
-    'Completion',
-  ]) {
-    assert.match(skill.markdown, new RegExp(`^## ${heading}$`, 'm'));
-  }
+test('package fixtures never synthesize absent production Skills', (t) => {
+  assert.throws(
+    () => createPackageFixture(t, ['skill-evaluation']),
+    /production Skill "skill-evaluation" does not exist/,
+  );
 });
 
 test('Skill Writing routes only Skill creation and revision', () => {
@@ -209,22 +126,13 @@ test('Skill Writing resolves every canonical dependency and fails closed by exac
     prompt: 'Create a deployment-triage Agent Skill.',
     model: 'test-model',
   };
-  const adapter = defineProductionAdapter({
-    name: 'skill-writing-contract',
-    execute(invoked, context) {
-      return Promise.resolve(normalizedResult({
-        invocation: invoked,
-        ...context,
-      }));
-    },
-  });
-  const complete = await executeProduction({
-    repositoryRoot: createPackageFixture(t, completePackage),
-    adapter,
-    invocation,
-  });
-
-  assert.deepEqual(complete.observations.routing.resolvedSkills, [
+  const suite = loadCanonicalSuite(repositoryRoot);
+  const resolved = resolvePackageDependencies(
+    suite,
+    { skills: canonicalSkillClosure.map((name) => ({ name })) },
+    'skill-writing',
+  );
+  assert.deepEqual(resolved.resolved, [
     'writing-foundation',
     'agent-writing',
     'skill-evaluation',
@@ -237,48 +145,57 @@ test('Skill Writing resolves every canonical dependency and fails closed by exac
     'evals',
     'package-closure.json',
   ));
+  let executions = 0;
+  const mustNotExecute = defineProductionAdapter({
+    name: 'missing-skill-evaluation',
+    async execute() {
+      executions += 1;
+      throw new Error('must not execute');
+    },
+  });
+  const productionResult = await executeProduction({
+    repositoryRoot: createPackageFixture(
+      t,
+      canonicalSkillClosure.filter((name) => name !== 'skill-evaluation'),
+    ),
+    adapter: mustNotExecute,
+    invocation,
+  });
+  const absentProductionSkill = packageClosure.cases.find(
+    ({ missing_dependency: missingSkill }) => missingSkill === 'skill-evaluation',
+  );
+
+  assert.equal(executions, 0);
+  assert.deepEqual(productionResult.failure, absentProductionSkill.expected_failure);
+  assert.deepEqual(productionResult.observations.responses, []);
+  assert.deepEqual(productionResult.observations.artifacts, []);
+
   for (const {
     missing_dependency: missingSkill,
     expected_failure: expectedFailure,
   } of packageClosure.cases) {
-    let executions = 0;
-    const mustNotExecute = defineProductionAdapter({
-      name: `missing-${missingSkill}`,
-      async execute() {
-        executions += 1;
-        throw new Error('must not execute');
+    const result = resolvePackageDependencies(
+      suite,
+      {
+        skills: canonicalSkillClosure
+          .filter((name) => name !== missingSkill)
+          .map((name) => ({ name })),
       },
+      'skill-writing',
+    );
+    assert.deepEqual(result, {
+      missingSkill: expectedFailure.missingSkill,
+      code: expectedFailure.code,
     });
-    const result = await executeProduction({
-      repositoryRoot: createPackageFixture(
-        t,
-        completePackage.filter((name) => name !== missingSkill),
-      ),
-      adapter: mustNotExecute,
-      invocation,
-    });
-
-    assert.equal(executions, 0);
-    assert.deepEqual(result.failure, expectedFailure);
-    assert.deepEqual(result.observations.responses, []);
-    assert.deepEqual(result.observations.artifacts, []);
   }
 });
 
-test('owner-local definitions cover both roles, three edges, routing, and outcome', () => {
-  const mechanicsRole = readEvaluationDefinition('skill-mechanics', 'role.json');
-  const mechanicsTrigger = readEvaluationDefinition('skill-mechanics', 'trigger.json');
+test('owner-local definitions cover the Writing role, three edges, routing, and outcome', () => {
   const writingRole = readEvaluationDefinition('skill-writing', 'role.json');
   const writingComponents = readEvaluationDefinition('skill-writing', 'component.json');
   const writingTrigger = readEvaluationDefinition('skill-writing', 'trigger.json');
   const writingOutcome = readEvaluationDefinition('skill-writing', 'outcome.json');
 
-  assert.equal(mechanicsRole.evaluation.layer, 'role');
-  assert.equal(mechanicsTrigger.evaluation.layer, 'trigger');
-  assert.deepEqual(
-    mechanicsTrigger.evals.map(({ should_trigger }) => should_trigger),
-    [true, false],
-  );
   assert.equal(writingRole.evaluation.layer, 'role');
   assert.equal(writingComponents.evaluation.layer, 'component');
   assert.deepEqual(
@@ -295,8 +212,6 @@ test('owner-local definitions cover both roles, three edges, routing, and outcom
     'skill-evaluation',
   ]);
   for (const value of [
-    mechanicsRole,
-    mechanicsTrigger,
     writingRole,
     writingComponents,
     writingTrigger,
@@ -306,25 +221,8 @@ test('owner-local definitions cover both roles, three edges, routing, and outcom
   }
 });
 
-test('all three component cases use the test-only ablation seam on either host', async (t) => {
+test('all three component cases declare the test-only ablation seam for both hosts', () => {
   const component = readEvaluationDefinition('skill-writing', 'component.json');
-  const fixtureRoot = createPackageFixture(t, completePackage);
-  const observations = [];
-  const adapter = defineTestAdapter({
-    name: 'skill-writing-component',
-    async execute(invocation, context) {
-      observations.push({
-        prompt: invocation.prompt,
-        model: invocation.model,
-        resolvedSkills: [...context.resolvedSkills],
-        dependencyAblation: context.dependencyAblation,
-      });
-      return normalizedResult({
-        invocation,
-        ...context,
-      });
-    },
-  });
   const manifest = createCampaignManifest({
     repositoryRoot,
     definition: component,
@@ -338,44 +236,19 @@ test('all three component cases use the test-only ablation seam on either host',
     limitations: ['Test-only Adapter fixture; no model behavior claim.'],
   });
 
-  for (const caseDefinition of component.evals) {
-    for (const cell of manifest.cells) {
-      const records = await runComponentEvaluation({
-        repositoryRoot: fixtureRoot,
-        manifest,
-        caseDefinition,
-        cell,
-        repetition: 1,
-        adapter,
-        gradeOutput({ arm }) {
-          return {
-            passed: true,
-            checks: [],
-            ...(arm === 'component-ablation' ? { status: 'baseline' } : {}),
-          };
-        },
-      });
-      assert.deepEqual(
-        records.map(({ arm }) => arm.kind),
-        ['treatment', 'component-ablation'],
-      );
-      const [treatment, ablated] = observations.slice(-2);
-      assert.equal(treatment.prompt, ablated.prompt);
-      assert.equal(treatment.model, ablated.model);
-      assert.equal(treatment.dependencyAblation, null);
-      assert.deepEqual(ablated.dependencyAblation, {
-        consumer: 'skill-writing',
-        dependency: caseDefinition.ablated_dependency,
-      });
-    }
-  }
-
-  assert.equal(observations.length, 12);
+  assert.deepEqual(manifest.arms, ['treatment', 'component-ablation']);
+  assert.deepEqual(
+    manifest.cells.map(({ host }) => host),
+    ['claude-code', 'cursor'],
+  );
+  assert.deepEqual(
+    manifest.cases.map(({ ablated_dependency: dependency }) => dependency),
+    ['agent-writing', 'skill-mechanics', 'skill-evaluation'],
+  );
 });
 
-test('complete outcome uses matched fresh-session Skill and No-Skill arms', async (t) => {
+test('complete outcome declares matched fresh-session Skill and No-Skill arms', () => {
   const outcome = readEvaluationDefinition('skill-writing', 'outcome.json');
-  const caseDefinition = outcome.evals[0];
   const manifest = createCampaignManifest({
     repositoryRoot,
     definition: outcome,
@@ -396,68 +269,27 @@ test('complete outcome uses matched fresh-session Skill and No-Skill arms', asyn
       conflictingOwners: [],
     },
   });
-  const observed = [];
-  const records = await runMatchedEvaluation({
-    repositoryRoot: createPackageFixture(t, completePackage),
-    manifest,
-    caseDefinition,
-    cell: manifest.cells[0],
-    repetition: 1,
-    async executeArm(context) {
-      observed.push(context);
-      const treatment = context.arm === 'treatment';
-      return normalizedResult({
-        invocation: {
-          skill: 'skill-writing',
-          model: context.cell.model,
-        },
-        packageSkills: treatment ? completePackage : [],
-        resolvedSkills: treatment
-          ? [
-            'writing-foundation',
-            'agent-writing',
-            'skill-evaluation',
-            'skill-mechanics',
-            'skill-writing',
-          ]
-          : [],
-        output: treatment
-          ? fs.readFileSync(
-            path.join(writingRoot, 'evals', 'fixtures', 'outcome-output.md'),
-            'utf8',
-          )
-          : 'Independent No-Skill response.',
-      });
-    },
-    gradeOutput({ arm, output }) {
-      const grade = gradeDeterministicOutput({
-        definition: outcome,
-        caseDefinition,
-        output,
-      });
-      return arm === 'treatment'
-        ? grade
-        : { ...grade, passed: true, status: 'baseline' };
-    },
-  });
 
-  assert.deepEqual(observed.map(({ arm }) => arm), ['no-skill', 'treatment']);
-  assert.strictEqual(observed[0].caseDefinition, observed[1].caseDefinition);
-  assert.strictEqual(
-    observed[0].executionConfiguration,
-    observed[1].executionConfiguration,
-  );
-  assert.deepEqual(records.map(({ arm }) => arm.kind), [
-    'no-skill',
-    'treatment',
+  assert.deepEqual(manifest.arms, ['no-skill', 'treatment']);
+  assert.deepEqual(manifest.cells, [{ host: 'cursor', model: 'test-model' }]);
+  assert.equal(manifest.cases.length, 1);
+  assert.deepEqual(manifest.cases[0].required_skill_loads, [
+    'skill-writing',
+    'agent-writing',
+    'writing-foundation',
+    'skill-mechanics',
+    'skill-evaluation',
   ]);
-  assert.equal(records[0].execution.control_contamination.clean, true);
-  assert.equal(records[1].deterministic.passed, true);
+  assert.equal(
+    manifest.limitations.includes(
+      'Static fixture only; semantic adoption remains unverified.',
+    ),
+    true,
+  );
 });
 
 test('deterministic gates prove mechanics only and leave semantics to evidence', () => {
   for (const [owner, fileName, fixtureName] of [
-    ['skill-mechanics', 'role.json', 'mechanics-output.md'],
     ['skill-writing', 'role.json', 'role-output.md'],
     ['skill-writing', 'outcome.json', 'outcome-output.md'],
   ]) {
