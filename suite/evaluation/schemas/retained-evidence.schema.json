@@ -205,9 +205,85 @@
     },
     "deterministic": {
       "type": "object",
+      "additionalProperties": false,
       "required": [
         "passed",
         "checks"
+      ],
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "checks": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "passed",
+              "details"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "passed": {
+                "type": "boolean"
+              },
+              "details": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "passed": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "checks": {
+                "items": {
+                  "properties": {
+                    "passed": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "checks": {
+                "contains": {
+                  "type": "object",
+                  "required": [
+                    "passed"
+                  ],
+                  "properties": {
+                    "passed": {
+                      "const": false
+                    }
+                  }
+                },
+                "minContains": 1
+              }
+            }
+          }
+        }
       ]
     },
     "fingerprints": {
@@ -262,10 +338,12 @@
       "properties": {
         "id": {
           "type": "string",
+          "maxLength": 128,
           "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
         },
         "version": {
           "type": "string",
+          "maxLength": 32,
           "pattern": "^[0-9]+(?:\\.[0-9]+){0,2}$"
         },
         "fingerprint": {

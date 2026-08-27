@@ -23,6 +23,8 @@ const DEFAULT_GRADER = Object.freeze({
   id: 'json-pattern',
   version: '1',
 });
+const MAX_GRADER_ID_LENGTH = 128;
+const MAX_GRADER_VERSION_LENGTH = 32;
 const MAX_GRADER_CHECKS = 256;
 const MAX_GRADER_CHECK_NAME_LENGTH = 256;
 const MAX_GRADER_CHECK_DETAILS_LENGTH = 2048;
@@ -71,6 +73,16 @@ function assertExactFields(value, expected, field) {
   const missing = expected.find((name) => !Object.hasOwn(value, name));
   if (missing) {
     throw new EvaluationContractError(`${field} is missing "${missing}"`);
+  }
+}
+
+function assertAllowedFields(value, allowed, field) {
+  const allowedFields = new Set(allowed);
+  const unsupported = Object.keys(value).find((name) => !allowedFields.has(name));
+  if (unsupported) {
+    throw new EvaluationContractError(
+      `${field} has unsupported field "${unsupported.slice(0, 64)}"`,
+    );
   }
 }
 
@@ -287,6 +299,16 @@ function validateGraderIdentity(value, field) {
   assertExactFields(value, ['id', 'version'], field);
   requireString(value.id, `${field}.id`);
   requireString(value.version, `${field}.version`);
+  if (value.id.length > MAX_GRADER_ID_LENGTH) {
+    throw new EvaluationContractError(
+      `${field}.id must not exceed ${MAX_GRADER_ID_LENGTH} characters`,
+    );
+  }
+  if (value.version.length > MAX_GRADER_VERSION_LENGTH) {
+    throw new EvaluationContractError(
+      `${field}.version must not exceed ${MAX_GRADER_VERSION_LENGTH} characters`,
+    );
+  }
   if (!/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(value.id)) {
     throw new EvaluationContractError(`${field}.id must be a stable grader ID`);
   }
@@ -318,14 +340,60 @@ function graderKey({ id, version }) {
   return `${id}\0${version}`;
 }
 
+function canonicalGraderConfiguration(value, field, seen = new Set(), depth = 0) {
+  if (value === null
+    || typeof value === 'string'
+    || typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (!value || typeof value !== 'object') {
+    throw new EvaluationContractError(
+      `${field} must contain only canonical JSON values`,
+    );
+  }
+  if (depth > 32 || seen.has(value)) {
+    throw new EvaluationContractError(`${field} must be finite and acyclic`);
+  }
+  seen.add(value);
+  let normalized;
+  if (Array.isArray(value)) {
+    normalized = value.map((item, index) => canonicalGraderConfiguration(
+      item,
+      `${field}[${index}]`,
+      seen,
+      depth + 1,
+    ));
+  } else {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new EvaluationContractError(`${field} must contain plain objects`);
+    }
+    normalized = {};
+    for (const key of Object.keys(value).sort()) {
+      normalized[key] = canonicalGraderConfiguration(
+        value[key],
+        `${field}.${key}`,
+        seen,
+        depth + 1,
+      );
+    }
+  }
+  seen.delete(value);
+  return deepFreeze(normalized);
+}
+
+function graderImplementationSource(grade) {
+  return Function.prototype.toString.call(grade);
+}
+
 function validateRegistration(registration, index) {
   const field = `graders[${index}]`;
   requireObject(registration, field);
   assertExactFields(registration, [
     'id',
     'version',
-    'implementationFingerprint',
-    'configurationFingerprint',
+    'configuration',
     'layers',
     'arms',
     'grade',
@@ -334,13 +402,9 @@ function validateRegistration(registration, index) {
     id: registration.id,
     version: registration.version,
   }, field);
-  requireFingerprint(
-    registration.implementationFingerprint,
-    `${field}.implementationFingerprint`,
-  );
-  requireFingerprint(
-    registration.configurationFingerprint,
-    `${field}.configurationFingerprint`,
+  const configuration = canonicalGraderConfiguration(
+    registration.configuration,
+    `${field}.configuration`,
   );
   validateStringArray(registration.layers, `${field}.layers`);
   validateStringArray(registration.arms, `${field}.arms`);
@@ -359,13 +423,17 @@ function validateRegistration(registration, index) {
   }
   return {
     ...registration,
+    configuration,
     layers: new Set(registration.layers),
     arms: new Set(registration.arms),
     fingerprint: fingerprintValue({
       id: registration.id,
       version: registration.version,
-      implementation: registration.implementationFingerprint,
-      configuration: registration.configurationFingerprint,
+      // Function source is stable only for the same runtime/build artifact. It
+      // detects substitutions; it is not a proof of semantic equivalence
+      // across engines, transpilers, minifiers, or mutable closed-over state.
+      implementation: graderImplementationSource(registration.grade),
+      configuration,
     }),
   };
 }
@@ -374,12 +442,9 @@ function defaultGraderRegistration() {
   return {
     id: DEFAULT_GRADER.id,
     version: DEFAULT_GRADER.version,
-    implementationFingerprint: fingerprintValue(
-      'json-pattern deterministic grader implementation v1',
-    ),
-    configurationFingerprint: fingerprintValue(
-      'json-pattern deterministic grader configuration v1',
-    ),
+    configuration: {
+      contract: 'json-pattern deterministic grader v1',
+    },
     layers: [...VALID_LAYERS],
     arms: [...VALID_ARMS],
     grade({ definition, caseDefinition, output, result }) {
@@ -910,6 +975,26 @@ function createCampaignManifest({
 
 function validateCampaignManifest(manifest, definition = null) {
   requireObject(manifest, 'manifest');
+  assertAllowedFields(manifest, [
+    'schema_version',
+    'kind',
+    'scope',
+    'layer',
+    'skill',
+    'definition_fingerprint',
+    'package_revision',
+    'cells',
+    'repetitions',
+    'execution_configuration',
+    'cases',
+    'arms',
+    'thresholds',
+    'randomization_seed',
+    'limitations',
+    'grader',
+    'control_policy',
+    'fingerprint',
+  ], 'manifest');
   if (manifest.schema_version !== SCHEMA_VERSION) {
     throw new EvaluationContractError('incompatible campaign schema version');
   }
@@ -925,6 +1010,13 @@ function validateCampaignManifest(manifest, definition = null) {
   requireArray(manifest.cases, 'manifest.cases');
   for (const [index, evaluation] of manifest.cases.entries()) {
     requireObject(evaluation, `manifest.cases[${index}]`);
+    assertExactFields(
+      evaluation,
+      manifest.layer === 'component'
+        ? ['id', 'name', 'ablated_dependency']
+        : ['id', 'name'],
+      `manifest.cases[${index}]`,
+    );
     requireString(evaluation.id, `manifest.cases[${index}].id`);
     requireString(evaluation.name, `manifest.cases[${index}].name`);
     if (manifest.layer === 'component') {
@@ -941,6 +1033,10 @@ function validateCampaignManifest(manifest, definition = null) {
   requireArray(manifest.arms, 'manifest.arms');
   requireObject(manifest.execution_configuration, 'manifest.execution_configuration');
   requireObject(manifest.thresholds, 'manifest.thresholds');
+  assertExactFields(manifest.thresholds, [
+    'minimum_treatment_pass_rate',
+    'minimum_treatment_win_rate',
+  ], 'manifest.thresholds');
   requireString(manifest.scope, 'manifest.scope');
   requireString(manifest.skill, 'manifest.skill');
   requireString(manifest.package_revision, 'manifest.package_revision');
@@ -954,10 +1050,14 @@ function validateCampaignManifest(manifest, definition = null) {
       'manifest.repetitions must be a positive integer',
     );
   }
-  const controlPolicy = normalizedControlPolicy(
-    manifest.control_policy,
-    manifest.skill,
-  );
+  requireObject(manifest.control_policy, 'manifest.control_policy');
+  assertExactFields(manifest.control_policy, [
+    'target',
+    'dependencies',
+    'aliases',
+    'conflictingOwners',
+  ], 'manifest.control_policy');
+  const controlPolicy = normalizedControlPolicy(manifest.control_policy, manifest.skill);
   if (controlPolicy.target !== manifest.skill) {
     throw new EvaluationContractError(
       'manifest control policy target must match manifest.skill',
@@ -1123,10 +1223,27 @@ function validateDeterministicGrade(grade) {
   return grade;
 }
 
-function validateResolvedGrade(grade) {
+function defaultAllowsChecklessGrade(definition, caseDefinition, grader) {
+  if (!definition || !caseDefinition
+    || !fingerprintsMatch(grader, DEFAULT_GRADER)) {
+    return false;
+  }
+  return (definition.global_required_signals || []).length === 0
+    && (definition.global_order || []).length === 0
+    && (definition.forbidden_patterns || []).length === 0
+    && (caseDefinition.required_signals || []).length === 0
+    && (caseDefinition.forbidden_patterns || []).length === 0
+    && caseDefinition.allow_early_block !== true;
+}
+
+function validateResolvedGrade(
+  grade,
+  { definition = null, caseDefinition = null, grader = null } = {},
+) {
   validateDeterministicGrade(grade);
   assertExactFields(grade, ['passed', 'checks'], 'deterministicGrade');
-  if (grade.checks.length === 0) {
+  if (grade.checks.length === 0
+    && !defaultAllowsChecklessGrade(definition, caseDefinition, grader)) {
     throw new EvaluationContractError(
       'deterministicGrade.checks must contain clause-level evidence',
     );
@@ -1190,6 +1307,7 @@ function gradeWithResolvedGrader({
     output: outputFromResult(result),
     result: structuredClone(result),
     arm: structuredClone(normalizedArmDefinition),
+    configuration: structuredClone(registration.configuration),
   }, mutationState);
   const contextFingerprint = fingerprintValue(context);
   let grade;
@@ -1205,7 +1323,14 @@ function gradeWithResolvedGrader({
     throw new EvaluationContractError('deterministic grader mutated its input');
   }
   try {
-    validateResolvedGrade(grade);
+    validateResolvedGrade(grade, {
+      definition,
+      caseDefinition,
+      grader: {
+        id: registration.id,
+        version: registration.version,
+      },
+    });
   } catch {
     throw new EvaluationContractError(
       'deterministic grader returned a malformed result',
@@ -1245,6 +1370,7 @@ function retainedControlContamination(observations, policy) {
 
 function createRunEvidence({
   manifest,
+  definition = null,
   caseDefinition,
   cell,
   repetition,
@@ -1254,7 +1380,7 @@ function createRunEvidence({
   controlPolicy = null,
   graderRegistry = defaultGraderRegistry(),
 }) {
-  validateCampaignManifest(manifest);
+  validateCampaignManifest(manifest, definition);
   validateCell(cell, 'cell');
   if (!Number.isInteger(repetition) || repetition < 1) {
     throw new EvaluationContractError('repetition must be a positive integer');
@@ -1265,7 +1391,11 @@ function createRunEvidence({
     result.model.resolved,
     'evaluation evidence',
   );
-  validateDeterministicGrade(deterministicGrade);
+  validateResolvedGrade(deterministicGrade, {
+    definition,
+    caseDefinition,
+    grader: manifestGraderIdentity(manifest),
+  });
   const normalized = normalizedArm(
     manifest,
     caseDefinition,
@@ -1360,6 +1490,7 @@ function unsealedRunRecord(record) {
 
 function validateRunEvidence({
   manifest,
+  definition = null,
   caseDefinition,
   cell,
   repetition,
@@ -1622,7 +1753,11 @@ function validateRunEvidence({
     || record.package_revision !== manifest.package_revision) {
     throw new EvaluationContractError('retained evidence coordinates mismatch');
   }
-  validateDeterministicGrade(record.deterministic);
+  validateResolvedGrade(record.deterministic, {
+    definition,
+    caseDefinition,
+    grader: manifestGraderIdentity(manifest),
+  });
   return record;
 }
 
@@ -1652,6 +1787,7 @@ function assessReusableEvidence({
     validateCampaignManifest(manifest, definition);
     validateRunEvidence({
       manifest,
+      definition,
       caseDefinition,
       cell,
       repetition,
@@ -1802,6 +1938,7 @@ async function runMatchedEvaluation({
     });
     records.push(createRunEvidence({
       manifest,
+      definition,
       caseDefinition: frozenCase,
       cell,
       repetition,
@@ -1873,6 +2010,7 @@ async function runComponentEvaluation({
     });
     records.push(createRunEvidence({
       manifest,
+      definition,
       caseDefinition,
       cell,
       repetition,
@@ -1999,6 +2137,7 @@ async function runTriggerEvaluation({
   }).grade;
   return createRunEvidence({
     manifest,
+    definition,
     caseDefinition,
     cell,
     repetition,
@@ -2144,6 +2283,7 @@ function createBlindComparison({
     : 'no-skill';
   validateRunEvidence({
     manifest,
+    definition,
     caseDefinition,
     cell,
     repetition,
@@ -2153,6 +2293,7 @@ function createBlindComparison({
   });
   validateRunEvidence({
     manifest,
+    definition,
     caseDefinition,
     cell,
     repetition,
@@ -2602,6 +2743,7 @@ function replayCampaign({
         expectedRuns += 2;
         validateRunEvidence({
           manifest,
+          definition,
           caseDefinition,
           cell,
           repetition,
@@ -2611,6 +2753,7 @@ function replayCampaign({
         });
         validateRunEvidence({
           manifest,
+          definition,
           caseDefinition,
           cell,
           repetition,
@@ -2810,6 +2953,7 @@ function replayTriggerCampaign({
         }
         validateRunEvidence({
           manifest,
+          definition,
           caseDefinition,
           cell,
           repetition,
