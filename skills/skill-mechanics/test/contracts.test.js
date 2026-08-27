@@ -254,3 +254,38 @@ test('mechanics grading rejects a reference through an escaping symlink', (t) =>
     false,
   );
 });
+
+test('mechanics grading rejects an internal intermediate symlink', (t) => {
+  const fixtureRoot = referenceFixture(
+    t,
+    'mechanics-internal-symlink-',
+    'alias/target.md',
+  );
+  const fixturesRoot = path.join(fixtureRoot, 'evals', 'fixtures');
+  const targetRoot = path.join(fixturesRoot, 'actual');
+  fs.mkdirSync(targetRoot);
+  fs.writeFileSync(path.join(targetRoot, 'target.md'), '# Internal target\n');
+  fs.symlinkSync('actual', path.join(fixturesRoot, 'alias'));
+  const role = definition('role.json');
+  const caseDefinition = {
+    ...role.evals[0],
+    files: [
+      'evals/fixtures/behavior-contract.json',
+      'evals/fixtures/alias/target.md',
+    ],
+  };
+  const { gradeMechanicsArtifacts } = require('../evals/grader');
+
+  const grade = gradeMechanicsArtifacts({
+    skillRoot: fixtureRoot,
+    caseDefinition,
+  });
+
+  assert.equal(grade.passed, false);
+  assert.equal(
+    grade.checks.find(
+      ({ name }) => name === 'reference alias/target.md',
+    ).passed,
+    false,
+  );
+});

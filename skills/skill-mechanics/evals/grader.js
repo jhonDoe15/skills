@@ -22,7 +22,15 @@ function regularFileWithin(root, relativePath) {
   const resolved = path.resolve(resolvedRoot, relativePath);
   if (!isStrictDescendant(resolvedRoot, resolved)) return null;
   try {
-    if (!fs.lstatSync(resolved).isFile()) return null;
+    const relative = path.relative(resolvedRoot, resolved);
+    let current = resolvedRoot;
+    let stats = null;
+    for (const component of relative.split(path.sep)) {
+      current = path.join(current, component);
+      stats = fs.lstatSync(current);
+      if (stats.isSymbolicLink()) return null;
+    }
+    if (!stats?.isFile()) return null;
     const realRoot = fs.realpathSync(resolvedRoot);
     const realFile = fs.realpathSync(resolved);
     return isStrictDescendant(realRoot, realFile) ? resolved : null;
