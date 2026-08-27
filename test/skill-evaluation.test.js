@@ -13,6 +13,7 @@ const {
   buildAdoptionReport,
   createBlindComparison,
   createCampaignManifest,
+  createGraderRegistry,
   createJudgmentEvidence,
   createRunEvidence,
   gradeDeterministicOutput,
@@ -215,6 +216,44 @@ function stableStringify(value) {
 
 function hash(value) {
   return createHash('sha256').update(stableStringify(value)).digest('hex');
+}
+
+function ownerGraderRegistration(overrides = {}) {
+  return {
+    id: 'fixture.clause-aware',
+    version: '1',
+    implementationFingerprint: hash('fixture.clause-aware/implementation/v1'),
+    configurationFingerprint: hash('fixture.clause-aware/configuration/v1'),
+    layers: ['role', 'component', 'outcome', 'trigger'],
+    arms: ['no-skill', 'treatment', 'component-ablation'],
+    grade({ arm, output }) {
+      const passed = arm.kind !== 'treatment' || output.includes('OWNER CLAUSE');
+      return {
+        passed,
+        checks: [{
+          name: 'owner clause',
+          passed,
+          details: passed ? 'clause-level fixture evidence' : 'owner clause missing',
+        }],
+      };
+    },
+    ...overrides,
+  };
+}
+
+function ownerGraderRegistry(overrides = {}) {
+  return createGraderRegistry({
+    graders: [ownerGraderRegistration(overrides)],
+  });
+}
+
+function declareOwnerGrader(definition, overrides = {}) {
+  definition.evaluation.grader = {
+    id: 'fixture.clause-aware',
+    version: '1',
+    ...overrides,
+  };
+  return definition;
 }
 
 function readJson(filePath) {
@@ -868,6 +907,7 @@ async function passingCampaign(t) {
   const runs = await runMatchedEvaluation({
     repositoryRoot: fixtureRoot,
     manifest,
+    definition,
     caseDefinition,
     cell,
     repetition: 1,
@@ -882,18 +922,6 @@ async function passingCampaign(t) {
         loadedSkills: treatment ? [definition.skill_name] : [],
         packageSkills: treatment ? [definition.skill_name] : [],
       });
-    },
-    gradeOutput({ arm, output }) {
-      const grade = gradeDeterministicOutput({
-        definition,
-        caseDefinition,
-        output,
-      });
-      return arm === 'treatment' ? grade : {
-        ...grade,
-        passed: true,
-        status: 'baseline',
-      };
     },
   });
   const control = runs.find((run) => run.arm.kind === 'no-skill');
@@ -1519,6 +1547,7 @@ test('matched evaluation checks package closure before executing either arm', as
     runMatchedEvaluation({
       repositoryRoot: fixtureRoot,
       manifest,
+      definition,
       caseDefinition: definition.evals[0],
       cell: manifest.cells[0],
       repetition: 1,
@@ -1526,7 +1555,6 @@ test('matched evaluation checks package closure before executing either arm', as
         executions += 1;
         throw new Error('must not execute');
       },
-      gradeOutput: passingGrade,
     }),
     /Missing internal dependency "engineering-guidance"/,
   );
@@ -1542,6 +1570,7 @@ test('matched arms retain the same frozen scenario and execution configuration',
   const runs = await runMatchedEvaluation({
     repositoryRoot: fixtureRoot,
     manifest,
+    definition,
     caseDefinition: definition.evals[0],
     cell: manifest.cells[0],
     repetition: 1,
@@ -1560,16 +1589,6 @@ test('matched arms retain the same frozen scenario and execution configuration',
           ? [definition.skill_name]
           : [],
       });
-    },
-    gradeOutput({ arm, output }) {
-      const grade = gradeDeterministicOutput({
-        definition,
-        caseDefinition: definition.evals[0],
-        output,
-      });
-      return arm === 'treatment'
-        ? grade
-        : { ...grade, passed: true, status: 'baseline' };
     },
   });
 
@@ -1618,6 +1637,7 @@ test('No-Skill control construction is independent of treatment activation', asy
   const records = await runMatchedEvaluation({
     repositoryRoot: fixtureRoot,
     manifest,
+    definition,
     caseDefinition: definition.evals[0],
     cell: manifest.cells[0],
     repetition: 1,
@@ -1633,9 +1653,6 @@ test('No-Skill control construction is independent of treatment activation', asy
         preExecutionSkills: provisioning.installedSkills,
         loadedSkills: [],
       });
-    },
-    gradeOutput({ arm }) {
-      return arm === 'treatment' ? passingGrade() : baselineGrade();
     },
   });
 
@@ -1672,6 +1689,7 @@ test('the normalized Incident scenario runs unchanged through both host cells', 
     records.push(...await runMatchedEvaluation({
       repositoryRoot: fixtureRoot,
       manifest,
+      definition,
       caseDefinition: definition.evals[0],
       cell,
       repetition: 1,
@@ -1685,18 +1703,6 @@ test('the normalized Incident scenario runs unchanged through both host cells', 
           loadedSkills: arm === 'treatment' ? [definition.skill_name] : [],
           packageSkills: arm === 'treatment' ? [definition.skill_name] : [],
         });
-      },
-      gradeOutput({ arm, output }) {
-        const grade = gradeDeterministicOutput({
-          definition,
-          caseDefinition: definition.evals[0],
-          output,
-        });
-        return arm === 'treatment' ? grade : {
-          ...grade,
-          passed: true,
-          status: 'baseline',
-        };
       },
     }));
   }
@@ -1749,22 +1755,11 @@ test('component evaluation pairs complete and ablated consumers for offline repl
   const evidence = await runComponentEvaluation({
     repositoryRoot: completeRoot,
     manifest,
+    definition,
     caseDefinition: definition.evals[0],
     cell: manifest.cells[0],
     repetition: 1,
     adapter,
-    gradeOutput({ arm, output }) {
-      const grade = gradeDeterministicOutput({
-        definition,
-        caseDefinition: definition.evals[0],
-        output,
-      });
-      return arm === 'treatment' ? grade : {
-        ...grade,
-        passed: true,
-        status: 'baseline',
-      };
-    },
   });
 
   assert.equal(adapterExecutions, 2);
@@ -1844,11 +1839,11 @@ test('component evaluation pairs complete and ablated consumers for offline repl
     runComponentEvaluation({
       repositoryRoot: incompleteRoot,
       manifest,
+      definition,
       caseDefinition: definition.evals[0],
       cell: manifest.cells[0],
       repetition: 1,
       adapter,
-      gradeOutput: passingGrade,
     }),
     /Missing internal dependency "writing-foundation"/,
   );
@@ -1899,15 +1894,11 @@ test('component Adoption report counts the dependency-ablated control', () => {
       output: ablatedOutput,
       loadedSkills: ['agent-writing'],
     }),
-    deterministicGrade: {
-      ...gradeDeterministicOutput({
-        definition,
-        caseDefinition,
-        output: ablatedOutput,
-      }),
-      passed: true,
-      status: 'baseline',
-    },
+    deterministicGrade: gradeDeterministicOutput({
+      definition,
+      caseDefinition,
+      output: ablatedOutput,
+    }),
   });
   const comparison = createBlindComparison({
     manifest,
@@ -1985,7 +1976,11 @@ test('blind comparison is seeded, untrusted, and blocked by a failed lower gate'
       output: 'Incomplete trace.',
       loadedSkills: [campaign.definition.skill_name],
     }),
-    deterministicGrade: failingGrade(),
+    deterministicGrade: gradeDeterministicOutput({
+      definition: campaign.definition,
+      caseDefinition: campaign.definition.evals[0],
+      output: 'Incomplete trace.',
+    }),
   });
   assert.throws(
     () => createBlindComparison({
@@ -2021,6 +2016,720 @@ test('offline replay reconstructs the Incident tracer without host or model call
   assert.match(
     replay.coverage,
     /Incident Investigation and shared evaluation machinery only/,
+  );
+});
+
+test('owner grader evidence remains reusable through lifecycle resolution', async (t) => {
+  const definition = declareOwnerGrader(testDefinition());
+  definition.signals.ordered_trace = ['^GENERIC-GRADER-CANNOT-MATCH$'];
+  const graderRegistry = ownerGraderRegistry();
+  const manifest = createManifest(definition);
+  const cell = manifest.cells[0];
+  const caseDefinition = definition.evals[0];
+  const fixtureRoot = createPackageFixture(t, ['incident-investigation']);
+  const runs = await runMatchedEvaluation({
+    repositoryRoot: fixtureRoot,
+    manifest,
+    definition,
+    caseDefinition,
+    cell,
+    repetition: 1,
+    async executeArm({ arm }) {
+      return normalizedResult({
+        skill: definition.skill_name,
+        model: cell.model,
+        output: arm === 'treatment' ? 'OWNER CLAUSE' : 'control',
+        loadedSkills: arm === 'treatment' ? [definition.skill_name] : [],
+        packageSkills: arm === 'treatment' ? [definition.skill_name] : [],
+      });
+    },
+    graderRegistry,
+  });
+  const control = runs.find(({ arm }) => arm.kind === 'no-skill');
+  const treatment = runs.find(({ arm }) => arm.kind === 'treatment');
+  validateRunEvidence({
+    manifest,
+    caseDefinition,
+    cell,
+    repetition: 1,
+    arm: 'treatment',
+    record: treatment,
+    graderRegistry,
+  });
+
+  assert.deepEqual(
+    assessReusableEvidence({
+      manifest,
+      definition,
+      caseDefinition,
+      cell,
+      repetition: 1,
+      arm: 'treatment',
+      record: treatment,
+      graderRegistry,
+    }),
+    { reusable: true, reason: 'complete matching evidence' },
+  );
+  assert.equal(treatment.grader.id, 'fixture.clause-aware');
+  assert.equal(treatment.grader.version, '1');
+  assert.equal(treatment.grader.fingerprint, treatment.fingerprints.grading);
+
+  const comparison = createBlindComparison({
+    manifest,
+    definition,
+    caseDefinition,
+    repetition: 1,
+    control,
+    treatment,
+    judgeModel: 'judge-model',
+    graderRegistry,
+  });
+  const judgment = createJudgmentEvidence({
+    comparison,
+    definition,
+    caseDefinition,
+    judgeModel: 'judge-model',
+    judgment: structuredJudgment(comparison),
+    durationMs: 5,
+    costUsd: 0.02,
+  });
+  const replay = replayCampaign({
+    manifest,
+    definition,
+    runs,
+    judgments: [judgment],
+    graderRegistry,
+  });
+  assert.equal(replay.passed, true);
+});
+
+test('grader declarations and trusted registrations reject code-loading inputs', () => {
+  assert.throws(
+    () => createGraderRegistry({
+      graders: [
+        ownerGraderRegistration(),
+        ownerGraderRegistration(),
+      ],
+    }),
+    /duplicate deterministic grader/,
+  );
+
+  for (const grader of [
+    {
+      id: 'fixture.clause-aware',
+      version: '1',
+      path: '../../grader.js',
+    },
+    {
+      id: 'fixture.clause-aware',
+      version: '1',
+      code: 'return { passed: true }',
+    },
+    {
+      id: '../fixture',
+      version: '1',
+    },
+  ]) {
+    const definition = testDefinition();
+    definition.evaluation.grader = grader;
+    assert.throws(
+      () => validateEvaluationDefinition(definition),
+      /unsupported field|stable grader ID/,
+    );
+  }
+
+  const injected = testDefinition();
+  injected.evaluation.grader_path = '/tmp/grader.js';
+  assert.throws(
+    () => validateEvaluationDefinition(injected),
+    /unsupported field "grader_path"/,
+  );
+});
+
+test('grader resolution fails closed before execution for missing versions and unsupported coordinates', async (t) => {
+  const definition = declareOwnerGrader(testDefinition());
+  const manifest = createManifest(definition);
+  const caseDefinition = definition.evals[0];
+  const cell = manifest.cells[0];
+  const result = normalizedResult({
+    skill: definition.skill_name,
+    model: cell.model,
+    output: 'OWNER CLAUSE',
+    loadedSkills: [definition.skill_name],
+  });
+  const evidence = {
+    manifest,
+    caseDefinition,
+    cell,
+    repetition: 1,
+    arm: 'treatment',
+    result,
+    deterministicGrade: passingGrade(),
+  };
+
+  assert.throws(
+    () => createRunEvidence(evidence),
+    /is not registered/,
+  );
+  const fixtureRoot = createPackageFixture(t, ['incident-investigation']);
+  let executions = 0;
+  await assert.rejects(
+    runMatchedEvaluation({
+      repositoryRoot: fixtureRoot,
+      manifest,
+      definition,
+      caseDefinition,
+      cell,
+      repetition: 1,
+      executeArm() {
+        executions += 1;
+        return result;
+      },
+    }),
+    /is not registered/,
+  );
+  assert.equal(executions, 0);
+  assert.throws(
+    () => createRunEvidence({
+      ...evidence,
+      graderRegistry: ownerGraderRegistry({ version: '2' }),
+    }),
+    /version "1" is not registered/,
+  );
+  assert.throws(
+    () => createRunEvidence({
+      ...evidence,
+      graderRegistry: ownerGraderRegistry({ layers: ['role'] }),
+    }),
+    /does not support layer "outcome"/,
+  );
+  assert.throws(
+    () => createRunEvidence({
+      ...evidence,
+      graderRegistry: ownerGraderRegistry({ arms: ['no-skill'] }),
+    }),
+    /does not support arm "treatment"/,
+  );
+});
+
+test('owner grader failures and malformed checks fail closed with bounded errors', async (t) => {
+  const definition = declareOwnerGrader(testDefinition());
+  const manifest = createManifest(definition);
+  const fixtureRoot = createPackageFixture(t, ['incident-investigation']);
+  const base = {
+    repositoryRoot: fixtureRoot,
+    manifest,
+    definition,
+    caseDefinition: definition.evals[0],
+    cell: manifest.cells[0],
+    repetition: 1,
+    executeArm({ arm }) {
+      return normalizedResult({
+        skill: definition.skill_name,
+        model: manifest.cells[0].model,
+        output: arm === 'treatment' ? 'OWNER CLAUSE' : 'control',
+        loadedSkills: arm === 'treatment' ? [definition.skill_name] : [],
+        packageSkills: arm === 'treatment' ? [definition.skill_name] : [],
+      });
+    },
+  };
+
+  await assert.rejects(
+    runMatchedEvaluation({
+      ...base,
+      graderRegistry: ownerGraderRegistry({
+        grade() {
+          throw new Error('sensitive'.repeat(1000));
+        },
+      }),
+    }),
+    (error) => (
+      error.message === 'deterministic grader execution failed'
+      && error.message.length < 100
+    ),
+  );
+  await assert.rejects(
+    runMatchedEvaluation({
+      ...base,
+      graderRegistry: ownerGraderRegistry({
+        grade({ caseDefinition }) {
+          caseDefinition.prompt = 'mutated';
+          return passingGrade();
+        },
+      }),
+    }),
+    /deterministic grader execution failed|mutated its input/,
+  );
+  for (const malformed of [
+    null,
+    { passed: true, checks: [] },
+    {
+      passed: true,
+      checks: [{ name: 'clause', passed: false, details: 'contradiction' }],
+    },
+    {
+      passed: true,
+      checks: [{ name: 'clause', passed: true }],
+    },
+    {
+      passed: true,
+      checks: [{
+        name: 'clause',
+        passed: true,
+        details: 'evidence',
+        command: 'node arbitrary.js',
+      }],
+    },
+  ]) {
+    await assert.rejects(
+      runMatchedEvaluation({
+        ...base,
+        graderRegistry: ownerGraderRegistry({
+          grade() {
+            return malformed;
+          },
+        }),
+      }),
+      /deterministic grader returned a malformed result/,
+    );
+  }
+});
+
+test('grader fingerprints reject implementation substitution and tampering', async (t) => {
+  const definition = declareOwnerGrader(testDefinition());
+  const manifest = createManifest(definition);
+  const cell = manifest.cells[0];
+  const caseDefinition = definition.evals[0];
+  const fixtureRoot = createPackageFixture(t, ['incident-investigation']);
+  const originalRegistry = ownerGraderRegistry();
+  const runs = await runMatchedEvaluation({
+    repositoryRoot: fixtureRoot,
+    manifest,
+    definition,
+    caseDefinition,
+    cell,
+    repetition: 1,
+    executeArm({ arm }) {
+      return normalizedResult({
+        skill: definition.skill_name,
+        model: cell.model,
+        output: arm === 'treatment' ? 'OWNER CLAUSE' : 'control',
+        loadedSkills: arm === 'treatment' ? [definition.skill_name] : [],
+        packageSkills: arm === 'treatment' ? [definition.skill_name] : [],
+      });
+    },
+    graderRegistry: originalRegistry,
+  });
+  const treatment = runs[1];
+  const substitutedRegistry = ownerGraderRegistry({
+    implementationFingerprint: hash('substituted implementation'),
+  });
+
+  assert.deepEqual(
+    assessReusableEvidence({
+      manifest,
+      definition,
+      caseDefinition,
+      cell,
+      repetition: 1,
+      arm: 'treatment',
+      record: treatment,
+      graderRegistry: substitutedRegistry,
+    }),
+    { reusable: false, reason: 'deterministic grader fingerprint mismatch' },
+  );
+  assert.throws(
+    () => createBlindComparison({
+      manifest,
+      definition,
+      caseDefinition,
+      repetition: 1,
+      control: runs[0],
+      treatment,
+      judgeModel: 'judge-model',
+      graderRegistry: substitutedRegistry,
+    }),
+    /deterministic grader fingerprint mismatch/,
+  );
+  assert.throws(
+    () => replayCampaign({
+      manifest,
+      definition,
+      runs,
+      judgments: [],
+      graderRegistry: substitutedRegistry,
+    }),
+    /deterministic grader fingerprint mismatch/,
+  );
+  const staleControlGrade = structuredClone(runs[0]);
+  staleControlGrade.deterministic.checks[0].details = 'stale owner control grade';
+  reseal(staleControlGrade);
+  assert.throws(
+    () => createBlindComparison({
+      manifest,
+      definition,
+      caseDefinition,
+      repetition: 1,
+      control: staleControlGrade,
+      treatment,
+      judgeModel: 'judge-model',
+      graderRegistry: originalRegistry,
+    }),
+    /deterministic grade mismatch/,
+  );
+
+  const tampered = structuredClone(treatment);
+  tampered.grader.fingerprint = hash('tampered grader');
+  tampered.fingerprints.grading = tampered.grader.fingerprint;
+  reseal(tampered);
+  assert.throws(
+    () => validateRunEvidence({
+      manifest,
+      caseDefinition,
+      cell,
+      repetition: 1,
+      arm: 'treatment',
+      record: tampered,
+      graderRegistry: originalRegistry,
+    }),
+    /deterministic grader fingerprint mismatch/,
+  );
+});
+
+test('default and owner graders cover role outcome component and trigger arms', async (t) => {
+  for (const owner of [false, true]) {
+    for (const layer of ['role', 'outcome']) {
+      const definition = testDefinition({ layer });
+      const graderRegistry = owner ? ownerGraderRegistry() : undefined;
+      if (owner) {
+        declareOwnerGrader(definition);
+        definition.signals.ordered_trace = ['^GENERIC-GRADER-CANNOT-MATCH$'];
+      }
+      const manifest = createManifest(definition);
+      const fixtureRoot = createPackageFixture(t, ['incident-investigation']);
+      const records = await runMatchedEvaluation({
+        repositoryRoot: fixtureRoot,
+        manifest,
+        definition,
+        caseDefinition: definition.evals[0],
+        cell: manifest.cells[0],
+        repetition: 1,
+        executeArm({ arm }) {
+          return normalizedResult({
+            skill: definition.skill_name,
+            model: manifest.cells[0].model,
+            output: arm === 'treatment'
+              ? owner
+                ? 'OWNER CLAUSE'
+                : 'Frame\nInventory\nMap'
+              : 'control',
+            loadedSkills: arm === 'treatment' ? [definition.skill_name] : [],
+            packageSkills: arm === 'treatment' ? [definition.skill_name] : [],
+          });
+        },
+        ...(graderRegistry ? { graderRegistry } : {}),
+      });
+      assert.deepEqual(
+        records.map(({ arm }) => arm.kind),
+        ['no-skill', 'treatment'],
+      );
+      assert.equal(records[1].deterministic.passed, true);
+    }
+  }
+
+  const componentDefinition = declareOwnerGrader(testDefinition({
+    skill: 'agent-writing',
+    scope: 'agent-writing-component-owner',
+    layer: 'component',
+  }));
+  componentDefinition.signals.ordered_trace = ['^GENERIC-GRADER-CANNOT-MATCH$'];
+  const componentManifest = createManifest(componentDefinition);
+  const componentRoot = createPackageFixture(
+    t,
+    ['agent-writing', 'writing-foundation'],
+  );
+  const componentRegistry = ownerGraderRegistry();
+  const adapter = defineTestAdapter({
+    name: 'owner-component-grader',
+    execute(invocation, context) {
+      return normalizedResult({
+        skill: invocation.skill,
+        model: invocation.model,
+        output: 'OWNER CLAUSE',
+        loadedSkills: context.resolvedSkills,
+        packageSkills: context.packageSkills,
+      });
+    },
+  });
+  const componentRuns = await runComponentEvaluation({
+    repositoryRoot: componentRoot,
+    manifest: componentManifest,
+    definition: componentDefinition,
+    caseDefinition: componentDefinition.evals[0],
+    cell: componentManifest.cells[0],
+    repetition: 1,
+    adapter,
+    graderRegistry: componentRegistry,
+  });
+  assert.deepEqual(
+    componentRuns.map(({ arm, deterministic }) => [
+      arm.kind,
+      deterministic.passed,
+    ]),
+    [
+      ['treatment', true],
+      ['component-ablation', true],
+    ],
+  );
+  assert.equal(assessReusableEvidence({
+    manifest: componentManifest,
+    definition: componentDefinition,
+    caseDefinition: componentDefinition.evals[0],
+    cell: componentManifest.cells[0],
+    repetition: 1,
+    arm: 'treatment',
+    record: componentRuns[0],
+    graderRegistry: componentRegistry,
+  }).reusable, true);
+  const componentComparison = createBlindComparison({
+    manifest: componentManifest,
+    definition: componentDefinition,
+    caseDefinition: componentDefinition.evals[0],
+    repetition: 1,
+    control: componentRuns[1],
+    treatment: componentRuns[0],
+    judgeModel: 'judge-model',
+    graderRegistry: componentRegistry,
+  });
+  const componentJudgment = createJudgmentEvidence({
+    comparison: componentComparison,
+    definition: componentDefinition,
+    caseDefinition: componentDefinition.evals[0],
+    judgeModel: 'judge-model',
+    judgment: structuredJudgment(componentComparison),
+    durationMs: 5,
+    costUsd: 0.02,
+  });
+  assert.equal(replayCampaign({
+    manifest: componentManifest,
+    definition: componentDefinition,
+    runs: componentRuns,
+    judgments: [componentJudgment],
+    graderRegistry: componentRegistry,
+  }).passed, true);
+
+  const triggerDefinitionWithOwner = declareOwnerGrader(triggerDefinition());
+  const triggerManifest = createManifest(triggerDefinitionWithOwner);
+  const triggerRoot = createPackageFixture(
+    t,
+    ['agent-writing', 'writing-foundation'],
+  );
+  const triggerRegistry = ownerGraderRegistry({
+    grade({ arm, result }) {
+      const passed = arm.kind === 'treatment'
+        && result.observations.skillEvents.some((event) => (
+          event.name === 'agent-writing'
+            && event.operation === 'load'
+            && event.status === 'succeeded'
+        ));
+      return {
+        passed,
+        checks: [{
+          name: 'exact trigger lifecycle',
+          passed,
+          details: passed ? 'exact load observed' : 'exact load missing',
+        }],
+      };
+    },
+  });
+  const triggerRecord = await runTriggerEvaluation({
+    repositoryRoot: triggerRoot,
+    manifest: triggerManifest,
+    definition: triggerDefinitionWithOwner,
+    caseDefinition: triggerDefinitionWithOwner.evals[0],
+    cell: triggerManifest.cells[0],
+    repetition: 1,
+    execute() {
+      return normalizedResult({
+        skill: 'agent-writing',
+        model: triggerManifest.cells[0].model,
+        output: 'trigger output',
+        loadedSkills: ['agent-writing'],
+      });
+    },
+    graderRegistry: triggerRegistry,
+  });
+  assert.equal(triggerRecord.deterministic.passed, true);
+  assert.equal(assessReusableEvidence({
+    manifest: triggerManifest,
+    definition: triggerDefinitionWithOwner,
+    caseDefinition: triggerDefinitionWithOwner.evals[0],
+    cell: triggerManifest.cells[0],
+    repetition: 1,
+    arm: 'treatment',
+    record: triggerRecord,
+    graderRegistry: triggerRegistry,
+  }).reusable, true);
+  assert.equal(replayTriggerCampaign({
+    manifest: triggerManifest,
+    definition: triggerDefinitionWithOwner,
+    runs: [triggerRecord],
+    graderRegistry: triggerRegistry,
+  }).passed, true);
+});
+
+test('critical owner deterministic failure blocks blind judging', async (t) => {
+  const definition = declareOwnerGrader(testDefinition());
+  const manifest = createManifest(definition);
+  const cell = manifest.cells[0];
+  const fixtureRoot = createPackageFixture(t, ['incident-investigation']);
+  const graderRegistry = ownerGraderRegistry({
+    grade({ arm }) {
+      const passed = arm.kind !== 'treatment';
+      return {
+        passed,
+        checks: [{
+          name: 'critical owner clause',
+          passed,
+          details: passed ? 'baseline arm' : 'critical clause absent',
+        }],
+      };
+    },
+  });
+  const records = await runMatchedEvaluation({
+    repositoryRoot: fixtureRoot,
+    manifest,
+    definition,
+    caseDefinition: definition.evals[0],
+    cell,
+    repetition: 1,
+    executeArm({ arm }) {
+      return normalizedResult({
+        skill: definition.skill_name,
+        model: cell.model,
+        output: arm,
+        loadedSkills: arm === 'treatment' ? [definition.skill_name] : [],
+        packageSkills: arm === 'treatment' ? [definition.skill_name] : [],
+      });
+    },
+    graderRegistry,
+  });
+
+  assert.throws(
+    () => createBlindComparison({
+      manifest,
+      definition,
+      caseDefinition: definition.evals[0],
+      repetition: 1,
+      control: records[0],
+      treatment: records[1],
+      judgeModel: 'judge-model',
+      graderRegistry,
+    }),
+    /deterministic gate failed before judging/,
+  );
+});
+
+test('legacy evidence resolves only to a provably equivalent default grader', () => {
+  const definition = testDefinition();
+  const manifest = structuredClone(createManifest(definition));
+  delete manifest.grader;
+  delete manifest.fingerprint;
+  manifest.fingerprint = hash(manifest);
+  const caseDefinition = definition.evals[0];
+  const cell = manifest.cells[0];
+  const output = 'Frame\nInventory\nMap';
+  const record = structuredClone(createRunEvidence({
+    manifest,
+    caseDefinition,
+    cell,
+    repetition: 1,
+    arm: 'treatment',
+    result: normalizedResult({
+      skill: definition.skill_name,
+      model: cell.model,
+      output,
+      loadedSkills: [definition.skill_name],
+    }),
+    deterministicGrade: gradeDeterministicOutput({
+      definition,
+      caseDefinition,
+      output,
+    }),
+  }));
+  delete record.grader;
+  delete record.fingerprints.grading;
+  record.fingerprints.input = hash({
+    campaign_fingerprint: manifest.fingerprint,
+    definition_fingerprint: manifest.definition_fingerprint,
+    scope: manifest.scope,
+    skill: manifest.skill,
+    case: caseDefinition,
+    host: cell.host,
+    model: cell.model,
+    repetition: 1,
+    arm: record.arm,
+    package_revision: manifest.package_revision,
+    execution_configuration: manifest.execution_configuration,
+  });
+  reseal(record);
+  assert.deepEqual(
+    assessReusableEvidence({
+      manifest,
+      definition,
+      caseDefinition,
+      cell,
+      repetition: 1,
+      arm: 'treatment',
+      record,
+    }),
+    { reusable: true, reason: 'complete matching evidence' },
+  );
+
+  const stale = structuredClone(record);
+  stale.deterministic.checks[0].details = 'stale default evidence';
+  reseal(stale);
+  assert.deepEqual(
+    assessReusableEvidence({
+      manifest,
+      definition,
+      caseDefinition,
+      cell,
+      repetition: 1,
+      arm: 'treatment',
+      record: stale,
+    }),
+    { reusable: false, reason: 'deterministic grade mismatch' },
+  );
+
+  const ownerDefinition = declareOwnerGrader(testDefinition());
+  const ownerManifest = createManifest(ownerDefinition);
+  const ownerRecord = structuredClone(record);
+  ownerRecord.campaign_fingerprint = ownerManifest.fingerprint;
+  ownerRecord.arm.pairing_id = hash({
+    campaign: ownerManifest.fingerprint,
+    case_id: String(ownerDefinition.evals[0].id),
+    host: ownerManifest.cells[0].host,
+    model: ownerManifest.cells[0].model,
+    repetition: 1,
+  });
+  ownerRecord.fingerprints.input = hash('forged owner legacy input');
+  reseal(ownerRecord);
+  assert.deepEqual(
+    assessReusableEvidence({
+      manifest: ownerManifest,
+      definition: ownerDefinition,
+      caseDefinition: ownerDefinition.evals[0],
+      cell: ownerManifest.cells[0],
+      repetition: 1,
+      arm: 'treatment',
+      record: ownerRecord,
+      graderRegistry: ownerGraderRegistry(),
+    }),
+    {
+      reusable: false,
+      reason: 'legacy evidence cannot synthesize owner grader identity',
+    },
   );
 });
 
@@ -2227,6 +2936,7 @@ test('offline replay requires every host and model cell to pass thresholds', asy
     const cellRuns = await runMatchedEvaluation({
       repositoryRoot: fixtureRoot,
       manifest,
+      definition,
       caseDefinition,
       cell,
       repetition: 1,
@@ -2240,18 +2950,6 @@ test('offline replay requires every host and model cell to pass thresholds', asy
           loadedSkills: arm === 'treatment' ? [definition.skill_name] : [],
           packageSkills: arm === 'treatment' ? [definition.skill_name] : [],
         });
-      },
-      gradeOutput({ arm, output }) {
-        const grade = gradeDeterministicOutput({
-          definition,
-          caseDefinition,
-          output,
-        });
-        return arm === 'treatment' ? grade : {
-          ...grade,
-          passed: true,
-          status: 'baseline',
-        };
       },
     });
     runs.push(...cellRuns);

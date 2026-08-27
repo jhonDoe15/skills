@@ -13,7 +13,6 @@ const {
   createCampaignManifest,
   createJudgmentEvidence,
   fingerprintValue,
-  gradeDeterministicOutput,
   replayCampaign,
   replayTriggerCampaign,
   runMatchedEvaluation,
@@ -1078,6 +1077,7 @@ async function behaviorGate(definition, options, resultsDirectory) {
         const records = await runMatchedEvaluation({
           repositoryRoot: packageRoot,
           manifest: campaign.manifest,
+          definition: campaign.definition,
           caseDefinition: evaluation,
           cell,
           repetition: runNumber,
@@ -1171,21 +1171,6 @@ async function behaviorGate(definition, options, resultsDirectory) {
               withSkill,
               model,
             });
-          },
-          gradeOutput({ arm, output }) {
-            const grade = gradeDeterministicOutput({
-              definition: campaign.definition,
-              caseDefinition: evaluation,
-              output,
-            });
-            if (arm === 'no-skill') {
-              return {
-                ...grade,
-                passed: true,
-                status: 'baseline',
-              };
-            }
-            return grade;
           },
         });
 
@@ -1396,16 +1381,23 @@ function checkGate(definition, options, resultsDirectory) {
         );
         if (!evidenceValid) continue;
 
-        const grade = gradeDeterministicOutput({
+        const isTreatment = configuration === 'with_skill';
+        const assessment = assessReusableEvidence({
+          manifest: campaign.manifest,
           definition: campaign.definition,
           caseDefinition: evaluation,
-          output: evidence.execution.output,
+          cell,
+          repetition: runNumber,
+          arm,
+          record: evidence,
         });
-        const failures = grade.checks.filter((check) => !check.passed);
-        const isTreatment = configuration === 'with_skill';
-        const retainedGradeMatches = JSON.stringify(grade.checks)
-          === JSON.stringify(evidence.deterministic.checks)
-          && (!isTreatment || evidence.deterministic.passed === grade.passed);
+        const retainedGradeMatches = assessment.reusable
+          || (
+            isTreatment
+            && assessment.reason === 'deterministic gate not successful'
+          );
+        const failures = evidence.deterministic.checks
+          .filter((check) => !check.passed);
         addCheck(
           checks,
           'check',
@@ -1413,8 +1405,8 @@ function checkGate(definition, options, resultsDirectory) {
           retainedGradeMatches && (isTreatment ? failures.length === 0 : true),
           isTreatment
             ? `${
-              grade.checks.length - failures.length
-            }/${grade.checks.length} deterministic checks; retained=${
+              evidence.deterministic.checks.length - failures.length
+            }/${evidence.deterministic.checks.length} deterministic checks; retained=${
               retainedGradeMatches
             }`
             : `${failures.length} treatment signals absent; retained=${
