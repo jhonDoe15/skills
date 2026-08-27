@@ -72,6 +72,38 @@ function validateStringArray(value, field) {
   assertUnique(value, field);
 }
 
+function validateCanonicalSkillNames(value, field, allowEmpty = true) {
+  requireArray(value, field, allowEmpty);
+  value.forEach((name, index) => {
+    requireString(name, `${field}[${index}]`);
+    if (!/^[a-z0-9-]+$/.test(name)) {
+      throw new EvaluationContractError(
+        `${field}[${index}] is not canonical: "${name}"`,
+      );
+    }
+  });
+  assertUnique(value, field);
+}
+
+function normalizedMatchedRequiredSkillLoads({
+  layer,
+  skill,
+  caseDefinition,
+  field,
+  requireExplicit = false,
+}) {
+  if (!['role', 'outcome'].includes(layer)) return null;
+  const declared = caseDefinition.required_skill_loads;
+  if (declared === undefined && !requireExplicit) return [skill];
+  validateCanonicalSkillNames(declared, field, false);
+  if (!declared.includes(skill)) {
+    throw new EvaluationContractError(
+      `${field} must contain evaluated target "${skill}"`,
+    );
+  }
+  return [...declared];
+}
+
 function validateObjectItems(value, fields, field) {
   requireArray(value, field, true);
   for (const [index, item] of value.entries()) {
@@ -462,6 +494,12 @@ function validateEvaluationDefinition(definition) {
       evaluation.expectations,
       `definition.evals[${index}].expectations`,
     );
+    normalizedMatchedRequiredSkillLoads({
+      layer: metadata.layer,
+      skill: metadata.skill,
+      caseDefinition: evaluation,
+      field: `definition.evals[${index}].required_skill_loads`,
+    });
     if (metadata.layer === 'component') {
       requireString(
         evaluation.ablated_dependency,
@@ -586,10 +624,20 @@ function manifestContents(manifest) {
   return contents;
 }
 
-function campaignCase(evaluation, layer) {
+function campaignCase(evaluation, layer, skill) {
   return {
     id: String(evaluation.id),
     name: evaluation.name,
+    ...(['role', 'outcome'].includes(layer)
+      ? {
+        required_skill_loads: normalizedMatchedRequiredSkillLoads({
+          layer,
+          skill,
+          caseDefinition: evaluation,
+          field: 'evaluation.required_skill_loads',
+        }),
+      }
+      : {}),
     ...(layer === 'component'
       ? { ablated_dependency: evaluation.ablated_dependency }
       : {}),
@@ -643,7 +691,11 @@ function createCampaignManifest({
     repetitions,
     execution_configuration: structuredClone(executionConfiguration),
     cases: definition.evals.map((evaluation) => (
-      campaignCase(evaluation, definition.evaluation.layer)
+      campaignCase(
+        evaluation,
+        definition.evaluation.layer,
+        definition.evaluation.skill,
+      )
     )),
     arms: [...definition.evaluation.arms],
     thresholds: {
@@ -682,6 +734,13 @@ function validateCampaignManifest(manifest, definition = null) {
     requireObject(evaluation, `manifest.cases[${index}]`);
     requireString(evaluation.id, `manifest.cases[${index}].id`);
     requireString(evaluation.name, `manifest.cases[${index}].name`);
+    normalizedMatchedRequiredSkillLoads({
+      layer: manifest.layer,
+      skill: manifest.skill,
+      caseDefinition: evaluation,
+      field: `manifest.cases[${index}].required_skill_loads`,
+      requireExplicit: true,
+    });
     if (manifest.layer === 'component') {
       requireString(
         evaluation.ablated_dependency,
@@ -746,7 +805,11 @@ function validateCampaignManifest(manifest, definition = null) {
     }
     if (JSON.stringify(manifest.cases) !== JSON.stringify(
       definition.evals.map((evaluation) => (
-        campaignCase(evaluation, definition.evaluation.layer)
+        campaignCase(
+          evaluation,
+          definition.evaluation.layer,
+          definition.evaluation.skill,
+        )
       )),
     )) {
       throw new EvaluationContractError('manifest cases do not match definition');
@@ -767,6 +830,44 @@ function manifestCaseFor(manifest, caseDefinition) {
     );
   }
   return retainedCase;
+}
+
+function requiredSkillLoadsFor(
+  manifest,
+  caseDefinition,
+  resolvedSkills = null,
+) {
+  const retainedCase = manifestCaseFor(manifest, caseDefinition);
+  const retainedLoads = normalizedMatchedRequiredSkillLoads({
+    layer: manifest.layer,
+    skill: manifest.skill,
+    caseDefinition: retainedCase,
+    field: 'manifest case required_skill_loads',
+    requireExplicit: true,
+  });
+  if (retainedLoads === null) return null;
+  const currentLoads = normalizedMatchedRequiredSkillLoads({
+    layer: manifest.layer,
+    skill: manifest.skill,
+    caseDefinition,
+    field: 'caseDefinition.required_skill_loads',
+  });
+  if (!arraysEqual(retainedLoads, currentLoads)) {
+    throw new EvaluationContractError(
+      'case required_skill_loads do not match campaign definition',
+    );
+  }
+  if (resolvedSkills) {
+    const outsideClosure = retainedLoads.find(
+      (name) => !resolvedSkills.includes(name),
+    );
+    if (outsideClosure) {
+      throw new EvaluationContractError(
+        `required_skill_loads contains "${outsideClosure}" outside the resolved closure`,
+      );
+    }
+  }
+  return retainedLoads;
 }
 
 function componentAblationFor(manifest, caseDefinition) {
@@ -1008,6 +1109,7 @@ function validateRunEvidence({
   arm,
   record,
 }) {
+  validateCampaignManifest(manifest);
   requireObject(record, 'run evidence');
   if (record.schema_version !== SCHEMA_VERSION) {
     throw new EvaluationContractError('incompatible schema version');
@@ -1145,6 +1247,14 @@ function validateRunEvidence({
       resolved: record.model.resolved,
     },
   });
+  if (expectedArm.kind === 'treatment'
+    && ['role', 'outcome'].includes(manifest.layer)) {
+    requiredSkillLoadsFor(
+      manifest,
+      caseDefinition,
+      record.execution.routing.resolved_skills,
+    );
+  }
   if (expectedArm.kind === 'no-skill') {
     requireObject(
       record.execution.control_contamination,
@@ -1256,6 +1366,24 @@ function assessReusableEvidence({
     if (record.execution.status !== 'succeeded') {
       return { reusable: false, reason: 'execution not successful' };
     }
+    if (record.arm.kind === 'treatment' && manifest.layer !== 'trigger') {
+      const requiredLoads = manifest.layer === 'component'
+        ? [manifest.skill, componentAblationFor(manifest, caseDefinition).dependency]
+        : requiredSkillLoadsFor(
+          manifest,
+          caseDefinition,
+          record.execution.routing.resolved_skills,
+        );
+      if (missingSuccessfulLoads(
+        record.execution.skill_events,
+        requiredLoads,
+      ).length > 0) {
+        return {
+          reusable: false,
+          reason: 'activation evidence not successful',
+        };
+      }
+    }
     const recomputed = manifest.layer === 'trigger'
       ? triggerGradeFromObservation({
         caseDefinition,
@@ -1276,16 +1404,6 @@ function assessReusableEvidence({
     if (record.arm.kind === 'no-skill') {
       if (!record.execution.control_contamination.clean) {
         return { reusable: false, reason: 'No-Skill control contaminated' };
-      }
-    } else if (record.arm.kind === 'treatment' && manifest.layer !== 'trigger') {
-      const requiredLoads = manifest.layer === 'component'
-        ? [manifest.skill, componentAblationFor(manifest, caseDefinition).dependency]
-        : [manifest.skill];
-      if (!requiredLoads.every((name) => recordLoadedSkill(record, name))) {
-        return {
-          reusable: false,
-          reason: 'activation evidence not successful',
-        };
       }
     }
   } catch (error) {
@@ -1350,6 +1468,11 @@ async function runMatchedEvaluation({
   }
   const closure = packageClosure(repositoryRoot, manifest.skill);
   const frozenCase = deepFreeze(structuredClone(caseDefinition));
+  const requiredLoads = requiredSkillLoadsFor(
+    manifest,
+    frozenCase,
+    closure.resolvedSkills,
+  );
   const sharedContext = {
     caseDefinition: frozenCase,
     cell: deepFreeze({ ...cell }),
@@ -1380,12 +1503,17 @@ async function runMatchedEvaluation({
       provisioning,
     }));
     validateResult(result);
-    const grade = gradeOutput({
-      arm,
-      output: outputFromResult(result),
-      result,
-      caseDefinition: frozenCase,
-    });
+    const missingLoads = treatment
+      ? missingSuccessfulLoads(result.observations.skillEvents, requiredLoads)
+      : [];
+    const grade = missingLoads.length > 0
+      ? requiredLoadGateGrade(requiredLoads, missingLoads)
+      : gradeOutput({
+        arm,
+        output: outputFromResult(result),
+        result,
+        caseDefinition: frozenCase,
+      });
     records.push(createRunEvidence({
       manifest,
       caseDefinition: frozenCase,
@@ -1582,12 +1710,35 @@ function seededTreatmentPlacement(seed, caseDefinition, repetition) {
   return digest[0] % 2 === 0 ? 'A' : 'B';
 }
 
-function recordLoadedSkill(record, name) {
-  return record.execution.skill_events.some((event) => (
-    event.name === name
-      && event.operation === 'load'
-      && event.status === 'succeeded'
+function eventShowsSuccessfulLoad(event, name) {
+  return event.name === name
+    && event.operation === 'load'
+    && event.status === 'succeeded';
+}
+
+function missingSuccessfulLoads(skillEvents, requiredLoads) {
+  return requiredLoads.filter((name) => (
+    !skillEvents.some((event) => eventShowsSuccessfulLoad(event, name))
   ));
+}
+
+function requiredLoadGateGrade(requiredLoads, missingLoads) {
+  return {
+    passed: false,
+    checks: [
+      deterministicCheck(
+        'required Skill loads',
+        false,
+        `required=${requiredLoads.join(',')} missing=${missingLoads.join(',')}`,
+      ),
+    ],
+  };
+}
+
+function recordLoadedSkill(record, name) {
+  return record.execution.skill_events.some(
+    (event) => eventShowsSuccessfulLoad(event, name),
+  );
 }
 
 function recordAttemptedSkill(record, name) {
@@ -1642,8 +1793,20 @@ function assertPairLifecycleGates(manifest, caseDefinition, control, treatment) 
     if (!contamination.clean) {
       throw new EvaluationContractError('No-Skill control contamination gate failed');
     }
-    if (!recordLoadedSkill(treatment, manifest.skill)) {
-      throw new EvaluationContractError('treatment activation gate failed');
+    const requiredLoads = requiredSkillLoadsFor(
+      manifest,
+      caseDefinition,
+      treatment.execution.routing.resolved_skills,
+    );
+    const missingLoads = missingSuccessfulLoads(
+      treatment.execution.skill_events,
+      requiredLoads,
+    );
+    if (missingLoads.length > 0) {
+      throw new EvaluationContractError(
+        'treatment activation gate failed: required Skill load gate failed; '
+          + `missing ${missingLoads.join(', ')}`,
+      );
     }
     return;
   }
@@ -2135,22 +2298,6 @@ function replayCampaign({ manifest, definition, runs, judgments }) {
           arm: 'treatment',
           record: treatment,
         });
-        const controlGrade = gradeDeterministicOutput({
-          definition,
-          caseDefinition,
-          output: control.execution.output,
-        });
-        const treatmentGrade = gradeDeterministicOutput({
-          definition,
-          caseDefinition,
-          output: treatment.execution.output,
-        });
-        if (!fingerprintsMatch(
-          control.deterministic.checks,
-          controlGrade.checks,
-        ) || !fingerprintsMatch(treatment.deterministic, treatmentGrade)) {
-          throw new EvaluationContractError('deterministic grade mismatch');
-        }
         if (control.arm.pairing_id !== treatment.arm.pairing_id) {
           throw new EvaluationContractError('pairing mismatch');
         }
@@ -2174,6 +2321,28 @@ function replayCampaign({ manifest, definition, runs, judgments }) {
               ? 'no-skill-contamination'
               : 'treatment-activation',
           );
+        }
+        const controlGrade = gradeDeterministicOutput({
+          definition,
+          caseDefinition,
+          output: control.execution.output,
+        });
+        if (!fingerprintsMatch(
+          control.deterministic.checks,
+          controlGrade.checks,
+        )) {
+          throw new EvaluationContractError('deterministic grade mismatch');
+        }
+        let treatmentGrade = null;
+        if (lowerGatePassed) {
+          treatmentGrade = gradeDeterministicOutput({
+            definition,
+            caseDefinition,
+            output: treatment.execution.output,
+          });
+          if (!fingerprintsMatch(treatment.deterministic, treatmentGrade)) {
+            throw new EvaluationContractError('deterministic grade mismatch');
+          }
         }
         if (control.execution.status !== 'succeeded') {
           lowerGatePassed = false;
