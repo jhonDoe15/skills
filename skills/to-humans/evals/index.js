@@ -121,8 +121,7 @@ function isRepetitive(value) {
   return false;
 }
 
-function evidenceUnits(output) {
-  const units = contentUnits(output);
+function describeEvidenceUnits(units) {
   const counts = new Map();
   for (const unit of units) {
     const key = normalizedUnit(unit);
@@ -138,6 +137,17 @@ function evidenceUnits(output) {
       meaningful: key.length > 0 && !isRepetitive(unit),
     };
   });
+}
+
+function evidenceUnits(output) {
+  return describeEvidenceUnits(contentUnits(output));
+}
+
+function actionEvidenceUnits(output) {
+  const clauses = contentUnits(output).flatMap((unit) => (
+    unit.split(/,\s+(?=(?:and|as)\b)/i)
+  )).map((unit) => unit.trim()).filter(Boolean);
+  return describeEvidenceUnits(clauses);
 }
 
 function matchingText(value, patterns, field) {
@@ -169,6 +179,38 @@ function matchingNonnegatedText(value, patterns, field) {
     }
   }
   return null;
+}
+
+function matchingSpan(value, patterns, field, { nonnegated = false } = {}) {
+  if (!Array.isArray(patterns) || patterns.length === 0) {
+    throw new TypeError(`${field} must be a non-empty pattern array`);
+  }
+  let earliest = null;
+  for (const [index, pattern] of patterns.entries()) {
+    const match = compile(pattern, `${field}[${index}]`).exec(value);
+    if (match && (!nonnegated || !hasPredicateLocalNegation(value, match.index))
+        && (!earliest || match.index < earliest.index)) {
+      earliest = match;
+    }
+  }
+  return earliest;
+}
+
+function hasOnlyCoreConnectors(value, qualifierGroups, field) {
+  let remainder = value;
+  for (const [groupIndex, patterns] of qualifierGroups.entries()) {
+    if (!Array.isArray(patterns) || patterns.length === 0) {
+      throw new TypeError(`${field}[${groupIndex}] must be a non-empty pattern array`);
+    }
+    for (const [patternIndex, pattern] of patterns.entries()) {
+      remainder = remainder.replace(
+        compile(pattern, `${field}[${groupIndex}][${patternIndex}]`),
+        ' ',
+      );
+    }
+  }
+  const connectors = new Set(['a', 'an', 'that', 'the', 'with']);
+  return normalizedTokens(remainder).every((token) => connectors.has(token));
 }
 
 function matchesOrderedGroups(value, groups, field) {
@@ -272,7 +314,7 @@ function gradeAccountableActions(output, expectations = []) {
   if (!Array.isArray(expectations)) {
     throw new TypeError('accountable_actions must be an array');
   }
-  const units = evidenceUnits(output);
+  const units = actionEvidenceUnits(output);
   const usedUnits = new Set();
   const usedPairs = new Set();
   return expectations.map((expectation, index) => {
@@ -298,20 +340,34 @@ function gradeAccountableActions(output, expectations = []) {
         expectation.source_patterns,
         `accountable_actions[${index}].source_patterns`,
       );
-      const qualifier = matchingText(
+      const qualifierGroups = expectation.qualifier_groups;
+      if (!Array.isArray(qualifierGroups) || qualifierGroups.length === 0) {
+        throw new TypeError(
+          `accountable_actions[${index}].qualifier_groups must be non-empty`,
+        );
+      }
+      const qualifiers = qualifierGroups.every((patterns, groupIndex) => (
+        matchesAny(
+          unit.text,
+          patterns,
+          `accountable_actions[${index}].qualifier_groups[${groupIndex}]`,
+        )
+      ));
+      const ownerSpan = matchingSpan(
         unit.text,
-        expectation.qualifier_patterns,
-        `accountable_actions[${index}].qualifier_patterns`,
+        expectation.owner_patterns,
+        `accountable_actions[${index}].owner_patterns`,
       );
-      const predicateObject = matchingNonnegatedText(
+      const actionSpan = matchingSpan(
         unit.text,
-        expectation.predicate_object_patterns,
-        `accountable_actions[${index}].predicate_object_patterns`,
+        expectation.action_patterns,
+        `accountable_actions[${index}].action_patterns`,
+        { nonnegated: true },
       );
-      const proposition = matchingNonnegatedText(
+      const sourceSpan = matchingSpan(
         unit.text,
-        expectation.proposition_patterns,
-        `accountable_actions[${index}].proposition_patterns`,
+        expectation.source_patterns,
+        `accountable_actions[${index}].source_patterns`,
       );
       const ownerCount = expectations.filter((other, otherIndex) => (
         matchesAny(
@@ -328,17 +384,22 @@ function gradeAccountableActions(output, expectations = []) {
           `accountable_actions[${otherIndex}].source_patterns`,
         )
       ));
-      const relationship = matchesOrderedGroups(
-        unit.text,
-        [
-          expectation.owner_patterns,
-          expectation.predicate_object_patterns,
-        ],
-        `accountable_actions[${index}].owner_predicate_object`,
+      const ordered = ownerSpan && actionSpan && sourceSpan
+        && ownerSpan.index + ownerSpan[0].length <= actionSpan.index
+        && actionSpan.index + actionSpan[0].length <= sourceSpan.index;
+      const actorActionConnector = ordered && hasOnlyCoreConnectors(
+        unit.text.slice(ownerSpan.index + ownerSpan[0].length, actionSpan.index),
+        qualifierGroups,
+        `accountable_actions[${index}].qualifier_groups`,
+      );
+      const actionObjectConnector = ordered && hasOnlyCoreConnectors(
+        unit.text.slice(actionSpan.index + actionSpan[0].length, sourceSpan.index),
+        qualifierGroups,
+        `accountable_actions[${index}].qualifier_groups`,
       );
       const pair = owner && action ? `${owner}\0${action}` : null;
-      if (!owner || !action || !source || !qualifier || !predicateObject
-          || !proposition || !relationship
+      if (!owner || !action || !source || !qualifiers || !ordered
+          || !actorActionConnector || !actionObjectConnector
           || conflictingSource || ownerCount !== 1 || usedPairs.has(pair)) {
         return false;
       }

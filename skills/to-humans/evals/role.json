@@ -86,15 +86,10 @@
             "source_patterns": [
               "\\b(?:internal (?:group|cohort)|first cohort)\\b"
             ],
-            "qualifier_patterns": [
-              "\\b(?:14:00|2\\s*(?:p\\.?m\\.?|pm)|two in the afternoon)\\b"
-            ],
-            "predicate_object_patterns": [
-              "\\b(?:starts|stages|deploys|rolls out|will (?:start|stage|deploy|roll out)|must (?:start|stage|deploy|roll out)) (?:with )?(?:the )?(?:internal (?:group|cohort)|first cohort)\\b"
-            ],
-            "proposition_patterns": [
-              "\\b(?:at )?(?:14:00|2\\s*(?:p\\.?m\\.?|pm)|two in the afternoon)[,:]? (?:the )?release(?: engineering| lead| owner)? (?:starts|stages|deploys|rolls out|will (?:start|stage|deploy|roll out)|must (?:start|stage|deploy|roll out)) (?:with )?(?:the )?(?:internal (?:group|cohort)|first cohort)\\b",
-              "\\b(?:the )?release(?: engineering| lead| owner)? (?:starts|stages|deploys|rolls out|will (?:start|stage|deploy|roll out)|must (?:start|stage|deploy|roll out)) (?:with )?(?:the )?(?:internal (?:group|cohort)|first cohort) (?:at |by )?(?:14:00|2\\s*(?:p\\.?m\\.?|pm)|two in the afternoon)\\b"
+            "qualifier_groups": [
+              [
+                "\\b(?:at )?(?:14:00|2\\s*(?:p\\.?m\\.?|pm)|two in the afternoon)\\b"
+              ]
             ]
           },
           {
@@ -108,15 +103,10 @@
             "source_patterns": [
               "\\b(?:customer notice|customer message|support notice)\\b"
             ],
-            "qualifier_patterns": [
-              "\\b(?:before|prior to|ahead of) (?:the )?(?:staged )?rollout\\b"
-            ],
-            "predicate_object_patterns": [
-              "\\b(?:prepares|publishes|notifies|will (?:prepare|publish|notify)|must (?:prepare|publish|notify)) (?:the )?(?:customer notice|customer message|support notice)\\b"
-            ],
-            "proposition_patterns": [
-              "\\b(?:before|prior to|ahead of) (?:the )?(?:staged )?rollout[,:]? (?:the )?(?:customer )?support(?: team| lead| owner)? (?:prepares|publishes|notifies|will (?:prepare|publish|notify)|must (?:prepare|publish|notify)) (?:the )?(?:customer notice|customer message|support notice)\\b",
-              "\\b(?:the )?(?:customer )?support(?: team| lead| owner)? (?:prepares|publishes|notifies|will (?:prepare|publish|notify)|must (?:prepare|publish|notify)) (?:the )?(?:customer notice|customer message|support notice) (?:before|prior to|ahead of) (?:the )?(?:staged )?rollout\\b"
+            "qualifier_groups": [
+              [
+                "\\b(?:before|prior to|ahead of) (?:the )?(?:staged )?rollout\\b"
+              ]
             ]
           },
           {
@@ -128,18 +118,15 @@
               "\\b(?:verifies|will verify|reviews|will review|confirms|will confirm)\\b"
             ],
             "source_patterns": [
-              "\\b(?:exception (?:expires|expiry)|exception's expiry|exception expiration)\\b"
+              "\\b(?:exception expires Friday|exception's expiry is Friday|exception expiration is Friday|exception expiration Friday)\\b"
             ],
-            "qualifier_patterns": [
-              "\\b(?:Friday|before approval|prior to approval)\\b"
-            ],
-            "predicate_object_patterns": [
-              "\\b(?:verifies|reviews|confirms|will (?:verify|review|confirm)|must (?:verify|review|confirm))(?: before approval| prior to approval)? (?:that )?(?:the )?(?:exception (?:expires|expiry)|exception's expiry|exception expiration)\\b"
-            ],
-            "proposition_patterns": [
-              "\\b(?:before|prior to) approval[,:]? (?:the )?security(?: team| lead| owner)? (?:verifies|reviews|confirms|will (?:verify|review|confirm)|must (?:verify|review|confirm)) (?:that )?(?:the )?(?:exception expires Friday|exception's expiry is Friday|exception expiration is Friday|exception expiration Friday)\\b",
-              "\\b(?:the )?security(?: team| lead| owner)? (?:verifies|reviews|confirms|will (?:verify|review|confirm)|must (?:verify|review|confirm)) (?:before|prior to) approval (?:that )?(?:the )?(?:exception expires Friday|exception's expiry is Friday|exception expiration is Friday|exception expiration Friday)\\b",
-              "\\b(?:the )?security(?: team| lead| owner)? (?:verifies|reviews|confirms|will (?:verify|review|confirm)|must (?:verify|review|confirm)) (?:that )?(?:the )?(?:exception expires Friday|exception's expiry is Friday|exception expiration is Friday|exception expiration Friday) (?:before|prior to) approval\\b"
+            "qualifier_groups": [
+              [
+                "\\bFriday\\b"
+              ],
+              [
+                "\\b(?:before|prior to) approval\\b"
+              ]
             ]
           }
         ],

@@ -480,6 +480,36 @@ test('deterministic writing grader requires distinct accountable actions', () =>
     'Prior to approval, security will confirm the exception expiration Friday.',
   ]);
   assert.equal(paraphrase.passed, true, JSON.stringify(paraphrase, null, 2));
+  const qualifierPlacements = [
+    [
+      'At 14:00, the release lead stages the internal cohort.',
+      'Before rollout, support prepares the customer notice.',
+      'Before approval, security verifies that the exception expires Friday.',
+    ],
+    [
+      'The release lead, at 14:00, stages the internal cohort.',
+      'Support, before rollout, prepares the customer notice.',
+      'Security, before approval, verifies that the exception expires Friday.',
+    ],
+    [
+      'The release lead stages at 14:00 the internal cohort.',
+      'Support prepares before rollout the customer notice.',
+      'Security verifies before approval that the exception expires Friday.',
+    ],
+    [
+      'The release lead stages the internal cohort at 14:00.',
+      'Support prepares the customer notice before rollout.',
+      'Security verifies that the exception expires Friday before approval.',
+    ],
+  ];
+  for (const [index, actions] of qualifierPlacements.entries()) {
+    const placement = grade(['Start a staged rollout.', ...actions]);
+    assert.equal(
+      placement.passed,
+      true,
+      `qualifier placement ${index + 1}: ${JSON.stringify(placement, null, 2)}`,
+    );
+  }
 
   const probes = [
     [
