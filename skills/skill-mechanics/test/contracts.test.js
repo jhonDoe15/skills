@@ -39,6 +39,24 @@ function definition(fileName) {
   return value;
 }
 
+function referenceFixture(t, prefix, reference) {
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  t.after(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
+  const contractPath = path.join(
+    fixtureRoot,
+    'evals',
+    'fixtures',
+    'behavior-contract.json',
+  );
+  fs.mkdirSync(path.dirname(contractPath), { recursive: true });
+  const contract = readJson(
+    path.join(skillRoot, 'evals', 'fixtures', 'behavior-contract.json'),
+  );
+  contract.branches[1].reference = reference;
+  fs.writeFileSync(contractPath, `${JSON.stringify(contract, null, 2)}\n`);
+  return fixtureRoot;
+}
+
 test('Skill Mechanics exposes only its private representation contract', () => {
   const skill = readSkill();
 
@@ -142,5 +160,97 @@ test('mechanics grading resolves every declared conditional reference', (t) => {
       passed: false,
       details: 'missing evals/fixtures/references/failure-path.md',
     },
+  );
+});
+
+test('mechanics grading rejects a declared reference that escapes fixture root', (t) => {
+  const fixtureRoot = referenceFixture(t, 'mechanics-traversal-', '../README.md');
+  const escapedTarget = path.join(fixtureRoot, 'evals', 'README.md');
+  fs.writeFileSync(escapedTarget, '# Escaped target\n');
+  const role = definition('role.json');
+  const caseDefinition = {
+    ...role.evals[0],
+    files: [
+      'evals/fixtures/behavior-contract.json',
+      'evals/README.md',
+    ],
+  };
+  const { gradeMechanicsArtifacts } = require('../evals/grader');
+
+  const grade = gradeMechanicsArtifacts({
+    skillRoot: fixtureRoot,
+    caseDefinition,
+  });
+
+  assert.equal(grade.passed, false);
+  assert.equal(
+    grade.checks.find(({ name }) => name === 'reference ../README.md').passed,
+    false,
+  );
+});
+
+test('mechanics grading rejects an absolute reference after normalization', (t) => {
+  const fixtureRoot = referenceFixture(t, 'mechanics-absolute-', '/escape.md');
+  const normalizedTarget = path.join(
+    fixtureRoot,
+    'evals',
+    'fixtures',
+    'escape.md',
+  );
+  fs.writeFileSync(normalizedTarget, '# Normalized absolute target\n');
+  const role = definition('role.json');
+  const caseDefinition = {
+    ...role.evals[0],
+    files: [
+      'evals/fixtures/behavior-contract.json',
+      'evals/fixtures/escape.md',
+    ],
+  };
+  const { gradeMechanicsArtifacts } = require('../evals/grader');
+
+  const grade = gradeMechanicsArtifacts({
+    skillRoot: fixtureRoot,
+    caseDefinition,
+  });
+
+  assert.equal(
+    grade.checks.find(({ name }) => name === 'reference /escape.md').passed,
+    false,
+  );
+});
+
+test('mechanics grading rejects a reference through an escaping symlink', (t) => {
+  const fixtureRoot = referenceFixture(
+    t,
+    'mechanics-symlink-',
+    'references/target.md',
+  );
+  const externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mechanics-external-'));
+  t.after(() => fs.rmSync(externalRoot, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(externalRoot, 'target.md'), '# External target\n');
+  fs.symlinkSync(
+    externalRoot,
+    path.join(fixtureRoot, 'evals', 'fixtures', 'references'),
+  );
+  const role = definition('role.json');
+  const caseDefinition = {
+    ...role.evals[0],
+    files: [
+      'evals/fixtures/behavior-contract.json',
+      'evals/fixtures/references/target.md',
+    ],
+  };
+  const { gradeMechanicsArtifacts } = require('../evals/grader');
+
+  const grade = gradeMechanicsArtifacts({
+    skillRoot: fixtureRoot,
+    caseDefinition,
+  });
+
+  assert.equal(
+    grade.checks.find(
+      ({ name }) => name === 'reference references/target.md',
+    ).passed,
+    false,
   );
 });

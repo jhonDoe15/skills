@@ -7,29 +7,34 @@ function check(name, passed, details) {
   return { name, passed, details };
 }
 
-function fixturePath(skillRoot, relativePath) {
-  if (path.isAbsolute(relativePath)) return null;
-  const resolvedRoot = path.resolve(skillRoot);
-  const resolved = path.resolve(resolvedRoot, relativePath);
-  if (resolved !== resolvedRoot && !resolved.startsWith(`${resolvedRoot}${path.sep}`)) {
-    return null;
-  }
-  return resolved;
+function isStrictDescendant(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return relative !== ''
+    && relative !== '..'
+    && !relative.startsWith(`..${path.sep}`)
+    && !path.isAbsolute(relative);
 }
 
-function isRegularFile(filePath) {
-  if (filePath === null) return false;
+function regularFileWithin(root, relativePath) {
+  if (path.posix.isAbsolute(relativePath)
+    || path.win32.isAbsolute(relativePath)) return null;
+  const resolvedRoot = path.resolve(root);
+  const resolved = path.resolve(resolvedRoot, relativePath);
+  if (!isStrictDescendant(resolvedRoot, resolved)) return null;
   try {
-    return fs.lstatSync(filePath).isFile();
+    if (!fs.lstatSync(resolved).isFile()) return null;
+    const realRoot = fs.realpathSync(resolvedRoot);
+    const realFile = fs.realpathSync(resolved);
+    return isStrictDescendant(realRoot, realFile) ? resolved : null;
   } catch {
-    return false;
+    return null;
   }
 }
 
 function gradeMechanicsArtifacts({ skillRoot, caseDefinition }) {
   const declaredFiles = new Set(caseDefinition.files);
   const checks = caseDefinition.files.map((relativePath) => {
-    const passed = isRegularFile(fixturePath(skillRoot, relativePath));
+    const passed = regularFileWithin(skillRoot, relativePath) !== null;
     return check(
       `input ${relativePath}`,
       passed,
@@ -37,9 +42,9 @@ function gradeMechanicsArtifacts({ skillRoot, caseDefinition }) {
     );
   });
   const contractPath = 'evals/fixtures/behavior-contract.json';
-  const resolvedContract = fixturePath(skillRoot, contractPath);
+  const resolvedContract = regularFileWithin(skillRoot, contractPath);
 
-  if (!declaredFiles.has(contractPath) || !isRegularFile(resolvedContract)) {
+  if (!declaredFiles.has(contractPath) || resolvedContract === null) {
     return {
       passed: false,
       checks,
@@ -64,14 +69,29 @@ function gradeMechanicsArtifacts({ skillRoot, caseDefinition }) {
   const references = contract.branches
     .map(({ reference }) => reference)
     .filter((reference) => typeof reference === 'string');
+  const fixtureRoot = path.join(skillRoot, 'evals', 'fixtures');
   for (const reference of references) {
-    const declaredPath = path.posix.join('evals/fixtures', reference);
-    const passed = declaredFiles.has(declaredPath)
-      && isRegularFile(fixturePath(skillRoot, declaredPath));
+    const portableRelative = path.posix.isAbsolute(reference)
+      || path.win32.isAbsolute(reference)
+      || reference.includes('\\')
+      ? null
+      : path.posix.normalize(reference);
+    const staysWithinFixture = portableRelative !== null
+      && portableRelative !== '.'
+      && portableRelative !== '..'
+      && !portableRelative.startsWith('../');
+    const declaredPath = staysWithinFixture
+      ? path.posix.join('evals/fixtures', portableRelative)
+      : null;
+    const passed = declaredPath !== null
+      && declaredFiles.has(declaredPath)
+      && regularFileWithin(fixtureRoot, portableRelative) !== null;
     checks.push(check(
       `reference ${reference}`,
       passed,
-      passed ? `resolved ${declaredPath}` : `missing ${declaredPath}`,
+      passed
+        ? `resolved ${declaredPath}`
+        : `missing ${declaredPath ?? reference}`,
     ));
   }
 
