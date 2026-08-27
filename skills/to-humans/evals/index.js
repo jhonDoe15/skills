@@ -82,41 +82,95 @@ function matchesAny(value, patterns, field) {
   ));
 }
 
-function firstNonemptyBlock(output) {
-  return output.trimStart().split(/\r?\n\s*\r?\n/, 1)[0] || '';
-}
-
-function wordCount(value) {
-  return value.match(/[\p{L}\p{N}]+(?:[-'][\p{L}\p{N}]+)*/gu)?.length || 0;
-}
-
 function contentUnits(output) {
   return output
     .split(/\r?\n/)
-    .flatMap((line) => line.split(/(?<=[.!?])\s+/))
+    .flatMap((line) => line.split(
+      /(?<=[.!?;])\s+|,\s+(?=(?:but|while|although)\b)|\s+(?=(?:because|since|but|while|although)\b)/i,
+    ))
     .map((unit) => unit.trim())
     .filter(Boolean);
 }
 
+function normalizedTokens(value) {
+  return value.toLocaleLowerCase('en').match(/[\p{L}\p{N}]+/gu) || [];
+}
+
+const STRUCTURE_WORDS = new Set([
+  'a', 'an', 'and', 'are', 'at', 'because', 'but', 'by', 'for', 'from',
+  'has', 'have', 'if', 'in', 'is', 'it', 'of', 'on', 'only', 'or', 'since',
+  'that', 'the', 'this', 'to', 'was', 'were', 'when', 'while', 'with',
+]);
+
+function normalizedUnit(value) {
+  return normalizedTokens(value).join(' ');
+}
+
+function isRepetitive(value) {
+  const tokens = normalizedTokens(value);
+  if (tokens.some((token, index) => index > 0 && token === tokens[index - 1])) {
+    return true;
+  }
+  const contentTokens = tokens.filter((token) => !STRUCTURE_WORDS.has(token));
+  const pairs = new Set();
+  for (let index = 0; index + 1 < contentTokens.length; index += 1) {
+    const pair = `${contentTokens[index]}\0${contentTokens[index + 1]}`;
+    if (pairs.has(pair)) return true;
+    pairs.add(pair);
+  }
+  return false;
+}
+
+function evidenceUnits(output) {
+  const units = contentUnits(output);
+  const counts = new Map();
+  for (const unit of units) {
+    const key = normalizedUnit(unit);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return units.map((unit, index) => {
+    const key = normalizedUnit(unit);
+    return {
+      index,
+      key,
+      text: unit,
+      unique: key.length > 0 && counts.get(key) === 1,
+      meaningful: key.length > 0 && !isRepetitive(unit),
+    };
+  });
+}
+
+function matchingText(value, patterns, field) {
+  if (!Array.isArray(patterns) || patterns.length === 0) {
+    throw new TypeError(`${field} must be a non-empty pattern array`);
+  }
+  for (const [index, pattern] of patterns.entries()) {
+    const match = compile(pattern, `${field}[${index}]`).exec(value);
+    if (match) return match[0].toLocaleLowerCase('en');
+  }
+  return null;
+}
+
 function gradeAnswerFirst(output, expectation) {
   if (!expectation) return [];
-  const firstBlock = firstNonemptyBlock(output);
+  const firstUnit = evidenceUnits(output)[0];
   const topic = matchesAny(
-    firstBlock,
+    firstUnit?.text || '',
     expectation.topic_patterns,
     'answer_first.topic_patterns',
   );
   const answer = matchesAny(
-    firstBlock,
+    firstUnit?.text || '',
     expectation.answer_patterns,
     'answer_first.answer_patterns',
   );
+  const substantive = firstUnit?.meaningful === true;
   return [check(
     'answer first',
-    topic && answer,
-    topic && answer
-      ? 'scenario answer appears in the first block'
-      : 'first block lacks the scenario topic or a concrete answer',
+    topic && answer && substantive,
+    topic && answer && substantive
+      ? 'scenario answer appears in the first statement'
+      : 'first statement lacks a substantive scenario answer',
   )];
 }
 
@@ -124,65 +178,91 @@ function gradeAccountableActions(output, expectations = []) {
   if (!Array.isArray(expectations)) {
     throw new TypeError('accountable_actions must be an array');
   }
-  const lines = output.split(/\r?\n/);
-  const usedLines = new Set();
+  const units = evidenceUnits(output);
+  const usedUnits = new Set();
+  const usedPairs = new Set();
   return expectations.map((expectation, index) => {
     if (!expectation || typeof expectation.name !== 'string') {
       throw new TypeError(`accountable_actions[${index}] needs a name`);
     }
-    const minimumWords = expectation.minimum_words || 4;
-    const lineIndex = lines.findIndex((line, candidateIndex) => (
-      !usedLines.has(candidateIndex)
-      && wordCount(line) >= minimumWords
-      && matchesAny(
-        line,
+    const candidate = units.find((unit) => {
+      if (!unit.unique || !unit.meaningful || usedUnits.has(unit.key)) {
+        return false;
+      }
+      const owner = matchingText(
+        unit.text,
         expectation.owner_patterns,
         `accountable_actions[${index}].owner_patterns`,
-      )
-      && matchesAny(
-        line,
+      );
+      const action = matchingText(
+        unit.text,
         expectation.action_patterns,
         `accountable_actions[${index}].action_patterns`,
-      )
-    ));
-    if (lineIndex !== -1) usedLines.add(lineIndex);
+      );
+      const source = matchingText(
+        unit.text,
+        expectation.source_patterns,
+        `accountable_actions[${index}].source_patterns`,
+      );
+      const ownerCount = expectations.filter((other, otherIndex) => (
+        matchesAny(
+          unit.text,
+          other.owner_patterns,
+          `accountable_actions[${otherIndex}].owner_patterns`,
+        )
+      )).length;
+      const pair = owner && action ? `${owner}\0${action}` : null;
+      if (!owner || !action || !source || ownerCount !== 1 || usedPairs.has(pair)) {
+        return false;
+      }
+      unit.pair = pair;
+      return true;
+    });
+    if (candidate) {
+      usedUnits.add(candidate.key);
+      usedPairs.add(candidate.pair);
+    }
     return check(
       `accountable action ${expectation.name}`,
-      lineIndex !== -1,
-      lineIndex === -1
-        ? 'no distinct owner-and-action line found'
-        : `line ${lineIndex + 1}`,
+      Boolean(candidate),
+      candidate
+        ? `statement ${candidate.index + 1}`
+        : 'no distinct owner, action, and source statement found',
     );
   });
 }
 
 function gradeDecisionSupport(output, expectation) {
   if (!expectation) return [];
-  const units = contentUnits(output);
+  const units = evidenceUnits(output);
+  const usedUnits = new Set();
   return [
-    ['recommendation', 'decision recommendation', 5],
-    ['basis', 'decision basis', 6],
-    ['material_uncertainty', 'decision material uncertainty', 4],
-    ['change_condition', 'decision change condition', 8],
-  ].map(([field, name, minimumWords]) => {
+    ['recommendation', 'decision recommendation'],
+    ['basis', 'decision basis'],
+    ['material_uncertainty', 'decision material uncertainty'],
+    ['change_condition', 'decision change condition'],
+  ].map(([field, name]) => {
     const groups = expectation[field];
     if (!Array.isArray(groups) || groups.length === 0) {
       throw new TypeError(`decision_support.${field} must contain pattern groups`);
     }
-    const unitIndex = units.findIndex((unit) => (
-      wordCount(unit) >= minimumWords
+    const unit = units.find((candidate) => (
+      candidate.unique
+      && candidate.meaningful
+      && !usedUnits.has(candidate.key)
       && groups.every((patterns, index) => matchesAny(
-        unit,
+        candidate.text,
         patterns,
         `decision_support.${field}[${index}]`,
       ))
     ));
+    if (unit) usedUnits.add(unit.key);
     return check(
       name,
-      unitIndex !== -1,
-      unitIndex === -1
-        ? `no ${minimumWords}-word scenario-grounded statement`
-        : `statement ${unitIndex + 1}`,
+      Boolean(unit),
+      unit
+        ? `statement ${unit.index + 1}`
+        : 'no distinct scenario-grounded statement',
     );
   });
 }

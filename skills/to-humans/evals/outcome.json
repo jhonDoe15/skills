@@ -103,7 +103,6 @@
             ]
           ]
         },
-        "minimum_nonempty_lines": 4,
         "forbidden_patterns": [],
         "no_em_dash": true
       }

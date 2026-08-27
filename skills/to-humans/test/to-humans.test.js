@@ -436,27 +436,63 @@ test('deterministic writing grader accepts alternate wording and keeps hard gate
 test('deterministic writing grader requires distinct accountable actions', () => {
   const role = definitionFor(loadDefinitions(), 'role');
   const caseDefinition = role.evals.find(({ id }) => id === 'human-status');
-  const contentFree = normalizedResult({
-    output: [
+  const grade = (lines) => gradeHumanWritingResult({
+    evaluationDefinition: role,
+    caseDefinition,
+    result: normalizedResult({ output: lines.join('\n') }),
+  });
+  const concise = grade([
+    'Start a staged rollout.',
+    'Release lead stages the internal cohort.',
+    'Support prepares the customer notice.',
+    'Security reviews the exception expiry.',
+  ]);
+  assert.equal(concise.passed, true, JSON.stringify(concise, null, 2));
+
+  const probes = [
+    [
       'Start a staged rollout today.',
-      '',
       'Release.',
       'Support.',
       'Security.',
-      '',
       'Rollback is verified. Peak traffic is untested.',
-    ].join('\n'),
-  });
-
-  const grade = gradeHumanWritingResult({
-    evaluationDefinition: role,
-    caseDefinition,
-    result: contentFree,
-  });
-  assert.equal(grade.passed, false);
-  assertFailedCheck(grade, 'accountable action release');
-  assertFailedCheck(grade, 'accountable action support');
-  assertFailedCheck(grade, 'accountable action security');
+    ],
+    [
+      'Start a staged rollout today.',
+      'Release owner starts starts.',
+      'Support owner confirms confirms.',
+      'Security owner verifies verifies.',
+    ],
+    [
+      'Start a staged rollout today.',
+      'Release owner starts the internal group and starts the internal group.',
+      'Support owner prepares the customer notice and prepares the customer notice.',
+      'Security owner reviews the exception expiry and reviews the exception expiry.',
+    ],
+    [
+      'Start a staged rollout today.',
+      'Release owner starts internal group release owner starts internal group.',
+      'Support owner prepares customer notice support owner prepares customer notice.',
+      'Security owner reviews exception expiry security owner reviews exception expiry.',
+    ],
+    [
+      'Start a staged rollout today.',
+      'Release support security starts confirms verifies internal group customer notice exception expiry.',
+      'Release support security starts confirms verifies internal group customer notice exception expiry.',
+      'Release support security starts confirms verifies internal group customer notice exception expiry.',
+    ],
+  ];
+  for (const [index, probe] of probes.entries()) {
+    const result = grade(probe);
+    assert.equal(result.passed, false, `hollow action probe ${index + 1}`);
+    assert.equal(
+      result.checks.some(({ name, passed }) => (
+        name.startsWith('accountable action ') && !passed
+      )),
+      true,
+      `hollow action probe ${index + 1} needs an action failure`,
+    );
+  }
 });
 
 test('decision gates accept unlabeled alternate prose and reject hollow probes', () => {
@@ -481,6 +517,18 @@ test('decision gates accept unlabeled alternate prose and reject hollow probes',
   });
   assert.equal(passing.passed, true, JSON.stringify(passing, null, 2));
 
+  const concise = structuredClone(alternate);
+  concise.observations.responses[0].text = [
+    'Use a staged rollout; verified rollback limits exposure; '
+      + 'peak traffic is untested; switch if the load test fails.',
+  ].join('');
+  const conciseGrade = gradeHumanWritingResult({
+    evaluationDefinition: role,
+    caseDefinition,
+    result: concise,
+  });
+  assert.equal(conciseGrade.passed, true, JSON.stringify(conciseGrade, null, 2));
+
   const detailFirst = structuredClone(alternate);
   detailFirst.observations.responses[0].text = [
     'Verified rollback and a small first cohort contain exposure.',
@@ -499,26 +547,66 @@ test('decision gates accept unlabeled alternate prose and reject hollow probes',
   assert.equal(detailFirstGrade.passed, false);
   assertFailedCheck(detailFirstGrade, 'answer first');
 
-  const hollow = structuredClone(alternate);
-  hollow.observations.responses[0].text = [
-    'Use staged rollout.',
-    'Verified rollback contain.',
-    'Peak traffic untested.',
-    'When load test move.',
-  ].join('\n');
-  const hollowGrade = gradeHumanWritingResult({
+  const hollowProbes = [
+    [
+      'Recommendation.',
+      'Basis.',
+      'Material uncertainty.',
+      'Change condition.',
+    ],
+    [
+      'Use limited release use use.',
+      'Verified rollback contain contain contain exposure.',
+      'Peak traffic untested untested untested now.',
+      'When load test move move move to deployment.',
+    ],
+    [
+      'Use limited release today use limited release today.',
+      'Verified rollback limits exposure verified rollback limits exposure.',
+      'Peak traffic remains untested peak traffic remains untested.',
+      'Switch when load test reports latency switch when load test reports latency.',
+    ],
+    Array(4).fill(
+      'Use a limited release because verified rollback contains exposure '
+      + 'while peak traffic remains untested and when the load test reports '
+      + 'latency move to a full deployment.',
+    ),
+  ];
+  for (const [index, lines] of hollowProbes.entries()) {
+    const hollow = structuredClone(alternate);
+    hollow.observations.responses[0].text = lines.join('\n');
+    const hollowGrade = gradeHumanWritingResult({
+      evaluationDefinition: role,
+      caseDefinition,
+      result: hollow,
+    });
+    assert.equal(hollowGrade.passed, false, `hollow decision probe ${index + 1}`);
+    assert.equal(
+      hollowGrade.checks.some(({ name, passed }) => (
+        name.startsWith('decision ') && !passed
+      )),
+      true,
+      `hollow decision probe ${index + 1} needs a decision-field failure`,
+    );
+  }
+});
+
+test('neutral records remain factual without a manufactured decision', () => {
+  const role = definitionFor(loadDefinitions(), 'role');
+  const caseDefinition = role.evals.find(({ id }) => id === 'neutral-record');
+  const result = normalizedResult({
+    output: [
+      '09:10: The release lead paused deployment.',
+      '09:14: The security owner confirmed the signing key was unchanged.',
+      '09:18: The support owner opened incident INC-42.',
+    ].join('\n'),
+  });
+  const grade = gradeHumanWritingResult({
     evaluationDefinition: role,
     caseDefinition,
-    result: hollow,
+    result,
   });
-  assert.equal(hollowGrade.passed, false);
-  for (const checkName of [
-    'decision recommendation',
-    'decision basis',
-    'decision change condition',
-  ]) {
-    assertFailedCheck(hollowGrade, checkName);
-  }
+  assert.equal(grade.passed, true, JSON.stringify(grade, null, 2));
 });
 
 test('deterministic writing grader preserves protected non-prose exactly', () => {

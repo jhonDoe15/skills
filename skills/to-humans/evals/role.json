@@ -83,7 +83,9 @@
             "action_patterns": [
               "\\b(?:starts?|stages?|deploys?|rolls? out|approves?|coordinates?)\\b"
             ],
-            "minimum_words": 4
+            "source_patterns": [
+              "\\b(?:internal (?:group|cohort)|first cohort|staged rollout|deployment)\\b"
+            ]
           },
           {
             "name": "support",
@@ -93,7 +95,9 @@
             "action_patterns": [
               "\\b(?:confirms?|prepares?|notifies?|publishes?|monitors?|opens?)\\b"
             ],
-            "minimum_words": 4
+            "source_patterns": [
+              "\\b(?:customer notice|customer message|support notice|incident)\\b"
+            ]
           },
           {
             "name": "security",
@@ -103,10 +107,11 @@
             "action_patterns": [
               "\\b(?:verifies?|checks?|reviews?|confirms?|expires?|approves?)\\b"
             ],
-            "minimum_words": 4
+            "source_patterns": [
+              "\\b(?:exception|expiry|expiration|security review|control)\\b"
+            ]
           }
         ],
-        "minimum_nonempty_lines": 4,
         "forbidden_patterns": [],
         "no_em_dash": true
       }
@@ -170,7 +175,6 @@
             ]
           ]
         },
-        "minimum_nonempty_lines": 4,
         "forbidden_patterns": [],
         "no_em_dash": true
       }
