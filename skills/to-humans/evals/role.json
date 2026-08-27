@@ -40,7 +40,7 @@
     {
       "id": "human-status",
       "name": "human project status with complete actions",
-      "prompt": "Write a status reply for an experienced release lead. Rollback is verified, but peak demand remains untested. Recommend whether to start a staged rollout today and preserve separate requested actions for release, support, and security owners.",
+      "prompt": "Write a status reply for an experienced release lead. Rollback is verified, but peak demand remains untested. Recommend whether to start a staged rollout today. Preserve these separate requested actions: at 14:00 the release lead stages the internal cohort; before rollout the support owner prepares the customer notice; before approval the security owner verifies that the exception expires Friday.",
       "expected_output": "The answer appears first, all three requested owner actions remain visible, the basis follows, and the prose is direct and easy to scan.",
       "files": [],
       "expectations": [
@@ -81,10 +81,16 @@
               "\\brelease(?: engineering| lead| owner)?\\b"
             ],
             "action_patterns": [
-              "\\b(?:starts?|stages?|deploys?|rolls? out|approves?|coordinates?)\\b"
+              "\\b(?:starts|will start|stages|will stage|deploys|will deploy|rolls out|will roll out)\\b"
             ],
             "source_patterns": [
-              "\\b(?:internal (?:group|cohort)|first cohort|staged rollout|deployment)\\b"
+              "\\b(?:internal (?:group|cohort)|first cohort)\\b"
+            ],
+            "qualifier_patterns": [
+              "\\b(?:14:00|2\\s*(?:p\\.?m\\.?|pm)|two in the afternoon)\\b"
+            ],
+            "relationship_orders": [
+              ["owner", "action", "source"]
             ]
           },
           {
@@ -93,10 +99,16 @@
               "\\b(?:customer )?support(?: team| lead| owner)?\\b"
             ],
             "action_patterns": [
-              "\\b(?:confirms?|prepares?|notifies?|publishes?|monitors?|opens?)\\b"
+              "\\b(?:prepares|will prepare|publishes|will publish|notifies|will notify)\\b"
             ],
             "source_patterns": [
-              "\\b(?:customer notice|customer message|support notice|incident)\\b"
+              "\\b(?:customer notice|customer message|support notice)\\b"
+            ],
+            "qualifier_patterns": [
+              "\\b(?:before|prior to|ahead of) (?:the )?(?:staged )?rollout\\b"
+            ],
+            "relationship_orders": [
+              ["owner", "action", "source"]
             ]
           },
           {
@@ -105,10 +117,16 @@
               "\\bsecurity(?: team| lead| owner)?\\b"
             ],
             "action_patterns": [
-              "\\b(?:verifies?|checks?|reviews?|confirms?|expires?|approves?)\\b"
+              "\\b(?:verifies|will verify|reviews|will review|confirms|will confirm)\\b"
             ],
             "source_patterns": [
-              "\\b(?:exception|expiry|expiration|security review|control)\\b"
+              "\\b(?:exception (?:expires|expiry)|exception's expiry|exception expiration)\\b"
+            ],
+            "qualifier_patterns": [
+              "\\b(?:Friday|before approval|prior to approval)\\b"
+            ],
+            "relationship_orders": [
+              ["owner", "action", "source"]
             ]
           }
         ],
@@ -119,7 +137,7 @@
     {
       "id": "decision-support",
       "name": "decision support with bounded recommendation",
-      "prompt": "Recommend one of two deployment options to an engineering manager. A limited release uses a verified rollback and a small first cohort; a full deployment reaches everyone at once. Peak traffic remains untested, and the noon load test will report latency. Include the basis, material uncertainty, and the evidence that would change the recommendation.",
+      "prompt": "Recommend one of two deployment options to an engineering manager. A limited release uses a verified rollback and a small first cohort to contain exposure; a full deployment reaches everyone at once. Peak traffic remains untested. The noon load test passes when p95 latency stays under 200 ms; a passing result supports moving to full deployment, while a miss means keeping the limited release. Include the basis, material uncertainty, and the evidence that would change the recommendation.",
       "expected_output": "The response states one recommendation, its basis, material uncertainty, and a concrete condition that would change it.",
       "files": [],
       "expectations": [
@@ -139,41 +157,136 @@
           ]
         },
         "decision_support": {
-          "recommendation": [
-            [
-              "\\b(?:limited|staged|full) (?:release|rollout|deployment)\\b"
+          "recommendation": {
+            "required_groups": [
+              [
+                "\\b(?:limited|staged|full) (?:release|rollout|deployment)\\b"
+              ],
+              [
+                "\\b(?:recommend|choose|prefer|use|start|proceed with)\\b|\\b(?:is|looks|remains) (?:safer|safest|best|preferred|recommended)\\b"
+              ]
             ],
-            [
-              "\\b(?:recommend|choose|prefer|use|start|proceed|safer|safest|hold|delay)\\b"
+            "ordered_groups": [
+              [
+                [
+                  "\\b(?:recommend|choose|prefer|use|start|proceed with)\\b"
+                ],
+                [
+                  "\\b(?:limited|staged|full) (?:release|rollout|deployment)\\b"
+                ]
+              ],
+              [
+                [
+                  "\\b(?:limited|staged|full) (?:release|rollout|deployment)\\b"
+                ],
+                [
+                  "\\b(?:is|looks|remains) (?:safer|safest|best|preferred|recommended)\\b"
+                ]
+              ]
             ]
-          ],
-          "basis": [
-            [
-              "\\b(?:verified rollback|rollback (?:is|was) verified|small first cohort|limited first cohort)\\b"
+          },
+          "basis": {
+            "required_groups": [
+              [
+                "\\b(?:verified rollback|rollback (?:is|was) verified|small first cohort|limited first cohort)\\b"
+              ],
+              [
+                "\\b(?:contain|cap|limit|reduce)\\w* (?:the )?(?:exposure|risk|blast radius)\\b|\\b(?:exposure|risk|blast radius) (?:is |stays )?(?:contained|capped|limited|reduced)\\b"
+              ]
             ],
-            [
-              "\\b(?:contain|cap|limit|reduce|because|since|protect)\\w*\\b"
+            "ordered_groups": [
+              [
+                [
+                  "\\b(?:verified rollback|rollback (?:is|was) verified|small first cohort|limited first cohort)\\b"
+                ],
+                [
+                  "\\b(?:contain|cap|limit|reduce)\\w* (?:the )?(?:exposure|risk|blast radius)\\b"
+                ]
+              ],
+              [
+                [
+                  "\\b(?:exposure|risk|blast radius) (?:is |stays )?(?:contained|capped|limited|reduced)(?: by| with| through)\\b"
+                ],
+                [
+                  "\\b(?:verified rollback|rollback (?:is|was) verified|small first cohort|limited first cohort)\\b"
+                ]
+              ]
             ]
-          ],
-          "material_uncertainty": [
-            [
-              "\\bpeak (?:traffic|demand|load)\\b"
+          },
+          "material_uncertainty": {
+            "required_groups": [
+              [
+                "\\bpeak (?:traffic|demand|load)\\b"
+              ],
+              [
+                "\\b(?:remains|is) untested\\b|\\b(?:has|have) not (?:yet )?(?:been )?(?:tested|exercised)\\b"
+              ]
             ],
-            [
-              "\\b(?:untested|unknown|uncertain|not (?:yet )?(?:tested|exercised|known))\\b"
+            "ordered_groups": [
+              [
+                [
+                  "\\bpeak (?:traffic|demand|load)\\b"
+                ],
+                [
+                  "\\b(?:remains|is) untested\\b|\\b(?:has not|hasn't) (?:yet )?(?:been )?(?:tested|exercised)\\b"
+                ]
+              ],
+              [
+                [
+                  "\\b(?:have not|haven't) (?:yet )?(?:tested|exercised)\\b"
+                ],
+                [
+                  "\\bpeak (?:traffic|demand|load)\\b"
+                ]
+              ]
             ]
-          ],
-          "change_condition": [
-            [
-              "\\b(?:if|when|unless|only when)\\b"
+          },
+          "change_condition": {
+            "required_groups": [
+              [
+                "\\b(?:if|when|unless|only when)\\b"
+              ],
+              [
+                "\\b(?:noon )?load test\\b"
+              ],
+              [
+                "\\b(?:(?:p95 )?latency (?:target|threshold)|200\\s*ms|passes|fails|meets|misses|exceeds)\\b"
+              ],
+              [
+                "\\b(?:move|switch|change|reconsider|pause|stop|keep|choose|deploy)\\w*\\b"
+              ]
             ],
-            [
-              "\\b(?:load test|latency (?:result|target)|error rate)\\b"
-            ],
-            [
-              "\\b(?:move|switch|change|reconsider|pause|stop|choose|deploy)\\w*\\b"
+            "ordered_groups": [
+              [
+                [
+                  "\\b(?:move|switch|change|reconsider|pause|stop|keep|choose|deploy)\\w*\\b"
+                ],
+                [
+                  "\\b(?:if|when|unless|only when)\\b"
+                ],
+                [
+                  "\\b(?:noon )?load test\\b"
+                ],
+                [
+                  "\\b(?:(?:p95 )?latency (?:target|threshold)|200\\s*ms|passes|fails|meets|misses|exceeds)\\b"
+                ]
+              ],
+              [
+                [
+                  "\\b(?:if|when|unless|only when)\\b"
+                ],
+                [
+                  "\\b(?:noon )?load test\\b"
+                ],
+                [
+                  "\\b(?:(?:p95 )?latency (?:target|threshold)|200\\s*ms|passes|fails|meets|misses|exceeds)\\b"
+                ],
+                [
+                  "\\b(?:move|switch|change|reconsider|pause|stop|keep|choose|deploy)\\w*\\b"
+                ]
+              ]
             ]
-          ]
+          }
         },
         "forbidden_patterns": [],
         "no_em_dash": true

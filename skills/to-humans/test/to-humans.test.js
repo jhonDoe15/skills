@@ -402,9 +402,9 @@ test('deterministic writing grader accepts alternate wording and keeps hard gate
     output: [
       'A limited rollout is the safest move today.',
       '',
-      '- Release engineering starts with the internal group.',
-      '- Customer support confirms the customer notice.',
-      '- Security verifies that the exception expires Friday.',
+      '- At 14:00, release engineering starts with the internal group.',
+      '- Customer support prepares the customer notice before rollout.',
+      '- Security verifies before approval that the exception expires Friday.',
       '',
       'This keeps the rollback window open while peak demand remains untested.',
     ].join('\n'),
@@ -441,11 +441,25 @@ test('deterministic writing grader requires distinct accountable actions', () =>
     caseDefinition,
     result: normalizedResult({ output: lines.join('\n') }),
   });
+  for (const sourceFact of [
+    '14:00',
+    'internal cohort',
+    'customer notice',
+    'before rollout',
+    'exception expires Friday',
+    'before approval',
+  ]) {
+    assert.equal(
+      caseDefinition.prompt.includes(sourceFact),
+      true,
+      `scenario must supply ${sourceFact}`,
+    );
+  }
   const concise = grade([
     'Start a staged rollout.',
-    'Release lead stages the internal cohort.',
-    'Support prepares the customer notice.',
-    'Security reviews the exception expiry.',
+    'At 14:00, the release lead stages the internal cohort.',
+    'Support prepares the customer notice before rollout.',
+    'Security verifies before approval that the exception expires Friday.',
   ]);
   assert.equal(concise.passed, true, JSON.stringify(concise, null, 2));
 
@@ -480,6 +494,18 @@ test('deterministic writing grader requires distinct accountable actions', () =>
       'Release support security starts confirms verifies internal group customer notice exception expiry.',
       'Release support security starts confirms verifies internal group customer notice exception expiry.',
       'Release support security starts confirms verifies internal group customer notice exception expiry.',
+    ],
+    [
+      'Start a staged rollout today.',
+      'At 14:00 internal cohort release lead stages.',
+      'Before rollout customer notice support prepares.',
+      'Before approval exception expires Friday security verifies.',
+    ],
+    [
+      'Start a staged rollout today.',
+      'At 14:00 the release lead starts the customer notice and mentions the internal cohort.',
+      'Before rollout support prepares the exception and mentions the customer notice.',
+      'Before approval security reviews the internal cohort and mentions the exception expiry Friday.',
     ],
   ];
   for (const [index, probe] of probes.entries()) {
@@ -553,6 +579,18 @@ test('decision gates accept unlabeled alternate prose and reject hollow probes',
       'Basis.',
       'Material uncertainty.',
       'Change condition.',
+    ],
+    [
+      'Recommendation limited release use.',
+      'Basis exposure verified rollback contains.',
+      'Material uncertainty untested peak traffic.',
+      'Change condition load test move when latency target.',
+    ],
+    [
+      'Limited release today use.',
+      'Contains exposure verified rollback.',
+      'Peak traffic unknown untested remains.',
+      'Load test move only when latency target.',
     ],
     [
       'Use limited release use use.',

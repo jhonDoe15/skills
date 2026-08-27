@@ -151,6 +151,48 @@ function matchingText(value, patterns, field) {
   return null;
 }
 
+function matchesOrderedGroups(value, groups, field) {
+  if (!Array.isArray(groups) || groups.length < 2) {
+    throw new TypeError(`${field} must contain at least two pattern groups`);
+  }
+  let cursor = 0;
+  return groups.every((patterns, groupIndex) => {
+    if (!Array.isArray(patterns) || patterns.length === 0) {
+      throw new TypeError(`${field}[${groupIndex}] must be a non-empty pattern array`);
+    }
+    let earliest = null;
+    for (const [patternIndex, pattern] of patterns.entries()) {
+      const match = compile(
+        pattern,
+        `${field}[${groupIndex}][${patternIndex}]`,
+      ).exec(value.slice(cursor));
+      if (match && (!earliest || match.index < earliest.index)) earliest = match;
+    }
+    if (!earliest) return false;
+    cursor += earliest.index + earliest[0].length;
+    return true;
+  });
+}
+
+function matchesProposition(value, proposition, field) {
+  if (!proposition || typeof proposition !== 'object' || Array.isArray(proposition)) {
+    throw new TypeError(`${field} must be an object`);
+  }
+  const requiredGroups = proposition.required_groups;
+  const orderedGroups = proposition.ordered_groups;
+  if (!Array.isArray(requiredGroups) || requiredGroups.length === 0) {
+    throw new TypeError(`${field}.required_groups must contain pattern groups`);
+  }
+  if (!Array.isArray(orderedGroups) || orderedGroups.length === 0) {
+    throw new TypeError(`${field}.ordered_groups must contain relationship alternatives`);
+  }
+  return requiredGroups.every((patterns, index) => (
+    matchesAny(value, patterns, `${field}.required_groups[${index}]`)
+  )) && orderedGroups.some((groups, index) => (
+    matchesOrderedGroups(value, groups, `${field}.ordered_groups[${index}]`)
+  ));
+}
+
 function gradeAnswerFirst(output, expectation) {
   if (!expectation) return [];
   const firstUnit = evidenceUnits(output)[0];
@@ -204,6 +246,11 @@ function gradeAccountableActions(output, expectations = []) {
         expectation.source_patterns,
         `accountable_actions[${index}].source_patterns`,
       );
+      const qualifier = matchingText(
+        unit.text,
+        expectation.qualifier_patterns,
+        `accountable_actions[${index}].qualifier_patterns`,
+      );
       const ownerCount = expectations.filter((other, otherIndex) => (
         matchesAny(
           unit.text,
@@ -211,8 +258,44 @@ function gradeAccountableActions(output, expectations = []) {
           `accountable_actions[${otherIndex}].owner_patterns`,
         )
       )).length;
+      const conflictingSource = expectations.some((other, otherIndex) => (
+        otherIndex !== index
+        && matchesAny(
+          unit.text,
+          other.source_patterns,
+          `accountable_actions[${otherIndex}].source_patterns`,
+        )
+      ));
+      if (!Array.isArray(expectation.relationship_orders)
+          || expectation.relationship_orders.length === 0) {
+        throw new TypeError(
+          `accountable_actions[${index}].relationship_orders must be non-empty`,
+        );
+      }
+      const relationship = expectation.relationship_orders.some((order, orderIndex) => {
+        if (!Array.isArray(order)) {
+          throw new TypeError(
+            `accountable_actions[${index}].relationship_orders[${orderIndex}] must be an array`,
+          );
+        }
+        const groups = order.map((part) => {
+          const patterns = expectation[`${part}_patterns`];
+          if (!patterns) {
+            throw new TypeError(
+              `accountable_actions[${index}] has no ${part}_patterns`,
+            );
+          }
+          return patterns;
+        });
+        return matchesOrderedGroups(
+          unit.text,
+          groups,
+          `accountable_actions[${index}].relationship_orders[${orderIndex}]`,
+        );
+      });
       const pair = owner && action ? `${owner}\0${action}` : null;
-      if (!owner || !action || !source || ownerCount !== 1 || usedPairs.has(pair)) {
+      if (!owner || !action || !source || !qualifier || !relationship
+          || conflictingSource || ownerCount !== 1 || usedPairs.has(pair)) {
         return false;
       }
       unit.pair = pair;
@@ -227,7 +310,7 @@ function gradeAccountableActions(output, expectations = []) {
       Boolean(candidate),
       candidate
         ? `statement ${candidate.index + 1}`
-        : 'no distinct owner, action, and source statement found',
+        : 'no distinct source-grounded owner-action relationship found',
     );
   });
 }
@@ -242,19 +325,16 @@ function gradeDecisionSupport(output, expectation) {
     ['material_uncertainty', 'decision material uncertainty'],
     ['change_condition', 'decision change condition'],
   ].map(([field, name]) => {
-    const groups = expectation[field];
-    if (!Array.isArray(groups) || groups.length === 0) {
-      throw new TypeError(`decision_support.${field} must contain pattern groups`);
-    }
+    const proposition = expectation[field];
     const unit = units.find((candidate) => (
       candidate.unique
       && candidate.meaningful
       && !usedUnits.has(candidate.key)
-      && groups.every((patterns, index) => matchesAny(
+      && matchesProposition(
         candidate.text,
-        patterns,
-        `decision_support.${field}[${index}]`,
-      ))
+        proposition,
+        `decision_support.${field}`,
+      )
     ));
     if (unit) usedUnits.add(unit.key);
     return check(
