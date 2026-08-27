@@ -36,6 +36,16 @@
       "should_trigger": true
     },
     {
+      "id": "pr-carver-declared-consumer-load",
+      "name": "pr-carver-consumer-load",
+      "prompt": "PR Carver is evaluating one branch candidate and loads ticket-scope by canonical name for its bounded judgment.",
+      "expected_output": "The host records the declared Ticket Scope dependency load.",
+      "files": [],
+      "expectations": ["Ticket Scope loads by canonical name for its declared PR Carver consumer."],
+      "covered_clauses": ["ts-pr-carver-consumer-routing"],
+      "should_trigger": true
+    },
+    {
       "id": "private-ambient-false-activation",
       "name": "ambient-ticket-sizing-request",
       "prompt": "Can you tell me whether this work item seems too broad?",

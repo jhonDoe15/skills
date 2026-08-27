@@ -18,10 +18,13 @@ function check(name, passed, details) {
   return { name, passed, details };
 }
 
-function haveSameMembers(left, right) {
+function haveExactUniqueMembers(left, right) {
   if (left.length !== right.length) return false;
+  const actual = new Set(left);
   const expected = new Set(right);
-  return left.every((value) => expected.has(value));
+  return actual.size === left.length
+    && expected.size === right.length
+    && [...actual].every((value) => expected.has(value));
 }
 
 function successfulLoad(events, name) {
@@ -72,6 +75,19 @@ function blockerKeysFromObservation(blockers) {
   ));
 }
 
+function mutationKeysFromPlan(plan) {
+  return [
+    ...plan.tickets.map(({ id }) => `create-ticket\0${id}`),
+    ...blockerKeysFromPlan(plan).map((edge) => `create-blocker\0${edge}`),
+  ];
+}
+
+function mutationKeysFromResult(result) {
+  return result.observations.attemptedMutations.map(
+    ({ operation, target }) => `${operation}\0${target}`,
+  );
+}
+
 function isPublicationObservation(observation) {
   return Boolean(
     observation
@@ -99,17 +115,17 @@ function gradePublication(plan, result, observation) {
   const observedBlockers = blockerKeysFromObservation(observation.blockers);
   checks.push(check(
     'every planned ticket was read back',
-    haveSameMembers(observation.ticket_ids, expectedTickets),
+    haveExactUniqueMembers(observation.ticket_ids, expectedTickets),
     `expected=${expectedTickets.join(',')} observed=${observation.ticket_ids.join(',')}`,
   ));
   checks.push(check(
     'every direct blocker was read back',
-    haveSameMembers(observedBlockers, expectedBlockers),
+    haveExactUniqueMembers(observedBlockers, expectedBlockers),
     `expected=${expectedBlockers.join(',')} observed=${observedBlockers.join(',')}`,
   ));
   checks.push(check(
     'published frontier matches validated plan',
-    haveSameMembers(observation.initial_frontier, plan.initial_frontier),
+    haveExactUniqueMembers(observation.initial_frontier, plan.initial_frontier),
     `expected=${plan.initial_frontier.join(',')} observed=${
       observation.initial_frontier.join(',')
     }`,
@@ -120,11 +136,13 @@ function gradePublication(plan, result, observation) {
     `later_workflow_started=${observation.later_workflow_started}`,
   ));
   const mutations = result.observations.attemptedMutations;
+  const expectedMutationKeys = mutationKeysFromPlan(plan);
+  const observedMutationKeys = mutationKeysFromResult(result);
   checks.push(check(
-    'authorized publication mutations succeeded',
-    mutations.length >= expectedTickets.length + expectedBlockers.length
+    'only exact authorized publication mutations succeeded',
+    haveExactUniqueMembers(observedMutationKeys, expectedMutationKeys)
       && mutations.every(({ outcome }) => outcome === 'succeeded'),
-    `mutations=${mutations.length}`,
+    `expected=${expectedMutationKeys.join(',')} observed=${observedMutationKeys.join(',')}`,
   ));
   return checks;
 }

@@ -1,17 +1,19 @@
 # skills
 
-One Claude Code plugin with six agent skills:
+Agent Skills including these documented planning surfaces:
 
 - **Lean** — model-invoked writing guidance for response density and shape.
-- **`ticket-scope`** — internal model-invoked evaluation of cohesive, independently verifiable ticket and PR units.
-- **`/carve`** — explicitly invoked to size a spec-derived ticket set so each piece fits one main subagent.
+- **`ticket-scope`** — private per-candidate judgment loaded by Slice Plan and PR Carver.
+- **`slice-plan`** — private set-level decomposition loaded by Carve.
+- **`/carve`** — explicitly invoked to turn settled requirements into a ready ticket DAG.
 - **`pr-carver`** — model-invoked PR size and structure guidance for parallel and stacked pull requests.
 - **`/dispatch-work`** — explicitly invoked to run an already-sized tracker in parallel and carry each piece through implementation, review, and PR approval.
 - **`/incident-investigation`** — explicitly invoked, investigation-only guidance for evidence-led production incident and hard-to-localize bug analysis.
 
-Lean, ticket-scope, and pr-carver are selected automatically by the model when
-their descriptions match the work. Carve, dispatch-work, and
-incident-investigation run only when the user invokes them.
+Lean and pr-carver are selected automatically by the model when their
+descriptions match the work. Ticket Scope and Slice Plan activate only when
+their declared consumers load them. Carve, dispatch-work, and
+incident-investigation run only when the user explicitly invokes them.
 
 ## Install
 
@@ -65,23 +67,26 @@ short answer.
 The density levels are `terse`, `default`, and `full`. The model chooses the
 level from the request and the detail the reader needs.
 
-## `ticket-scope` — shared unit evaluation
+## `ticket-scope` — private unit evaluation
 
-Ticket-scope is the shared internal evaluator used by carve and pr-carver. It
-checks outcome, seam, shape, acceptance, validation, uncertainty, risk,
-breadth, blockers, and collisions. Vertical slices are preferred; constrained
-layered slices are valid when a real contract or migration order requires them.
+Ticket Scope is the private per-candidate evaluator loaded by Slice Plan and PR
+Carver. It checks outcome, seam, shape, acceptance, validation, uncertainty,
+risk, breadth, blockers, and collisions. Slice Plan accepts vertical slices or
+concrete prerequisites for the ordinary Carve path. PR Carver can also consume
+a constrained layered result when a real contract or migration order requires
+a separately landing PR.
 
 ## `/carve` — size the work
 
-Carve layers sizing and collision coordination onto a spec-derived ticket set.
-It uses ticket-scope first, then requires each resulting piece to fit one main
-subagent. Work that does not fit is split; an open design choice or risk
-boundary is flagged for a human. Related pieces record dependencies and
-shared-resource collisions so dispatch-work can parallelise safely.
+Carve turns settled source requirements into a complete ready ticket DAG. It
+loads Slice Plan for set-level decomposition; Slice Plan loads Ticket Scope for
+each bounded candidate judgment. Work that does not fit is split; an open
+design choice or risk boundary is flagged for a human. Related pieces record
+dependencies and shared-resource collisions so later execution can
+parallelise safely.
 
-Invoke `/carve` explicitly after the work has been reduced to a spec and ticket
-set.
+Invoke `/carve` explicitly after requirements and material design decisions are
+settled. Carve publishes only with separate explicit authorization.
 
 ## `pr-carver` — size and structure PRs
 

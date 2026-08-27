@@ -42,6 +42,16 @@ later ticket must consume. A framework shell, empty abstraction, shared model
 without an independently verified result, or layer created only for
 organizational convenience is not a prerequisite.
 
+When PR Carver supplies a branch or PR candidate, `Shape: layered` remains
+valid for a separately landing layer with its own observable validation and a
+real contract or migration order. PR Carver uses that shape to distinguish
+stacked work from parallel work. Arbitrary horizontal convenience is not
+layered.
+
+When Slice Plan supplies a candidate for the ordinary Carve path, return only
+`vertical` or a concrete `prerequisite`. Slice Plan rejects skeletal or
+convenience layers instead of carrying `layered` into a ready plan.
+
 Ticket shape does not encode rollout. Record migration strategy separately as
 `normal`, `prefactor`, or `expand-contract`; do not infer one from the other.
 
@@ -58,7 +68,7 @@ Return:
 
 ```text
 Assessment: fit | split | combine | flag
-Shape: vertical | prerequisite
+Shape: vertical | prerequisite | layered
 Candidate:
 Outcome:
 In scope:

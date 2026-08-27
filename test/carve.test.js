@@ -475,13 +475,61 @@ test('deterministic outcome grading separates publication from plan quality', ()
   assert.equal(
     grade(authorized, attemptedMutations, {
       ...publication,
+      ticket_ids: ['T1', 'T1'],
+    }).passed,
+    false,
+    'duplicate read-back must not hide a missing ticket',
+  );
+  assert.equal(
+    grade(authorized, attemptedMutations, {
+      ...publication,
       blockers: [],
     }).passed,
     false,
   );
+  assert.equal(
+    grade(authorized, [
+      ...attemptedMutations,
+      {
+        operation: 'dispatch-work',
+        target: 'T1',
+        outcome: 'succeeded',
+      },
+    ], publication).passed,
+    false,
+    'later-workflow mutations are outside publication authority',
+  );
+  assert.equal(
+    grade(authorized, [
+      attemptedMutations[0],
+      attemptedMutations[0],
+      attemptedMutations[2],
+    ], publication).passed,
+    false,
+    'duplicate mutations must not hide a missing ticket creation',
+  );
   assert.equal(assessment.publication_authorized, false);
   assert.equal(grade(assessment, []).passed, true);
   assert.equal(grade(assessment, attemptedMutations).passed, false);
+});
+
+test('Ticket Scope preserves each declared consumer shape contract', () => {
+  const skill = fs.readFileSync(path.join(
+    repositoryRoot,
+    'skills',
+    'ticket-scope',
+    'SKILL.md',
+  ), 'utf8');
+  const role = readEvaluation('ticket-scope', 'role.json');
+
+  assert.match(skill, /Shape: vertical \| prerequisite \| layered/);
+  assert.deepEqual(
+    role.evals.map(({ id }) => id),
+    [
+      'reject-convenience-foundation',
+      'pr-carver-layered-candidate',
+    ],
+  );
 });
 
 test('semantic planning criteria require evidence-bearing blind judgment', () => {
@@ -526,15 +574,23 @@ test('trigger definitions separate canonical Carve activation from private routi
     ],
   );
   assert.equal(carve.evals[0].canonical_invocation, true);
-  for (const definition of [slicePlan, ticketScope]) {
-    assert.deepEqual(
-      definition.evals.map(({ id, should_trigger: shouldTrigger }) => (
-        [id, shouldTrigger]
-      )),
-      [
-        ['declared-consumer-load', true],
-        ['private-ambient-false-activation', false],
-      ],
-    );
-  }
+  assert.deepEqual(
+    slicePlan.evals.map(({ id, should_trigger: shouldTrigger }) => (
+      [id, shouldTrigger]
+    )),
+    [
+      ['declared-consumer-load', true],
+      ['private-ambient-false-activation', false],
+    ],
+  );
+  assert.deepEqual(
+    ticketScope.evals.map(({ id, should_trigger: shouldTrigger }) => (
+      [id, shouldTrigger]
+    )),
+    [
+      ['declared-consumer-load', true],
+      ['pr-carver-declared-consumer-load', true],
+      ['private-ambient-false-activation', false],
+    ],
+  );
 });

@@ -28,7 +28,7 @@
       },
       {
         "id": "shape-and-relations",
-        "description": "Semantically assess whether shape is vertical or a genuine prerequisite, migration strategy stays separate, and blockers require direct consumption while collisions remain non-blocking. Quote or reference output evidence for every score."
+        "description": "Semantically assess whether shape is vertical, a genuine Slice Plan prerequisite, or a constrained PR Carver layer; migration strategy stays separate, blockers require direct consumption, and collisions remain non-blocking. Quote or reference output evidence for every score."
       }
     ]
   },
@@ -50,6 +50,25 @@
         "ts-shape",
         "ts-migration-separation",
         "ts-convenience-foundation",
+        "ts-set-level-exclusion"
+      ]
+    },
+    {
+      "id": "pr-carver-layered-candidate",
+      "name": "bounded-pr-carver-layered-judgment",
+      "prompt": "PR Carver asks Ticket Scope to assess one branch candidate: add and backfill a nullable account-time-zone column through an expand-contract migration. The branch has migration verification and compatibility tests, and the later account API branch directly consumes the resulting schema contract. Return the bounded Ticket Scope judgment only; do not choose the full PR structure.",
+      "expected_output": "One bounded fit judgment with layered shape for PR Carver, concrete validation and consumed output, a separate expand-contract migration strategy, and no set-level PR planning.",
+      "files": [],
+      "required_skill_loads": ["ticket-scope"],
+      "expectations": [
+        "The response preserves PR Carver's constrained layered shape for a separately landing, independently verified migration contract.",
+        "The response keeps migration strategy distinct from shape and does not choose or create the complete PR stack.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks whether the layer and dependency are contextually sound."
+      ],
+      "covered_clauses": [
+        "ts-bounded-judgment",
+        "ts-pr-carver-layered-shape",
+        "ts-migration-separation",
         "ts-set-level-exclusion"
       ]
     }
