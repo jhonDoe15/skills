@@ -15,42 +15,16 @@
     "randomization_seed": "writing-foundation-role-v1"
   },
   "signals": {
-    "wf-accepted-context": ["deploy only.*(?:tickets.*unblocked|unblocked tickets)"],
-    "wf-coverage": ["deploy only.*(?:tickets.*unblocked|unblocked tickets)"],
-    "wf-grounding": ["(?:supplied|source) note.*(?:requires|required)|(?:requires|required).*?(?:supplied|source) note"],
-    "wf-uncertainty": ["concurrency limit.*(?:unresolved|unknown).*owner"],
-    "wf-structure": ["(?:keep|retain) only.*(?:requirements|constraints).*(?:unresolved|unknown)"],
     "wf-terminology": ["`?DAG frontier`?"],
-    "wf-relevance": ["(?:keep|retain) only.*(?:requirements|constraints).*(?:unresolved|unknown)"],
-    "wf-work-product-fidelity": ["\\{\"maxAttempts\":3\\}"],
-    "wf-behavioral-pruning": ["(?:keep|retain) only.*(?:requirements|constraints).*(?:unresolved|unknown)"],
-    "wf-exclusions": ["(?:add no|without adding|no).*audience-specific"],
-    "wf-failure-behavior": ["concurrency limit.*(?:unresolved|unknown).*(?:do not|without).*invent"],
-    "wf-completion": ["(?:publish|complete|ready).*(?:only after|only when).*(?:requirement|constraint).*(?:exact|unknown|unresolved)"]
+    "wf-work-product-fidelity": ["\\{\"maxAttempts\":3\\}"]
   },
   "global_required_signals": [
-    "wf-accepted-context",
-    "wf-coverage",
-    "wf-grounding",
-    "wf-uncertainty",
-    "wf-structure",
     "wf-terminology",
-    "wf-relevance",
-    "wf-work-product-fidelity",
-    "wf-behavioral-pruning",
-    "wf-exclusions",
-    "wf-failure-behavior",
-    "wf-completion"
+    "wf-work-product-fidelity"
   ],
   "global_order": [],
   "forbidden_patterns": [
-    "Historical background: the legacy deployer used a weekly batch window that does not control this deployment\\.",
-    "(?<!do not use )(?<!don't use )(?<!never use )(?<!must not use )\\{\\s*\"maxAttempts\"\\s*:\\s*(?!3\\s*[},])\\d+\\s*\\}",
-    "(?<!no )(?<!without )\\b(?:concurrency|parallelism)\\b[^.;]*\\b(?:cap|limit|ceiling|max(?:imum)?)\\b\\s*(?:is|=|:)\\s*\\d+\\b",
-    "(?<!no )(?<!do not invent )(?<!do not invent a )(?<!don't invent )(?<!don't invent a )(?<!never set )(?<!never set a )(?<!must not set )(?<!must not set a )\\b(?:concurrency|parallelism)\\b[^.;]*\\b(?:cap|limit|ceiling|max(?:imum)?)\\b\\s+of\\s+\\d+\\b",
-    "(?<!do not )(?<!don't )(?<!never )(?<!must not )(?<!or )\\b(?:use|set|apply|enforce|allow|run|process|throttle|restrict)\\b[^.;]*\\b(?:concurrency|parallelism|concurrent|at once|in parallel|in flight|deployments?|deployment batch|tickets?)\\b[^.;]*\\b\\d+\\b",
-    "(?<!do not )(?<!don't )(?<!never )(?<!must not )(?<!or )\\b(?:use|set|apply|enforce|allow|run|process|throttle|restrict)\\b[^.;]*\\b\\d+\\b[^.;]*\\b(?:concurrent|at once|in parallel|in flight|deployments?|tickets?)\\b",
-    "\\b(?:customer-friendly|executive voice|Skill routing|fresh-context handoff)\\b"
+    "Historical background: the legacy deployer used a weekly batch window that does not control this deployment\\."
   ],
   "judge": {
     "score_range": [0, 2],
@@ -58,11 +32,11 @@
     "dimensions": [
       {
         "id": "foundation-contract",
-        "description": "Preserves required coverage, grounding, uncertainty, exact terminology, relevance, and work-product semantics."
+        "description": "Semantically assess whether every supplied requirement is covered and grounded, the owner-pending concurrency limit remains unresolved without an invented value, and the work product preserves meaning. Quote or reference output evidence for every score."
       },
       {
         "id": "foundation-pruning",
-        "description": "Uses structure and pruning to remove only material without a required or observable purpose."
+        "description": "Semantically assess whether structure follows purpose, audience-specific voice is absent, duplicated or irrelevant material is pruned without losing requirements, and completion is justified. Quote or reference output evidence for every score."
       }
     ]
   },
@@ -74,13 +48,13 @@
       "expected_output": "A purpose-shaped record that accounts for every requirement, grounds claims, keeps the concurrency limit unresolved, preserves the exact term and JSON value, removes only the duplicate, and exposes a checkable completion result.",
       "files": ["evals/fixtures/deployment-note-source.md"],
       "expectations": [
-        "Every requested requirement and exclusion has an explicit disposition.",
-        "Factual claims distinguish supplied evidence from inference or unknown information.",
-        "The unresolved concurrency limit remains visible.",
-        "The structure follows the artifact purpose rather than an audience-specific style.",
-        "The exact term `DAG frontier` and JSON value keep their original semantics.",
-        "Only duplicated or behaviorally irrelevant material is removed.",
-        "Completion is withheld if any required disposition, grounding, uncertainty, terminology, or work-product check is missing."
+        "The deterministic gate establishes only the exact DAG frontier term, exact JSON literal {\"maxAttempts\":3}, and removal of the duplicated source paragraph.",
+        "The blind judge verifies that every requested requirement and exclusion has an explicit, source-grounded disposition, including deployment of unblocked tickets only.",
+        "The blind judge verifies that the owner-pending concurrency limit remains unresolved and no numeric cap is invented, including until the owner responds.",
+        "The blind judge verifies that structure follows purpose rather than an audience-specific voice.",
+        "The blind judge verifies that only duplicated or behaviorally irrelevant material is pruned and no required meaning is lost.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness.",
+        "Failed critical mechanical gates are non-overridable, and completion is withheld when semantic evidence is missing."
       ],
       "covered_clauses": [
         "wf-accepted-context",

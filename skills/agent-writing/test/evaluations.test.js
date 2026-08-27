@@ -257,6 +257,16 @@ test('owner-local definitions isolate roles, the dependency edge, and the public
 test('component orchestration sends one neutral task and owns Foundation ablation', async (t) => {
   const definition = loadDefinition('agent-writing', 'component.json');
   const caseDefinition = definition.evals[0];
+  assert.deepEqual(definition.global_required_signals, [
+    'aw-foundation-edge-terminology',
+    'aw-foundation-edge-work-product',
+  ]);
+  assert.equal(
+    definition.judge.dimensions.every(({ description }) => (
+      /(?:quote|cite|reference).*output evidence/i.test(description)
+    )),
+    true,
+  );
   assert.doesNotMatch(
     caseDefinition.prompt,
     /\b(?:ablat(?:e|ed|ion)|control|both arms|same host-neutral scenario)\b/i,
@@ -441,201 +451,115 @@ test('Contract coverage maps every clause to a case owned by the highest Skill',
   }
 });
 
-test('Agent Writing role grading accepts alternate structure and rejects semantic corruption', () => {
+test('Agent Writing role separates mechanical gates from semantic judgment', () => {
   const definition = loadDefinition('agent-writing', 'role.json');
   const caseDefinition = definition.evals[0];
-  const fixtureOutput = fs.readFileSync(
-    path.join(skillRoot, 'evals', 'fixtures', 'role-output.md'),
-    'utf8',
-  );
-  const alternateWording = [
-    '# Deployment status runbook',
-    'After `deploy-status.json` appears, treat the file as read-only.',
-    'Report the observed status, selected success or failure path, and exact `DAG frontier`.',
-    '1. Read the retry limit from the environment.',
-    '2. Inspect the status file without changing it.',
-    'If deployment succeeded, report the frontier and observed status.',
-    'If deployment failed, report the failure and only then consult the troubleshooting reference.',
-    'If the file, retry limit, or result is unavailable, name the missing input and stop without inventing a result.',
-    'Finish only after the observed status and selected branch have been reported.',
+  const conciseAlternate = [
+    '`deploy-status.json` is `read-only`.',
+    'Use the exact `DAG frontier` term.',
+    'The retry source is the `environment`.',
   ].join('\n');
-
-  assert.equal(gradeDeterministicOutput({
+  const grade = (output) => gradeDeterministicOutput({
     definition,
     caseDefinition,
-    output: fixtureOutput,
-  }).passed, true);
-  assert.equal(gradeDeterministicOutput({
-    definition,
-    caseDefinition,
-    output: alternateWording,
-  }).passed, true);
+    output,
+  });
 
-  for (const [corrupted, failedCheck] of [
-    [
-      alternateWording.replace('DAG frontier', 'deployment frontier'),
-      'signal aw-terminology',
-    ],
-    [
-      alternateWording.replace(/^If deployment failed,.*\n/m, ''),
-      'signal aw-failure-branch',
-    ],
+  assert.equal(grade(conciseAlternate).passed, true);
+  assert.deepEqual(definition.global_required_signals, [
+    'aw-artifact-name',
+    'aw-terminology',
+    'aw-input-mode',
+    'aw-environment-source',
+  ]);
+  for (const [literal, replacement] of [
+    ['deploy-status.json', 'status-input.json'],
+    ['DAG frontier', 'deployment frontier'],
+    ['read-only', 'immutable'],
+    ['environment', 'runtime source'],
   ]) {
-    const grade = gradeDeterministicOutput({
-      definition,
-      caseDefinition,
-      output: corrupted,
-    });
-    assert.equal(grade.passed, false, failedCheck);
     assert.equal(
-      grade.checks.find(({ name }) => name === failedCheck).passed,
+      grade(conciseAlternate.replace(literal, replacement)).passed,
       false,
-      failedCheck,
+      literal,
     );
   }
-  const leakedReference = gradeDeterministicOutput({
-    definition,
-    caseDefinition,
-    output: alternateWording.replace(
-      'If deployment succeeded, report the frontier and observed status.',
-      'If deployment succeeded, consult the troubleshooting reference and report the frontier and observed status.',
-    ),
-  });
-  assert.equal(leakedReference.passed, false);
+
+  const semanticRequirements = [
+    ...caseDefinition.expectations,
+    ...definition.judge.dimensions.map(({ description }) => description),
+  ].join(' ');
+  assert.match(semanticRequirements, /success.*failure|failure.*success/i);
+  assert.match(semanticRequirements, /failure-only/i);
+  assert.match(semanticRequirements, /environment.*(?:cache|persist)|(?:cache|persist).*environment/i);
   assert.equal(
-    leakedReference.checks.some(({ name, passed }) => (
-      name.startsWith('forbidden ') && !passed
+    definition.judge.dimensions.every(({ description }) => (
+      /(?:quote|cite|reference).*output evidence/i.test(description)
     )),
     true,
   );
-
-  const sourceFixture = readJson(path.join(
-    skillRoot,
-    'evals',
-    'fixtures',
-    'deploy-status-source.json',
-  ));
-  assert.equal(sourceFixture.frontierLabel, 'DAG frontier');
-  assert.equal(sourceFixture.retryLimitSource, 'environment');
-  assert.equal(sourceFixture.inputMode, 'read-only');
   assert.deepEqual(caseDefinition.files, [
     'evals/fixtures/deploy-status-source.json',
   ]);
-  assert.equal(
-    Object.values(definition.signals).flat().some((pattern) => (
-      /^\^[A-Z][^:]+:/.test(pattern)
-    )),
-    false,
-  );
 });
 
-test('deterministic grading reports clause evidence and blocks blind judgment', () => {
+test('Agent Writing outcome keeps only unambiguous deterministic gates', () => {
   const definition = loadDefinition('agent-writing', 'outcome.json');
   const caseDefinition = definition.evals[0];
   const fixtureOutput = fs.readFileSync(
     path.join(skillRoot, 'evals', 'fixtures', 'outcome-output.md'),
     'utf8',
   );
-  const passing = gradeDeterministicOutput({
-    definition,
-    caseDefinition,
-    output: fixtureOutput,
-  });
-  const alternateWording = [
-    '# Validation runbook',
-    'Once a path to `deploy-plan.json` is supplied, keep that input read-only.',
-    'The goal is to report the observed validation result, chosen valid or invalid path, and exact `DAG frontier`.',
-    '1. Obtain the current schema command from the environment.',
-    '2. Validate the supplied file without changing it.',
-    'If validation is valid, report the `DAG frontier` with `{"maxAttempts":3}`.',
-    'If validation is invalid, report the failure and only then consult the remediation reference.',
-    'If the command, file, or result is unavailable, name the missing input and stop without inventing a result.',
-    'Finish only after the observed result and selected branch have been reported.',
+  const semanticCounterexample = [
+    fixtureOutput,
+    'On success, disclose the recovery guide.',
+    'The environment command is kept in local state.',
+    'An alternative object is {"maxAttempts":4,"backoff":"linear"}.',
   ].join('\n');
-  const alternate = gradeDeterministicOutput({
+  const grade = (output) => gradeDeterministicOutput({
     definition,
     caseDefinition,
-    output: alternateWording,
+    output,
   });
 
-  assert.equal(passing.passed, true);
-  assert.equal(alternate.passed, true);
-  assert.ok(passing.checks.length > 0);
-  for (const check of passing.checks.filter(({ name }) => (
-    name.startsWith('signal ')
-  ))) {
-    assert.match(check.name, /^signal aw-/);
-    assert.match(check.details, /line \d+/);
-  }
-
-  const missingFailureBranch = alternateWording
-    .replace(/^If validation is invalid,.*\n/m, '');
-  const failing = gradeDeterministicOutput({
-    definition,
-    caseDefinition,
-    output: missingFailureBranch,
-  });
+  assert.equal(grade(fixtureOutput).passed, true);
+  assert.equal(
+    grade(semanticCounterexample).passed,
+    true,
+    'semantic defects are adoption evidence, not regex facts',
+  );
+  assert.deepEqual(definition.global_required_signals, [
+    'aw-artifact-name',
+    'aw-terminology',
+    'aw-execution-semantics',
+    'aw-input-mode',
+    'aw-environment-source',
+  ]);
+  const corrupted = fixtureOutput.replace(
+    '`{"maxAttempts":3}`',
+    '`{"maxAttempts":4}`',
+  );
+  const failing = grade(corrupted);
   assert.equal(failing.passed, false);
   assert.equal(
-    failing.checks.find(({ name }) => name === 'signal aw-failure-branch').passed,
+    failing.checks.find(({ name }) => (
+      name === 'signal aw-execution-semantics'
+    )).passed,
     false,
-  );
-  for (const [corrupted, failedCheck] of [
-    [
-      alternateWording.replaceAll('DAG frontier', 'dependency frontier'),
-      'signal aw-terminology',
-    ],
-    [
-      alternateWording.replace('{"maxAttempts":3}', '{"maxAttempts":4}'),
-      'signal aw-execution-semantics',
-    ],
-  ]) {
-    const corruptedGrade = gradeDeterministicOutput({
-      definition,
-      caseDefinition,
-      output: corrupted,
-    });
-    assert.equal(corruptedGrade.passed, false, failedCheck);
-    assert.equal(
-      corruptedGrade.checks.find(({ name }) => name === failedCheck).passed,
-      false,
-      failedCheck,
-    );
-  }
-  const leakedReference = gradeDeterministicOutput({
-    definition,
-    caseDefinition,
-    output: alternateWording.replace(
-      'If validation is valid, report the `DAG frontier` with `{"maxAttempts":3}`.',
-      'If validation is valid, load the remediation reference, then report the `DAG frontier` with `{"maxAttempts":3}`.',
-    ),
-  });
-  assert.equal(leakedReference.passed, false);
-  assert.equal(
-    leakedReference.checks.some(({ name, passed: checkPassed }) => (
-      name.startsWith('forbidden ') && !checkPassed
-    )),
-    true,
   );
 
-  const sourceFixture = readJson(path.join(
-    skillRoot,
-    'evals',
-    'fixtures',
-    'deploy-plan-source.json',
-  ));
-  assert.equal(sourceFixture.frontierLabel, 'DAG frontier');
-  assert.deepEqual(sourceFixture.retryPolicy, { maxAttempts: 3 });
-  assert.equal(sourceFixture.inputMode, 'read-only');
-  assert.deepEqual(caseDefinition.files, [
-    'evals/fixtures/deploy-plan-source.json',
-  ]);
+  const semanticRequirements = [
+    ...caseDefinition.expectations,
+    ...definition.judge.dimensions.map(({ description }) => description),
+  ].join(' ');
+  assert.match(semanticRequirements, /failure-only/i);
+  assert.match(semanticRequirements, /environment.*(?:cache|persist|local state)/i);
+  assert.match(semanticRequirements, /contradict/i);
   assert.equal(
-    Object.values(definition.signals).flat().some((pattern) => (
-      /^\^[A-Z][^:]+:/.test(pattern)
+    definition.judge.dimensions.every(({ description }) => (
+      /(?:quote|cite|reference).*output evidence/i.test(description)
     )),
-    false,
-    'semantic grading must not require canned labels',
+    true,
   );
 
   const manifest = createCampaignManifest({
@@ -659,7 +583,7 @@ test('deterministic grading reports clause evidence and blocks blind judgment', 
     cell,
     repetition: 1,
     arm: 'no-skill',
-    result: normalizedResult({ output: 'Unstructured response.', invokedSkills: [] }),
+    result: normalizedResult({ output: 'Baseline response.', invokedSkills: [] }),
     deterministicGrade: { passed: true, checks: [], status: 'baseline' },
   });
   const treatment = createRunEvidence({
@@ -669,12 +593,11 @@ test('deterministic grading reports clause evidence and blocks blind judgment', 
     repetition: 1,
     arm: 'treatment',
     result: normalizedResult({
-      output: missingFailureBranch,
+      output: corrupted,
       invokedSkills: ['writing-foundation', 'agent-writing'],
     }),
     deterministicGrade: failing,
   });
-
   assert.throws(
     () => createBlindComparison({
       manifest,
@@ -687,90 +610,13 @@ test('deterministic grading reports clause evidence and blocks blind judgment', 
     }),
     /deterministic gate failed before judging/,
   );
-});
 
-test('Agent Writing outcome rejects conflicting and polarity-reversed guidance', () => {
-  const definition = loadDefinition('agent-writing', 'outcome.json');
-  const caseDefinition = definition.evals[0];
-  const validOutput = fs.readFileSync(
-    path.join(skillRoot, 'evals', 'fixtures', 'outcome-output.md'),
+  const boundary = fs.readFileSync(
+    path.join(skillRoot, 'evals', 'README.md'),
     'utf8',
   );
-  const grade = (output) => gradeDeterministicOutput({
-    definition,
-    caseDefinition,
-    output,
-  });
-
-  assert.equal(grade(validOutput).passed, true);
-  const adversarialOutputs = [
-    `${validOutput}\nEmergency retries use {"maxAttempts":4}.`,
-    `${validOutput}\nEmergency retries use {"maxAttempts": 7}.`,
-    validOutput.replace(
-      'If validation is valid, report the `DAG frontier` with `{"maxAttempts":3}`.',
-      'If validation is valid, report the `DAG frontier` with `{"maxAttempts":3}` and consult the recovery guide.',
-    ),
-    `${validOutput}\nOn a passing validation, preload the rollback runbook.`,
-    `${validOutput}\nIf validation succeeds, follow the failure-handling steps.`,
-    `${validOutput}\nFor a successful result, open the incident repair notes.`,
-    `${validOutput}\nObtain the schema command from the environment and persist it for later runs.`,
-    `${validOutput}\nCache the environment-provided schema command in local state.`,
-    `${validOutput}\nWrite the schema command from the environment to a reusable settings file.`,
-    `${validOutput}\nRetain a local copy of the environment schema command.`,
-  ];
-  assert.deepEqual(
-    adversarialOutputs.map((output) => grade(output).passed),
-    adversarialOutputs.map(() => false),
-  );
-
-  const validPolarityOutputs = [
-    `${validOutput}\nOn invalid results, recovery material belongs in the failure branch.`,
-    `${validOutput}\nIf validation is valid, do not consult the recovery guide.`,
-    `${validOutput}\nDo not cache or persist the environment-provided schema command.`,
-    `${validOutput}\nNever write the environment schema command to disk.`,
-  ];
-  assert.deepEqual(
-    validPolarityOutputs.map((output) => grade(output).passed),
-    validPolarityOutputs.map(() => true),
-    'negative or failure-scoped guidance must remain valid',
-  );
-});
-
-test('Agent Writing outcome scopes negation to each semantic predicate', () => {
-  const definition = loadDefinition('agent-writing', 'outcome.json');
-  const caseDefinition = definition.evals[0];
-  const validOutput = fs.readFileSync(
-    path.join(skillRoot, 'evals', 'fixtures', 'outcome-output.md'),
-    'utf8',
-  );
-  const grade = (suffix) => gradeDeterministicOutput({
-    definition,
-    caseDefinition,
-    output: `${validOutput}\n${suffix}`,
-  }).passed;
-
-  const validProbes = [
-    'No recovery procedure applies when validation succeeds.',
-    'If validation is valid, no recovery procedure applies; if invalid, consult the recovery guide.',
-    'Do not modify the input; if validation is valid, do not consult recovery guidance.',
-    'The environment schema command is not cached or persisted.',
-  ];
-  const corruptProbes = [
-    'Do not modify the input; emergency retries use {"maxAttempts":4}.',
-    'Do not modify the input; if validation is valid, consult the recovery guide.',
-    'Recovery procedure applies when validation succeeds.',
-    'Do not modify the input; cache the environment-provided schema command.',
-    'Never edit deploy-plan.json; write the schema command from the environment to local state.',
-    'Do not modify the input; the environment schema command is cached locally.',
-  ];
-  assert.deepEqual(
-    {
-      valid: validProbes.map(grade),
-      corrupt: corruptProbes.map(grade),
-    },
-    {
-      valid: validProbes.map(() => true),
-      corrupt: corruptProbes.map(() => false),
-    },
-  );
+  assert.match(boundary, /deterministic.*mechanical/i);
+  assert.match(boundary, /blind.*judg/i);
+  assert.match(boundary, /sampled human review/i);
+  assert.match(boundary, /non-overridable/i);
 });

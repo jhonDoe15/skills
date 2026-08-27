@@ -138,122 +138,26 @@ test('writing-foundation exposes its private audience-independent Interface', (t
   );
 });
 
-test('writing-foundation role evaluation grades every owned clause with line evidence', () => {
+test('writing-foundation separates mechanical gates from semantic adoption', () => {
   const definition = readJson('evals/role.json');
   const caseDefinition = definition.evals[0];
-
   assert.equal(validateEvaluationDefinition(definition), definition);
   assert.equal(definition.evaluation.layer, 'role');
   assert.deepEqual(definition.evaluation.hosts, ['claude-code', 'cursor']);
   assert.deepEqual(caseDefinition.covered_clauses, foundationClauses);
-  assert.deepEqual(definition.global_required_signals, foundationClauses);
 
-  const fixtureOutput = fs.readFileSync(
-    path.join(skillRoot, 'evals', 'fixtures', 'role-output.md'),
-    'utf8',
-  );
-  const grade = gradeDeterministicOutput({
-    definition,
-    caseDefinition,
-    output: fixtureOutput,
-  });
-  const alternateWording = [
-    '# Release requirements',
-    'Deploy only tickets that are unblocked, as required by the supplied note.',
-    'Preserve the exact `DAG frontier` term and `{"maxAttempts":3}` retry policy.',
-    'The concurrency limit remains unresolved until its owner decides; do not invent a numeric limit.',
-    'Keep only these operational requirements and the unresolved decision; add no audience-specific voice.',
-    'Publish only after every supplied requirement, exact value, and unknown has been accounted for.',
-  ].join('\n');
-  const alternateGrade = gradeDeterministicOutput({
-    definition,
-    caseDefinition,
-    output: alternateWording,
-  });
-
-  assert.equal(grade.passed, true);
-  assert.equal(alternateGrade.passed, true);
-  for (const clause of foundationClauses) {
-    assert.equal(
-      grade.checks.some(({ name }) => name === `signal ${clause}`),
-      true,
-      clause,
-    );
-  }
-  for (const check of grade.checks.filter(({ name }) => (
-    name.startsWith('signal ')
-  ))) {
-    assert.match(check.details, /^line \d+$/);
-  }
-
-  for (const [corrupted, failedCheck] of [
-    [
-      alternateWording.replace('DAG frontier', 'queue frontier'),
-      'signal wf-terminology',
-    ],
-    [
-      alternateWording.replace('{"maxAttempts":3}', '{"maxAttempts":4}'),
-      'signal wf-work-product-fidelity',
-    ],
-    [
-      alternateWording.replace(
-        'The concurrency limit remains unresolved until its owner decides; do not invent a numeric limit.',
-        'The concurrency limit is 8.',
-      ),
-      'signal wf-uncertainty',
-    ],
-  ]) {
-    const corruptedGrade = gradeDeterministicOutput({
-      definition,
-      caseDefinition,
-      output: corrupted,
-    });
-    assert.equal(corruptedGrade.passed, false, failedCheck);
-    assert.equal(
-      corruptedGrade.checks.find(({ name }) => name === failedCheck).passed,
-      false,
-      failedCheck,
-    );
-  }
-
-  const source = fs.readFileSync(
-    path.join(skillRoot, 'evals', 'fixtures', 'deployment-note-source.md'),
-    'utf8',
-  );
-  const duplicatedParagraph = 'Historical background: the legacy deployer used a weekly batch window that does not control this deployment.';
-  assert.equal(source.split(duplicatedParagraph).length - 1, 2);
-  assert.equal(fixtureOutput.includes(duplicatedParagraph), false);
-  const unprunedGrade = gradeDeterministicOutput({
-    definition,
-    caseDefinition,
-    output: `${alternateWording}\n${duplicatedParagraph}`,
-  });
-  assert.equal(unprunedGrade.passed, false);
-  assert.equal(
-    unprunedGrade.checks.some(({ name, passed }) => (
-      name.startsWith('forbidden ') && !passed
-    )),
-    true,
-  );
-  assert.deepEqual(caseDefinition.files, [
-    'evals/fixtures/deployment-note-source.md',
-  ]);
-  assert.equal(
-    Object.values(definition.signals).flat().some((pattern) => (
-      /^\^[A-Z][^:]+:/.test(pattern)
-    )),
-    false,
-    'semantic grading must not require canned labels',
-  );
-});
-
-test('writing-foundation rejects conflicting literals and invented concurrency', () => {
-  const definition = readJson('evals/role.json');
-  const caseDefinition = definition.evals[0];
   const validOutput = fs.readFileSync(
     path.join(skillRoot, 'evals', 'fixtures', 'role-output.md'),
     'utf8',
   );
+  const conciseAlternate = [
+    'Keep `DAG frontier` unchanged.',
+    'Retain `{"maxAttempts":3}` exactly.',
+  ].join('\n');
+  const semanticCounterexample = [
+    conciseAlternate,
+    'Until the owner responds, use a cap of 8.',
+  ].join('\n');
   const grade = (output) => gradeDeterministicOutput({
     definition,
     caseDefinition,
@@ -261,67 +165,65 @@ test('writing-foundation rejects conflicting literals and invented concurrency',
   });
 
   assert.equal(grade(validOutput).passed, true);
-  const adversarialOutputs = [
-    `${validOutput}\nFallback policy: {"maxAttempts":4}.`,
-    `${validOutput}\nFallback policy: {"maxAttempts": 7}.`,
-    `${validOutput}\nUntil the owner responds, use a concurrency cap of 8.`,
-    `${validOutput}\nRun no more than 12 at once.`,
-    `${validOutput}\nParallelism ceiling: 6.`,
-    `${validOutput}\nThrottle deployments to 9 concurrent tickets.`,
-    `${validOutput}\nUse a deployment batch size of 5.`,
-    `${validOutput}\nAllow 7 deployments in flight.`,
-  ];
-  assert.deepEqual(
-    adversarialOutputs.map((output) => grade(output).passed),
-    adversarialOutputs.map(() => false),
+  assert.equal(grade(conciseAlternate).passed, true);
+  assert.equal(
+    grade(semanticCounterexample).passed,
+    true,
+    'invented concurrency is judged semantically, not by keywords',
+  );
+  assert.deepEqual(definition.global_required_signals, [
+    'wf-terminology',
+    'wf-work-product-fidelity',
+  ]);
+  assert.equal(
+    grade(conciseAlternate.replace('DAG frontier', 'queue frontier')).passed,
+    false,
+  );
+  assert.equal(
+    grade(conciseAlternate.replace(
+      '{"maxAttempts":3}',
+      '{"maxAttempts":4}',
+    )).passed,
+    false,
   );
 
-  const validNumberUses = [
-    `${validOutput}\nThe source contains 3 explicit requirements.`,
-    `${validOutput}\nDo not invent a concurrency cap of 8.`,
-    `${validOutput}\nNever set a batch size of 5 without an owner decision.`,
-  ];
-  assert.deepEqual(
-    validNumberUses.map((output) => grade(output).passed),
-    validNumberUses.map(() => true),
-    'unrelated or explicitly rejected numbers must remain valid',
-  );
-});
-
-test('writing-foundation scopes numeric limits and their negation', () => {
-  const definition = readJson('evals/role.json');
-  const caseDefinition = definition.evals[0];
-  const validOutput = fs.readFileSync(
-    path.join(skillRoot, 'evals', 'fixtures', 'role-output.md'),
+  const duplicatedParagraph = 'Historical background: the legacy deployer used a weekly batch window that does not control this deployment.';
+  const source = fs.readFileSync(
+    path.join(skillRoot, 'evals', 'fixtures', 'deployment-note-source.md'),
     'utf8',
   );
-  const grade = (suffix) => gradeDeterministicOutput({
-    definition,
-    caseDefinition,
-    output: `${validOutput}\n${suffix}`,
-  }).passed;
-
-  const validProbes = [
-    'No concurrency cap of 8 is authorized.',
-    'Concurrency remains unresolved; the storage-retention cap is 8 days.',
-    'Do not invent concurrency; storage retention has a cap of 8 days.',
-  ];
-  const corruptProbes = [
-    'Do not remove uncertainty; set a concurrency cap of 8.',
-    'Concurrency cap of 8.',
-    'Do not remove `DAG frontier`; fallback policy is {"maxAttempts":4}.',
-    'Do not remove source wording; allow 7 deployments in flight.',
-  ];
-  assert.deepEqual(
-    {
-      valid: validProbes.map(grade),
-      corrupt: corruptProbes.map(grade),
-    },
-    {
-      valid: validProbes.map(() => true),
-      corrupt: corruptProbes.map(() => false),
-    },
+  assert.equal(source.split(duplicatedParagraph).length - 1, 2);
+  assert.equal(
+    grade(`${conciseAlternate}\n${duplicatedParagraph}`).passed,
+    false,
   );
+
+  const semanticRequirements = [
+    ...caseDefinition.expectations,
+    ...definition.judge.dimensions.map(({ description }) => description),
+  ].join(' ');
+  assert.match(semanticRequirements, /unblocked/i);
+  assert.match(semanticRequirements, /concurrency.*(?:unresolved|owner)/i);
+  assert.match(semanticRequirements, /audience-specific/i);
+  assert.match(semanticRequirements, /duplicate|prun/i);
+  assert.equal(
+    definition.judge.dimensions.every(({ description }) => (
+      /(?:quote|cite|reference).*output evidence/i.test(description)
+    )),
+    true,
+  );
+  assert.deepEqual(caseDefinition.files, [
+    'evals/fixtures/deployment-note-source.md',
+  ]);
+
+  const boundary = fs.readFileSync(
+    path.join(skillRoot, 'evals', 'README.md'),
+    'utf8',
+  );
+  assert.match(boundary, /deterministic.*mechanical/i);
+  assert.match(boundary, /blind.*judg/i);
+  assert.match(boundary, /sampled human review/i);
+  assert.match(boundary, /non-overridable/i);
 });
 
 test('writing-foundation trigger cases cover canonical reach and private false activation', () => {

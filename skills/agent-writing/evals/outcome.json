@@ -15,75 +15,32 @@
     "randomization_seed": "agent-writing-outcome-v1"
   },
   "signals": {
-    "aw-accepted-context": ["deploy-plan\\.json.*(?:read-only|without changing|never modify)", "(?:read-only|without changing|never modify).*deploy-plan\\.json"],
-    "aw-activation": ["(?:after|when|once).*deploy-plan\\.json.*(?:path|supplied|available)"],
-    "aw-intended-outcomes": ["report.*(?:observed )?validation result.*(?:valid|invalid|branch|path).*DAG frontier"],
-    "aw-branches": ["(?:valid|success).*(?:invalid|failure)|(?:invalid|failure).*(?:valid|success)"],
-    "aw-success-branch": ["\\bif\\b.*\\b(?:valid|success|succeeds)\\b.*\\breport\\b.*DAG frontier"],
-    "aw-failure-branch": ["\\bif\\b.*\\b(?:invalid|failure|fails)\\b.*\\breport\\b.*(?:remediation|reference)"],
-    "aw-steps-reference": ["\\bif\\b.*\\b(?:invalid|failure|fails)\\b.*(?:only then|only after).*(?:remediation|reference)"],
-    "aw-branch-disclosure": ["\\bif\\b.*\\b(?:invalid|failure|fails)\\b.*(?:only then|only after).*(?:remediation|reference)"],
-    "aw-co-located-authority": ["\\bif\\b.*\\b(?:valid|invalid|success|failure|fails)\\b.*\\breport\\b"],
-    "aw-instruction-form": ["^\\s*(?:[-*]\\s*)?\\bif\\b.*\\breport\\b"],
-    "aw-context-load": ["(?:only then|only after).*(?:remediation|reference)"],
-    "aw-behavioral-pruning": ["(?:only then|only after).*(?:remediation|reference)"],
+    "aw-artifact-name": ["deploy-plan\\.json"],
     "aw-terminology": ["`?DAG frontier`?"],
     "aw-execution-semantics": ["\\{\"maxAttempts\":3\\}"],
-    "aw-read-only-semantics": ["deploy-plan\\.json.*(?:read-only|without changing|never modify)", "(?:read-only|without changing|never modify).*deploy-plan\\.json"],
-    "aw-environment-source": ["schema command.*environment|environment.*schema command"],
-    "aw-failure-behavior": ["unavailable.*(?:missing|name).*(?:stop).*(?:without inventing|do not invent)", "(?:missing|name).*unavailable.*(?:stop).*(?:without inventing|do not invent)"],
-    "aw-completion": ["(?:finish|complete|done).*(?:only after|only when).*(?:observed )?result.*(?:branch|path)"]
+    "aw-input-mode": ["`?read-only`?"],
+    "aw-environment-source": ["`?environment`?"]
   },
   "global_required_signals": [
-    "aw-accepted-context",
-    "aw-activation",
-    "aw-intended-outcomes",
-    "aw-branches",
-    "aw-success-branch",
-    "aw-failure-branch",
-    "aw-steps-reference",
-    "aw-branch-disclosure",
-    "aw-co-located-authority",
-    "aw-instruction-form",
-    "aw-context-load",
-    "aw-behavioral-pruning",
+    "aw-artifact-name",
     "aw-terminology",
     "aw-execution-semantics",
-    "aw-read-only-semantics",
-    "aw-environment-source",
-    "aw-failure-behavior",
-    "aw-completion"
+    "aw-input-mode",
+    "aw-environment-source"
   ],
-  "global_order": [
-    ["aw-activation"],
-    ["aw-intended-outcomes"],
-    ["aw-success-branch"],
-    ["aw-failure-branch"],
-    ["aw-completion"]
-  ],
-  "forbidden_patterns": [
-    "\\b(?:if|when|on|for)\\b[^.;]*\\b(?:valid|success|successful|succeeds|succeeded|passing)\\b[^.;]*(?<!do not )(?<!don't )(?<!never )(?<!must not )(?<!or )\\b(?:consult|open|load|preload|follow|use|read|include|attach|provide|run|apply|invoke)\\b[^.;]*\\b(?:recovery|rollback|repair|remediation|troubleshoot(?:ing)?|diagnostic|failure[- ](?:handling|steps|guide|playbook|procedure|instructions)|incident (?:repair|response))\\b",
-    "(?<!do not )(?<!don't )(?<!never )(?<!must not )(?<!or )\\b(?:consult|open|load|preload|follow|use|read|include|attach|provide|run|apply|invoke)\\b[^.;]*\\b(?:recovery|rollback|repair|remediation|troubleshoot(?:ing)?|diagnostic|failure[- ](?:handling|steps|guide|playbook|procedure|instructions)|incident (?:repair|response))\\b[^.;]*\\b(?:if|when|on|for)\\b[^.;]*\\b(?:valid|success|successful|succeeds|succeeded|passing)\\b",
-    "\\b(?:if|when|on|for)\\b[^.;]*\\b(?:valid|success|successful|succeeds|succeeded|passing)\\b[^.;]*(?<!no )\\b(?:recovery|rollback|repair|remediation|troubleshoot(?:ing)?|diagnostic)\\b[^.;]*\\b(?:applies|applicable|available|belongs|used)\\b",
-    "(?<!no )\\b(?:recovery|rollback|repair|remediation|troubleshoot(?:ing)?|diagnostic)\\b[^.;]*\\b(?:applies|applicable|available|belongs|used)\\b[^.;]*\\b(?:if|when|on|for)\\b[^.;]*\\b(?:valid|success|successful|succeeds|succeeded|passing)\\b",
-    "(?<!do not )(?<!don't )(?<!never )(?<!must not )(?<!or )\\b(?:modify|write|edit|replace|delete|overwrite|mutate)\\b[^.;]*\\b(?:deploy-plan\\.json|input)\\b",
-    "(?<!do not )(?<!don't )(?<!never )(?<!must not )(?<!or )\\b(?:cache|persist|store|save|write|copy|retain)\\b[^.;]*\\b(?:environment|schema command)\\b",
-    "\\b(?:environment|schema command)\\b[^.;]*(?<!do not )(?<!don't )(?<!never )(?<!must not )(?<!or )\\b(?:cache|persist|store|save|write|copy|retain)\\b",
-    "\\b(?:environment|schema command)\\b[^.;]*\\b(?:is|must be|should be|gets?)\\s*(?<!not )(?<!never )\\b(?:cached|persisted|stored|saved|written|copied|retained)\\b",
-    "(?<!do not use )(?<!don't use )(?<!never use )(?<!must not use )\\{\\s*\"maxAttempts\"\\s*:\\s*(?!3\\s*[},])\\d+\\s*\\}",
-    "schema command\\s*(?:is|=|:)\\s*(?!not\\b|never\\b|unavailable\\b)`?[^`\\s]+"
-  ],
+  "global_order": [],
+  "forbidden_patterns": [],
   "judge": {
     "score_range": [0, 2],
     "minimum_dimension_score": 1,
     "dimensions": [
       {
         "id": "complete-agent-outcome",
-        "description": "Produces a complete executable artifact with observable activation, branches, execution, disclosure, semantics, failure behavior, and completion."
+        "description": "Semantically assess whether activation, valid and invalid branches, failure-only disclosure, missing-input behavior, and completion form a complete executable procedure. Quote or reference output evidence for every score."
       },
       {
         "id": "foundation-preservation",
-        "description": "Preserves shared coverage, grounding, uncertainty, structure, terminology, relevance, work-product fidelity, and pruning through the canonical dependency."
+        "description": "Semantically assess grounding, relevance, branch separation, whether the environment command remains a lookup rather than cached or persisted local state, and whether any prose contradicts source-owned values. Quote or reference output evidence for every score."
       }
     ]
   },
@@ -95,13 +52,14 @@
       "expected_output": "A complete host-neutral Agent Writing outcome that invokes Writing Foundation and exposes the accepted context, activation, outcome, branches, ordered steps, conditional reference, co-located authority, instruction form, context choices, exact semantics, failure path, pruning, and completion.",
       "files": ["evals/fixtures/deploy-plan-source.json"],
       "expectations": [
-        "The same scenario and expected contract can run through either host Adapter.",
-        "The treatment invokes writing-foundation and agent-writing by canonical name.",
-        "Activation, outcome, success and failure branches, ordered steps, and terminal checks are observable.",
-        "Failure-only reference is absent from the success path until its branch applies.",
-        "The canonical term, JSON literal, and read-only semantics are preserved.",
-        "The schema command remains an environment lookup.",
-        "The matched No-Skill control receives the same task without the Agent Writing package."
+        "The deterministic gate establishes only deploy-plan.json, DAG frontier, the exact JSON literal {\"maxAttempts\":3}, read-only, and environment.",
+        "Exact lifecycle evidence establishes writing-foundation and agent-writing activation; output wording is not used as trigger evidence.",
+        "The blind judge assesses activation, outcome, valid and invalid branches, ordered steps, missing-input behavior, and terminal checks.",
+        "The blind judge verifies that failure-only reference is absent from the success path until its branch applies.",
+        "The blind judge verifies that the schema command remains an environment lookup rather than cached, persisted, or kept in local state.",
+        "The blind judge rejects prose or additional values that contradict the source-owned retry policy.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness.",
+        "Failed critical mechanical gates are non-overridable, and the matched No-Skill control receives the same task without the package."
       ],
       "covered_clauses": [
         "aw-accepted-context",
