@@ -21,6 +21,11 @@ mechanisms cannot meet a verified requirement.
 
 ## Derive personal guidance
 
+Use an interview-led flow: inspect existing guidance and history first, present the preferences they
+support, then ask the user only about broad policy choices the evidence cannot settle. Discovery is
+complete when every proposed cross-project rule has either observed evidence or an explicit user
+preference.
+
 Run the failure-audit branch selected by the main skill and inspect the user's own histories. Do not
 copy another developer's file. A private file has broad blast radius, so every rule needs evidence
 or an explicit preference from the user.
@@ -59,8 +64,8 @@ Do not weaken hard guardrails with a blanket "everything is a default" sentence.
 taste as overridable defaults. Keep security, irreversible-action, and authorization boundaries
 explicit.
 
-For an existing private file, show the draft and migration map before replacing it unless the user
-already approved that exact rewrite.
+For an existing private file, show the exact draft and migration map before replacing it. If the
+user supplied and approved the exact rewrite in the request, count that as draft review.
 
 ## Verify broad behavior
 

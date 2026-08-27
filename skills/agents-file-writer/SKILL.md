@@ -11,6 +11,36 @@ right agent the right context at the right time.
 Observe local failures, audit them, codify the smallest effective rule, and retest. The user's
 history and preferences are the source of truth.
 
+## Lead the end-to-end flow
+
+Classify the request as **create**, **migrate**, **refine**, or **review**, then select its scope
+below. Create, migrate, and refine requests use every phase. A review-only request uses Discover,
+Resolve, Analyze, and read-only verification, then stops. If the review also requests proposed
+changes, continue through Draft and stop there. Enter Authorize and Write only when the user asks
+to apply a revision.
+
+1. **Discover.** Inspect the actual load chain, existing instructions and references, authoritative
+   project sources, and relevant user or repository history. This phase is complete when the
+   applicable authorities, current files, and evidence gaps are named.
+2. **Resolve.** Infer factual answers from those authorities before asking questions. Ask only for
+   unresolved policy choices that belong to the user or maintainer. This phase is complete when no
+   remaining question can be answered from available evidence.
+3. **Analyze.** Present the findings and a Keep/Move/Delete migration map. Account for every existing
+   section; for a fresh file, state that there is no existing material to migrate. This phase is
+   complete when every source item has a destination or a verified reason for deletion.
+4. **Draft.** Present the proposed file structure and load chain followed by the full proposed
+   contents of every file. This phase is complete when the exact proposed contents and migration
+   map are visible to the user.
+5. **Authorize.** Ask for one decision that covers acceptance of the exact draft and any replacement
+   that could lose guidance or external mutation that still needs approval. Count clear
+   authorization in the original request. This phase is complete when the draft is accepted and
+   every planned mutation is within the accepted boundary.
+6. **Write.** Apply the accepted draft and migration map. This phase is complete when each accepted
+   file and compatibility pointer exists at its intended path.
+7. **Verify.** Re-read the real load order, run the loss and pointer checks, and behavior-test
+   representative tasks. This phase is complete when the result preserves applicable facts, selects
+   the right procedures, and reports validation and unresolved gaps.
+
 ## Select the branch
 
 Resolve the intended audience and actual load chain before editing:

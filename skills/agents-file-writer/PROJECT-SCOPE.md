@@ -5,6 +5,11 @@ README for people deciding whether to use the project.
 
 ## Build the project mental model
 
+Use a repository-evidence-led flow: exhaust existing instructions, configuration, documentation,
+representative source, and history before asking the maintainer. Ask only about policy choices those
+sources cannot resolve. Discovery is complete when architecture, commands, ownership, recurring
+failure modes, and remaining policy gaps all have an explicit disposition.
+
 Read the repository, existing instructions, config, docs, history, and representative source before
 writing. Use the failure-audit workflow from the main skill. Do not accept a generated draft as
 authority.
