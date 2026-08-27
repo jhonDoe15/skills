@@ -139,6 +139,13 @@ artifact storage outside the committed patch. Use schema
   `guidance`, `test`, `validation`, or `implementation`, with its stage and
   observed message.
 
+For a completed handoff, lifecycle references use deterministic structured
+identities: test events encode `[behavior, command]`, validation events encode
+`[command, outcome]`, mutations use `operation:target`, and the final range event
+uses `base..head`. The lifecycle must match every test and validation entry, cover
+every changed file with a successful mutation target, and pin the exact
+implementation range.
+
 Return the artifact reference. The normalized host result separately retains
 Skill lifecycle evidence, tool use, attempted mutations, artifact descriptors,
 duration, cost, and requested and resolved model identity.

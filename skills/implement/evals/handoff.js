@@ -263,6 +263,82 @@ function validateLifecycle(lifecycle, complete) {
   }
 }
 
+function lifecycleEntries(lifecycle, kind) {
+  return lifecycle
+    .filter((event) => event.kind === kind)
+    .map(({ status, reference }) => ({ status, reference }));
+}
+
+function sameLifecycleEntries(actual, expected) {
+  return actual.length === expected.length
+    && actual.every((entry, index) => (
+      entry.status === expected[index].status
+      && entry.reference === expected[index].reference
+    ));
+}
+
+function requireMatchingLifecycleEntries(lifecycle, kind, expected, message) {
+  const actual = lifecycleEntries(lifecycle, kind);
+  if (!sameLifecycleEntries(actual, expected)) {
+    throw new ImplementEvaluationError(message);
+  }
+}
+
+function validateCompletedLifecycle({
+  tests,
+  validation,
+  implementation_range: implementationRange,
+  lifecycle,
+  changed_files: changedFiles,
+}) {
+  const testEntries = tests.map(({ behavior, phase, command }) => ({
+    status: phase,
+    reference: JSON.stringify([behavior, command]),
+  }));
+  requireMatchingLifecycleEntries(
+    lifecycle,
+    'test',
+    testEntries,
+    'lifecycle test evidence must match handoff.tests',
+  );
+
+  const validationEntries = validation.map(({ command, outcome }) => ({
+    status: 'completed',
+    reference: JSON.stringify([command, outcome]),
+  }));
+  requireMatchingLifecycleEntries(
+    lifecycle,
+    'validation',
+    validationEntries,
+    'lifecycle validation evidence must match handoff.validation',
+  );
+
+  const expectedRange = `${implementationRange.base}..${implementationRange.head}`;
+  const rangeEntries = lifecycleEntries(lifecycle, 'range');
+  if (!sameLifecycleEntries(rangeEntries, [{
+    status: 'pinned',
+    reference: expectedRange,
+  }]) || lifecycle.at(-1).kind !== 'range') {
+    throw new ImplementEvaluationError(
+      'lifecycle must pin the exact implementation range',
+    );
+  }
+
+  const mutationTargets = new Set(
+    lifecycleEntries(lifecycle, 'mutation')
+      .filter(({ status }) => status === 'succeeded')
+      .map(({ reference }) => {
+        const separator = reference.indexOf(':');
+        return separator > 0 ? reference.slice(separator + 1) : null;
+      }),
+  );
+  if (!changedFiles.every((file) => mutationTargets.has(file))) {
+    throw new ImplementEvaluationError(
+      'lifecycle mutations must cover every changed file',
+    );
+  }
+}
+
 function validateImplementHandoff(handoff) {
   requireExactFields(handoff, HANDOFF_FIELDS, 'handoff');
   if (handoff.schema !== 'implement-handoff/v2') {
@@ -318,6 +394,7 @@ function validateImplementHandoff(handoff) {
   requireString(handoff.correction.next_action, 'handoff.correction.next_action');
 
   if (completed) {
+    validateCompletedLifecycle(handoff);
     if (handoff.failure !== null) {
       throw new ImplementEvaluationError(
         'completed handoff cannot contain a failure',

@@ -127,7 +127,7 @@
       "expectations": [
         "Treatment and No-Skill runs are matched fresh sessions that differ only in Skill provisioning.",
         "The treatment produces one immutable scoped patch with source-cited guidance, TDD, validation, and correction-ready handoff evidence.",
-        "Mechanical checks establish artifact shape, exact dependency and failure literals, immutable revisions, ordered guidance and mutation lifecycle evidence, paired red-green commands, file existence, and a closed mutation allowlist.",
+        "Mechanical checks establish artifact shape, exact dependency and failure literals, immutable revisions, cross-field lifecycle consistency for tests, validation, changed-file mutations, and the pinned range, file existence, and a closed mutation allowlist.",
         "Semantic patch quality and requirement fidelity are decided by blind evidence-bearing model judgment and sampled human review.",
         "Generated runs, judge payloads, reports, and workspaces remain uncommitted."
       ],

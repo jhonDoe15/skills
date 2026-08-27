@@ -113,7 +113,7 @@ function successfulHandoff() {
         sequence: 2,
         kind: 'test',
         status: 'red',
-        reference: 'bounded-rule',
+        reference: '["bounded-rule","node --test test/bounded-change.test.js"]',
       },
       {
         sequence: 3,
@@ -123,21 +123,27 @@ function successfulHandoff() {
       },
       {
         sequence: 4,
-        kind: 'test',
-        status: 'green',
-        reference: 'bounded-rule',
+        kind: 'mutation',
+        status: 'succeeded',
+        reference: 'write:test/bounded-change.test.js',
       },
       {
         sequence: 5,
-        kind: 'validation',
-        status: 'completed',
-        reference: 'node --test',
+        kind: 'test',
+        status: 'green',
+        reference: '["bounded-rule","node --test test/bounded-change.test.js"]',
       },
       {
         sequence: 6,
+        kind: 'validation',
+        status: 'completed',
+        reference: '["node --test","passed"]',
+      },
+      {
+        sequence: 7,
         kind: 'range',
         status: 'pinned',
-        reference: 'b'.repeat(40),
+        reference: `${'a'.repeat(40)}..${'b'.repeat(40)}`,
       },
     ],
     changed_behavior: ['The bounded fixture behavior is implemented.'],
@@ -170,6 +176,12 @@ function successfulHandoff() {
     },
     failure: null,
   };
+}
+
+function removeLifecycleEvents(handoff, shouldRemove) {
+  handoff.lifecycle = handoff.lifecycle
+    .filter((event) => !shouldRemove(event))
+    .map((event, index) => ({ ...event, sequence: index + 1 }));
 }
 
 function failedHandoff(kind) {
@@ -292,11 +304,18 @@ function normalizedResult(invocationValue, context, artifact, status) {
         name: 'tdd',
         outcome: 'succeeded',
       }],
-      attemptedMutations: failed ? [] : [{
-        operation: 'write',
-        target: 'src/bounded-change.js',
-        outcome: 'succeeded',
-      }],
+      attemptedMutations: failed ? [] : [
+        {
+          operation: 'write',
+          target: 'src/bounded-change.js',
+          outcome: 'succeeded',
+        },
+        {
+          operation: 'write',
+          target: 'test/bounded-change.test.js',
+          outcome: 'succeeded',
+        },
+      ],
     },
     failure: failed ? {
       stage: 'execution',
@@ -470,6 +489,104 @@ test('completed handoff requires red evidence before matching green evidence', (
   assert.throws(
     () => validateImplementHandoff(reversed),
     /tests require ordered red then green evidence/,
+  );
+});
+
+test('completed handoff lifecycle includes every focused red-green pair', () => {
+  const { validateImplementHandoff } = loadImplementEvaluation();
+  for (const status of ['red', 'green']) {
+    const handoff = successfulHandoff();
+    removeLifecycleEvents(
+      handoff,
+      (event) => event.kind === 'test' && event.status === status,
+    );
+
+    assert.throws(
+      () => validateImplementHandoff(handoff),
+      /lifecycle test evidence must match handoff.tests/,
+      status,
+    );
+  }
+});
+
+test('completed handoff lifecycle includes every validation result', () => {
+  const { validateImplementHandoff } = loadImplementEvaluation();
+  const handoff = successfulHandoff();
+  removeLifecycleEvents(handoff, ({ kind }) => kind === 'validation');
+
+  assert.throws(
+    () => validateImplementHandoff(handoff),
+    /lifecycle validation evidence must match handoff.validation/,
+  );
+});
+
+test('completed handoff lifecycle pins the exact implementation range', () => {
+  const { validateImplementHandoff } = loadImplementEvaluation();
+  const missingRange = successfulHandoff();
+  removeLifecycleEvents(missingRange, ({ kind }) => kind === 'range');
+  assert.throws(
+    () => validateImplementHandoff(missingRange),
+    /lifecycle must pin the exact implementation range/,
+  );
+
+  const wrongRange = successfulHandoff();
+  wrongRange.lifecycle.at(-1).reference = `${'a'.repeat(40)}..${'c'.repeat(40)}`;
+  assert.throws(
+    () => validateImplementHandoff(wrongRange),
+    /lifecycle must pin the exact implementation range/,
+  );
+});
+
+test('completed handoff lifecycle rejects test and validation contradictions', () => {
+  const { validateImplementHandoff } = loadImplementEvaluation();
+  for (const [field, value] of [
+    ['behavior', 'different-rule'],
+    ['command', 'node --test test/other.test.js'],
+  ]) {
+    const handoff = successfulHandoff();
+    handoff.tests.forEach((entry) => {
+      entry[field] = value;
+    });
+    assert.throws(
+      () => validateImplementHandoff(handoff),
+      /lifecycle test evidence must match handoff.tests/,
+      field,
+    );
+  }
+
+  for (const [field, value] of [
+    ['command', 'node --test test/other-validation.test.js'],
+    ['outcome', 'skipped'],
+  ]) {
+    const handoff = successfulHandoff();
+    handoff.validation[0][field] = value;
+    assert.throws(
+      () => validateImplementHandoff(handoff),
+      /lifecycle validation evidence must match handoff.validation/,
+      field,
+    );
+  }
+});
+
+test('completed handoff lifecycle covers every changed file mutation', () => {
+  const { validateImplementHandoff } = loadImplementEvaluation();
+  const missingMutation = successfulHandoff();
+  removeLifecycleEvents(
+    missingMutation,
+    ({ reference }) => reference === 'write:test/bounded-change.test.js',
+  );
+  assert.throws(
+    () => validateImplementHandoff(missingMutation),
+    /lifecycle mutations must cover every changed file/,
+  );
+
+  const failedMutation = successfulHandoff();
+  failedMutation.lifecycle.find(
+    ({ reference }) => reference === 'write:test/bounded-change.test.js',
+  ).status = 'failed';
+  assert.throws(
+    () => validateImplementHandoff(failedMutation),
+    /lifecycle mutations must cover every changed file/,
   );
 });
 
