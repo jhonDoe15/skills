@@ -462,6 +462,17 @@ test('deterministic writing grader requires distinct accountable actions', () =>
     'Security verifies before approval that the exception expires Friday.',
   ]);
   assert.equal(concise.passed, true, JSON.stringify(concise, null, 2));
+  const unrelatedNegation = grade([
+    'Start a staged rollout.',
+    'Although the deadline is not flexible, at 14:00 the release lead stages the internal cohort.',
+    'Support prepares the customer notice before rollout, not the incident report.',
+    'Security verifies before approval that the exception expires Friday, without delay.',
+  ]);
+  assert.equal(
+    unrelatedNegation.passed,
+    true,
+    JSON.stringify(unrelatedNegation, null, 2),
+  );
 
   const probes = [
     [
@@ -507,6 +518,18 @@ test('deterministic writing grader requires distinct accountable actions', () =>
       'Before rollout support prepares the exception and mentions the customer notice.',
       'Before approval security reviews the internal cohort and mentions the exception expiry Friday.',
     ],
+    [
+      'Start a staged rollout today.',
+      'At 14:00 the release lead stages the agenda, noting the internal cohort.',
+      'Support prepares no customer notice before rollout.',
+      'Before approval security verifies the checklist, noting the exception expires Friday.',
+    ],
+    [
+      'Start a staged rollout today.',
+      'At 14:00 the release lead never stages the internal cohort.',
+      'Support does not prepare the customer notice before rollout.',
+      'Security never verifies before approval that the exception expires Friday.',
+    ],
   ];
   for (const [index, probe] of probes.entries()) {
     const result = grade(probe);
@@ -524,11 +547,24 @@ test('deterministic writing grader requires distinct accountable actions', () =>
 test('decision gates accept unlabeled alternate prose and reject hollow probes', () => {
   const role = definitionFor(loadDefinitions(), 'role');
   const caseDefinition = role.evals.find(({ id }) => id === 'decision-support');
+  for (const sourceFact of [
+    'verified rollback',
+    'small first cohort, which contains exposure',
+    'p95 latency stays under 200 ms',
+    'passing result supports moving to full deployment',
+    'miss means keeping the limited release',
+  ]) {
+    assert.equal(
+      caseDefinition.prompt.includes(sourceFact),
+      true,
+      `decision scenario must supply ${sourceFact}`,
+    );
+  }
   const alternate = normalizedResult({
     output: [
       'Use a limited release today.',
       '',
-      'Verified rollback and a small first cohort contain exposure.',
+      'Rollback has been verified, and a small first cohort contains exposure.',
       '',
       'We have not yet exercised peak traffic.',
       '',
@@ -545,8 +581,8 @@ test('decision gates accept unlabeled alternate prose and reject hollow probes',
 
   const concise = structuredClone(alternate);
   concise.observations.responses[0].text = [
-    'Use a staged rollout; verified rollback limits exposure; '
-      + 'peak traffic is untested; switch if the load test fails.',
+    'Use a staged rollout; a small first cohort limits exposure and rollback is verified; '
+      + 'peak traffic is untested; switch to full if the load test passes.',
   ].join('');
   const conciseGrade = gradeHumanWritingResult({
     evaluationDefinition: role,
@@ -557,7 +593,7 @@ test('decision gates accept unlabeled alternate prose and reject hollow probes',
 
   const detailFirst = structuredClone(alternate);
   detailFirst.observations.responses[0].text = [
-    'Verified rollback and a small first cohort contain exposure.',
+    'Rollback has been verified, and a small first cohort contains exposure.',
     '',
     'Use a limited release today.',
     '',
@@ -572,6 +608,82 @@ test('decision gates accept unlabeled alternate prose and reject hollow probes',
   });
   assert.equal(detailFirstGrade.passed, false);
   assertFailedCheck(detailFirstGrade, 'answer first');
+
+  const validParaphrases = [
+    [
+      'Prefer a staged rollout.',
+      'A limited first cohort caps exposure, and rollback was verified.',
+      'Peak demand remains untested.',
+      'Proceed with full deployment if the noon load test keeps p95 latency below 200 ms.',
+    ],
+    [
+      'Use a limited release.',
+      'Exposure stays contained through the small first cohort, and verified rollback is available.',
+      'We have not yet exercised peak traffic.',
+      'Keep the limited release when the noon load test exceeds 200 ms.',
+    ],
+  ];
+  for (const [index, lines] of validParaphrases.entries()) {
+    const paraphrase = structuredClone(alternate);
+    paraphrase.observations.responses[0].text = lines.join('\n');
+    const paraphraseGrade = gradeHumanWritingResult({
+      evaluationDefinition: role,
+      caseDefinition,
+      result: paraphrase,
+    });
+    assert.equal(
+      paraphraseGrade.passed,
+      true,
+      `valid decision paraphrase ${index + 1}: ${JSON.stringify(paraphraseGrade, null, 2)}`,
+    );
+  }
+
+  const contradictionProbes = [
+    [
+      'Use a limited release today.',
+      'Verified rollback limits exposure.',
+      'Peak traffic remains untested.',
+      'Move to full deployment when the noon load test passes.',
+    ],
+    [
+      'Use a limited release today.',
+      'A small first cohort contains exposure, and rollback is verified.',
+      'Peak traffic remains untested.',
+      'Move to full deployment when the noon load test fails.',
+    ],
+    [
+      'Use a limited release today.',
+      'A small first cohort contains exposure, and rollback is verified.',
+      'Peak traffic remains untested.',
+      'Deploy to everyone if the noon load test exceeds 200 ms.',
+    ],
+    [
+      'Use a full deployment today.',
+      'A small first cohort contains exposure, and rollback is verified.',
+      'Peak traffic remains untested.',
+      'Keep the limited release when the noon load test exceeds 200 ms.',
+    ],
+    [
+      'Use a limited release today.',
+      'An unverified rollback and a small first cohort contain exposure.',
+      'Peak traffic remains untested.',
+      'Move to full deployment when the noon load test passes.',
+    ],
+  ];
+  for (const [index, lines] of contradictionProbes.entries()) {
+    const contradiction = structuredClone(alternate);
+    contradiction.observations.responses[0].text = lines.join('\n');
+    const contradictionGrade = gradeHumanWritingResult({
+      evaluationDefinition: role,
+      caseDefinition,
+      result: contradiction,
+    });
+    assert.equal(
+      contradictionGrade.passed,
+      false,
+      `source contradiction ${index + 1}`,
+    );
+  }
 
   const hollowProbes = [
     [
@@ -913,7 +1025,7 @@ test('complete outcome retains a matched No-Skill control', async (t) => {
           ? [
             'Use a staged rollout today.',
             '',
-            'Verified rollback and the limited first cohort cap exposure.',
+            'Rollback is verified, and the limited first cohort caps exposure.',
             '',
             'Peak traffic remains untested.',
             '',

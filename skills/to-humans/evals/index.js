@@ -151,6 +151,26 @@ function matchingText(value, patterns, field) {
   return null;
 }
 
+function hasPredicateLocalNegation(value, predicateIndex) {
+  const prefix = value.slice(Math.max(0, predicateIndex - 48), predicateIndex);
+  return /(?:\b(?:no|not|never|without)\b|\b(?:declines|fails|refuses)\s+to)\s*$/i.test(
+    prefix,
+  );
+}
+
+function matchingNonnegatedText(value, patterns, field) {
+  if (!Array.isArray(patterns) || patterns.length === 0) {
+    throw new TypeError(`${field} must be a non-empty pattern array`);
+  }
+  for (const [index, pattern] of patterns.entries()) {
+    const match = compile(pattern, `${field}[${index}]`).exec(value);
+    if (match && !hasPredicateLocalNegation(value, match.index)) {
+      return match[0].toLocaleLowerCase('en');
+    }
+  }
+  return null;
+}
+
 function matchesOrderedGroups(value, groups, field) {
   if (!Array.isArray(groups) || groups.length < 2) {
     throw new TypeError(`${field} must contain at least two pattern groups`);
@@ -177,6 +197,33 @@ function matchesOrderedGroups(value, groups, field) {
 function matchesProposition(value, proposition, field) {
   if (!proposition || typeof proposition !== 'object' || Array.isArray(proposition)) {
     throw new TypeError(`${field} must be an object`);
+  }
+  if (proposition.forbidden_patterns
+      && matchesAny(value, proposition.forbidden_patterns, `${field}.forbidden_patterns`)) {
+    return false;
+  }
+  if (proposition.all_of) {
+    if (!Array.isArray(proposition.all_of) || proposition.all_of.length === 0) {
+      throw new TypeError(`${field}.all_of must contain propositions`);
+    }
+    return proposition.all_of.every((part, index) => (
+      matchesProposition(value, part, `${field}.all_of[${index}]`)
+    ));
+  }
+  if (proposition.alternatives) {
+    if (!Array.isArray(proposition.alternatives)
+        || proposition.alternatives.length === 0) {
+      throw new TypeError(`${field}.alternatives must contain propositions`);
+    }
+    return proposition.alternatives.some((part, index) => (
+      matchesProposition(value, part, `${field}.alternatives[${index}]`)
+    ));
+  }
+  if (proposition.claim_patterns) {
+    const match = proposition.allow_negation
+      ? matchingText(value, proposition.claim_patterns, `${field}.claim_patterns`)
+      : matchingNonnegatedText(value, proposition.claim_patterns, `${field}.claim_patterns`);
+    return Boolean(match);
   }
   const requiredGroups = proposition.required_groups;
   const orderedGroups = proposition.ordered_groups;
@@ -251,6 +298,11 @@ function gradeAccountableActions(output, expectations = []) {
         expectation.qualifier_patterns,
         `accountable_actions[${index}].qualifier_patterns`,
       );
+      const predicateObject = matchingNonnegatedText(
+        unit.text,
+        expectation.predicate_object_patterns,
+        `accountable_actions[${index}].predicate_object_patterns`,
+      );
       const ownerCount = expectations.filter((other, otherIndex) => (
         matchesAny(
           unit.text,
@@ -266,35 +318,16 @@ function gradeAccountableActions(output, expectations = []) {
           `accountable_actions[${otherIndex}].source_patterns`,
         )
       ));
-      if (!Array.isArray(expectation.relationship_orders)
-          || expectation.relationship_orders.length === 0) {
-        throw new TypeError(
-          `accountable_actions[${index}].relationship_orders must be non-empty`,
-        );
-      }
-      const relationship = expectation.relationship_orders.some((order, orderIndex) => {
-        if (!Array.isArray(order)) {
-          throw new TypeError(
-            `accountable_actions[${index}].relationship_orders[${orderIndex}] must be an array`,
-          );
-        }
-        const groups = order.map((part) => {
-          const patterns = expectation[`${part}_patterns`];
-          if (!patterns) {
-            throw new TypeError(
-              `accountable_actions[${index}] has no ${part}_patterns`,
-            );
-          }
-          return patterns;
-        });
-        return matchesOrderedGroups(
-          unit.text,
-          groups,
-          `accountable_actions[${index}].relationship_orders[${orderIndex}]`,
-        );
-      });
+      const relationship = matchesOrderedGroups(
+        unit.text,
+        [
+          expectation.owner_patterns,
+          expectation.predicate_object_patterns,
+        ],
+        `accountable_actions[${index}].owner_predicate_object`,
+      );
       const pair = owner && action ? `${owner}\0${action}` : null;
-      if (!owner || !action || !source || !qualifier || !relationship
+      if (!owner || !action || !source || !qualifier || !predicateObject || !relationship
           || conflictingSource || ownerCount !== 1 || usedPairs.has(pair)) {
         return false;
       }

@@ -40,7 +40,7 @@
     {
       "id": "complete-human-decision",
       "name": "complete human-facing deployment decision",
-      "prompt": "Recommend a deployment approach to the release owner. A staged rollout has verified rollback and a limited first cohort to contain exposure. Peak traffic remains untested. The noon load test passes when p95 latency stays under 200 ms; a passing result supports moving to full deployment, while a miss means keeping the staged rollout. Include the basis, the untested condition that matters, and what result would change the recommendation.",
+      "prompt": "Recommend a deployment approach to the release owner. A staged rollout has verified rollback. It starts with a limited first cohort, which contains exposure. Peak traffic remains untested. The noon load test passes when p95 latency stays under 200 ms; a passing result supports moving to full deployment, while a miss means keeping the staged rollout. Include the basis, the untested condition that matters, and what result would change the recommendation.",
       "expected_output": "The treatment provides a complete human-facing decision with its canonical dependency, while the matched No-Skill control receives the same scenario without writing Skills.",
       "files": [],
       "expectations": [
@@ -68,133 +68,86 @@
         },
         "decision_support": {
           "recommendation": {
-            "required_groups": [
-              [
-                "\\b(?:limited|staged|full) (?:release|rollout|deployment)\\b"
-              ],
-              [
-                "\\b(?:recommend|choose|prefer|use|start|proceed with)\\b|\\b(?:is|looks|remains) (?:safer|safest|best|preferred|recommended)\\b"
-              ]
-            ],
-            "ordered_groups": [
-              [
-                [
-                  "\\b(?:recommend|choose|prefer|use|start|proceed with)\\b"
-                ],
-                [
-                  "\\b(?:limited|staged|full) (?:release|rollout|deployment)\\b"
-                ]
-              ],
-              [
-                [
-                  "\\b(?:limited|staged|full) (?:release|rollout|deployment)\\b"
-                ],
-                [
-                  "\\b(?:is|looks|remains) (?:safer|safest|best|preferred|recommended)\\b"
-                ]
-              ]
+            "claim_patterns": [
+              "\\b(?:recommend|choose|prefer|use|start|proceed with) (?:a |the )?(?:limited|staged) (?:release|rollout|deployment)\\b",
+              "\\b(?:limited|staged) (?:release|rollout|deployment) (?:is|looks|remains) (?:safer|safest|best|preferred|recommended)\\b"
             ]
           },
           "basis": {
-            "required_groups": [
-              [
-                "\\b(?:verified rollback|rollback (?:is|was) verified|small first cohort|limited first cohort)\\b"
-              ],
-              [
-                "\\b(?:contain|cap|limit|reduce)\\w* (?:the )?(?:exposure|risk|blast radius)\\b|\\b(?:exposure|risk|blast radius) (?:is |stays )?(?:contained|capped|limited|reduced)\\b"
-              ]
-            ],
-            "ordered_groups": [
-              [
-                [
-                  "\\b(?:verified rollback|rollback (?:is|was) verified|small first cohort|limited first cohort)\\b"
-                ],
-                [
-                  "\\b(?:contain|cap|limit|reduce)\\w* (?:the )?(?:exposure|risk|blast radius)\\b"
+            "all_of": [
+              {
+                "claim_patterns": [
+                  "\\bverified rollback\\b",
+                  "\\brollback (?:is|was|has been) verified\\b"
                 ]
-              ],
-              [
-                [
-                  "\\b(?:exposure|risk|blast radius) (?:is |stays )?(?:contained|capped|limited|reduced)(?: by| with| through)\\b"
-                ],
-                [
-                  "\\b(?:verified rollback|rollback (?:is|was) verified|small first cohort|limited first cohort)\\b"
+              },
+              {
+                "claim_patterns": [
+                  "\\b(?:small|limited) first cohort (?:contains|caps|limits|reduces) (?:the )?(?:exposure|risk|blast radius)\\b",
+                  "\\b(?:exposure|risk|blast radius) (?:is |stays )?(?:contained|capped|limited|reduced) (?:by|with|through) (?:the )?(?:small|limited) first cohort\\b"
                 ]
-              ]
+              }
             ]
           },
           "material_uncertainty": {
-            "required_groups": [
-              [
-                "\\bpeak (?:traffic|demand|load)\\b"
-              ],
-              [
-                "\\b(?:remains|is) untested\\b|\\b(?:has|have) not (?:yet )?(?:been )?(?:tested|exercised)\\b"
-              ]
-            ],
-            "ordered_groups": [
-              [
-                [
-                  "\\bpeak (?:traffic|demand|load)\\b"
-                ],
-                [
-                  "\\b(?:remains|is) untested\\b|\\b(?:has not|hasn't) (?:yet )?(?:been )?(?:tested|exercised)\\b"
-                ]
-              ],
-              [
-                [
-                  "\\b(?:have not|haven't) (?:yet )?(?:tested|exercised)\\b"
-                ],
-                [
-                  "\\bpeak (?:traffic|demand|load)\\b"
-                ]
-              ]
+            "allow_negation": true,
+            "claim_patterns": [
+              "\\bpeak (?:traffic|demand|load) (?:remains|is) untested\\b",
+              "\\b(?:have|has) not (?:yet )?(?:tested|exercised) peak (?:traffic|demand|load)\\b"
             ]
           },
           "change_condition": {
-            "required_groups": [
-              [
-                "\\b(?:if|when|unless|only when)\\b"
-              ],
-              [
-                "\\b(?:noon )?load test\\b"
-              ],
-              [
-                "\\b(?:(?:p95 )?latency (?:target|threshold)|200\\s*ms|passes|fails|meets|misses|exceeds)\\b"
-              ],
-              [
-                "\\b(?:move|switch|change|reconsider|pause|stop|keep|choose|deploy)\\w*\\b"
-              ]
-            ],
-            "ordered_groups": [
-              [
-                [
-                  "\\b(?:move|switch|change|reconsider|pause|stop|keep|choose|deploy)\\w*\\b"
+            "alternatives": [
+              {
+                "forbidden_patterns": [
+                  "\\b(?:fails|misses|exceeds|above|over)\\b"
                 ],
-                [
-                  "\\b(?:if|when|unless|only when)\\b"
+                "required_groups": [
+                  ["\\b(?:if|when|only when)\\b"],
+                  ["\\b(?:noon )?load test\\b"],
+                  ["\\b(?:passes|meets (?:its )?(?:p95 )?latency (?:target|threshold)|(?:keeps|reports|shows) (?:p95 )?latency (?:under|below|at most) 200\\s*ms)\\b"],
+                  ["\\b(?:move|switch|proceed|deploy)(?:\\s+\\w+){0,3}\\s+(?:full(?: deployment| rollout| release)?|everyone)\\b"]
                 ],
-                [
-                  "\\b(?:noon )?load test\\b"
-                ],
-                [
-                  "\\b(?:(?:p95 )?latency (?:target|threshold)|200\\s*ms|passes|fails|meets|misses|exceeds)\\b"
+                "ordered_groups": [
+                  [
+                    ["\\b(?:move|switch|proceed|deploy)(?:\\s+\\w+){0,3}\\s+(?:full(?: deployment| rollout| release)?|everyone)\\b"],
+                    ["\\b(?:if|when|only when)\\b"],
+                    ["\\b(?:noon )?load test\\b"],
+                    ["\\b(?:passes|meets (?:its )?(?:p95 )?latency (?:target|threshold)|(?:keeps|reports|shows) (?:p95 )?latency (?:under|below|at most) 200\\s*ms)\\b"]
+                  ],
+                  [
+                    ["\\b(?:if|when|only when)\\b"],
+                    ["\\b(?:noon )?load test\\b"],
+                    ["\\b(?:passes|meets (?:its )?(?:p95 )?latency (?:target|threshold)|(?:keeps|reports|shows) (?:p95 )?latency (?:under|below|at most) 200\\s*ms)\\b"],
+                    ["\\b(?:move|switch|proceed|deploy)(?:\\s+\\w+){0,3}\\s+(?:full(?: deployment| rollout| release)?|everyone)\\b"]
+                  ]
                 ]
-              ],
-              [
-                [
-                  "\\b(?:if|when|unless|only when)\\b"
+              },
+              {
+                "forbidden_patterns": [
+                  "\\b(?:passes|meets|under|below|at most)\\b"
                 ],
-                [
-                  "\\b(?:noon )?load test\\b"
+                "required_groups": [
+                  ["\\b(?:if|when)\\b"],
+                  ["\\b(?:noon )?load test\\b"],
+                  ["\\b(?:fails|misses|exceeds|(?:p95 )?latency (?:is |stays )?(?:above|over) 200\\s*ms)\\b"],
+                  ["\\b(?:keep|hold|remain with|stay with)(?:\\s+\\w+){0,2}\\s+(?:limited|staged) (?:release|rollout|deployment)\\b"]
                 ],
-                [
-                  "\\b(?:(?:p95 )?latency (?:target|threshold)|200\\s*ms|passes|fails|meets|misses|exceeds)\\b"
-                ],
-                [
-                  "\\b(?:move|switch|change|reconsider|pause|stop|keep|choose|deploy)\\w*\\b"
+                "ordered_groups": [
+                  [
+                    ["\\b(?:keep|hold|remain with|stay with)(?:\\s+\\w+){0,2}\\s+(?:limited|staged) (?:release|rollout|deployment)\\b"],
+                    ["\\b(?:if|when)\\b"],
+                    ["\\b(?:noon )?load test\\b"],
+                    ["\\b(?:fails|misses|exceeds|(?:p95 )?latency (?:is |stays )?(?:above|over) 200\\s*ms)\\b"]
+                  ],
+                  [
+                    ["\\b(?:if|when)\\b"],
+                    ["\\b(?:noon )?load test\\b"],
+                    ["\\b(?:fails|misses|exceeds|(?:p95 )?latency (?:is |stays )?(?:above|over) 200\\s*ms)\\b"],
+                    ["\\b(?:keep|hold|remain with|stay with)(?:\\s+\\w+){0,2}\\s+(?:limited|staged) (?:release|rollout|deployment)\\b"]
+                  ]
                 ]
-              ]
+              }
             ]
           }
         },
