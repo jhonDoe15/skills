@@ -45,7 +45,7 @@ function compile(pattern, field) {
 
 function removeProtectedSegments(output, protectedSegments) {
   return protectedSegments.reduce(
-    (prose, segment) => prose.split(segment).join(''),
+    (prose, { content }) => prose.split(content).join(''),
     output,
   );
 }
@@ -66,40 +66,148 @@ function protectedSegmentsFromPrompt(prompt) {
     throw new TypeError('evaluation prompt must be a string');
   }
   return [...prompt.matchAll(
-    /BEGIN PROTECTED\n([\s\S]*?)\nEND PROTECTED/g,
-  )].map((match) => match[1]);
+    /BEGIN PROTECTED ([A-Z]+)\r?\n([\s\S]*?)\r?\nEND PROTECTED \1/g,
+  )].map((match) => ({
+    category: match[1].toLocaleLowerCase('en'),
+    content: match[2],
+  }));
 }
 
-function routingChecks(invoked, expectation = {}) {
-  const expected = expectation.selected || [];
-  const exactMatch = JSON.stringify([...invoked].sort())
-    === JSON.stringify([...expected].sort());
-  const checks = [
-    check(
-      'selected routes exactly',
-      exactMatch,
-      exactMatch
-        ? 'matched'
-        : `expected=${JSON.stringify(expected)} observed=${JSON.stringify(invoked)}`,
-    ),
-  ];
-  for (const skill of expectation.selected || []) {
-    const selected = invoked.includes(skill);
-    checks.push(check(
-      `selected route ${skill}`,
-      selected,
-      selected ? 'selected' : 'not selected',
-    ));
+function matchesAny(value, patterns, field) {
+  if (!Array.isArray(patterns) || patterns.length === 0) {
+    throw new TypeError(`${field} must be a non-empty pattern array`);
   }
-  for (const skill of expectation.excluded || []) {
-    const selected = invoked.includes(skill);
-    checks.push(check(
-      `excluded route ${skill}`,
-      !selected,
-      selected ? 'selected' : 'not selected',
-    ));
+  return patterns.some((pattern, index) => (
+    compile(pattern, `${field}[${index}]`).test(value)
+  ));
+}
+
+function firstNonemptyBlock(output) {
+  return output.trimStart().split(/\r?\n\s*\r?\n/, 1)[0] || '';
+}
+
+function wordCount(value) {
+  return value.match(/[\p{L}\p{N}]+(?:[-'][\p{L}\p{N}]+)*/gu)?.length || 0;
+}
+
+function contentUnits(output) {
+  return output
+    .split(/\r?\n/)
+    .flatMap((line) => line.split(/(?<=[.!?])\s+/))
+    .map((unit) => unit.trim())
+    .filter(Boolean);
+}
+
+function gradeAnswerFirst(output, expectation) {
+  if (!expectation) return [];
+  const firstBlock = firstNonemptyBlock(output);
+  const topic = matchesAny(
+    firstBlock,
+    expectation.topic_patterns,
+    'answer_first.topic_patterns',
+  );
+  const answer = matchesAny(
+    firstBlock,
+    expectation.answer_patterns,
+    'answer_first.answer_patterns',
+  );
+  return [check(
+    'answer first',
+    topic && answer,
+    topic && answer
+      ? 'scenario answer appears in the first block'
+      : 'first block lacks the scenario topic or a concrete answer',
+  )];
+}
+
+function gradeAccountableActions(output, expectations = []) {
+  if (!Array.isArray(expectations)) {
+    throw new TypeError('accountable_actions must be an array');
   }
-  return checks;
+  const lines = output.split(/\r?\n/);
+  const usedLines = new Set();
+  return expectations.map((expectation, index) => {
+    if (!expectation || typeof expectation.name !== 'string') {
+      throw new TypeError(`accountable_actions[${index}] needs a name`);
+    }
+    const minimumWords = expectation.minimum_words || 4;
+    const lineIndex = lines.findIndex((line, candidateIndex) => (
+      !usedLines.has(candidateIndex)
+      && wordCount(line) >= minimumWords
+      && matchesAny(
+        line,
+        expectation.owner_patterns,
+        `accountable_actions[${index}].owner_patterns`,
+      )
+      && matchesAny(
+        line,
+        expectation.action_patterns,
+        `accountable_actions[${index}].action_patterns`,
+      )
+    ));
+    if (lineIndex !== -1) usedLines.add(lineIndex);
+    return check(
+      `accountable action ${expectation.name}`,
+      lineIndex !== -1,
+      lineIndex === -1
+        ? 'no distinct owner-and-action line found'
+        : `line ${lineIndex + 1}`,
+    );
+  });
+}
+
+function gradeDecisionSupport(output, expectation) {
+  if (!expectation) return [];
+  const units = contentUnits(output);
+  return [
+    ['recommendation', 'decision recommendation', 5],
+    ['basis', 'decision basis', 6],
+    ['material_uncertainty', 'decision material uncertainty', 4],
+    ['change_condition', 'decision change condition', 8],
+  ].map(([field, name, minimumWords]) => {
+    const groups = expectation[field];
+    if (!Array.isArray(groups) || groups.length === 0) {
+      throw new TypeError(`decision_support.${field} must contain pattern groups`);
+    }
+    const unitIndex = units.findIndex((unit) => (
+      wordCount(unit) >= minimumWords
+      && groups.every((patterns, index) => matchesAny(
+        unit,
+        patterns,
+        `decision_support.${field}[${index}]`,
+      ))
+    ));
+    return check(
+      name,
+      unitIndex !== -1,
+      unitIndex === -1
+        ? `no ${minimumWords}-word scenario-grounded statement`
+        : `statement ${unitIndex + 1}`,
+    );
+  });
+}
+
+function gradeProtectedSegments(output, protectedSegments, categories = []) {
+  if (!Array.isArray(categories)) {
+    throw new TypeError('protected_categories must be an array');
+  }
+  return categories.map((category, index) => {
+    if (typeof category !== 'string' || category.length === 0) {
+      throw new TypeError(`protected_categories[${index}] must be non-empty`);
+    }
+    const segments = protectedSegments.filter((segment) => (
+      segment.category === category
+    ));
+    const preserved = segments.length > 0
+      && segments.every(({ content }) => output.includes(content));
+    return check(
+      `protected ${category} unchanged`,
+      preserved,
+      preserved
+        ? `${segments.length} segment(s) preserved byte-for-byte`
+        : 'missing category or changed content',
+    );
+  });
 }
 
 function gradeHumanWritingResult({
@@ -119,19 +227,18 @@ function gradeHumanWritingResult({
       result.status === 'succeeded',
       `status=${result.status}`,
     ),
-    ...routingChecks(
-      result.observations.routing.invokedSkills,
-      caseDefinition.routing_expectation,
-    ),
     ...gradeRequiredTerms(output, deterministic.required_terms),
-    ...protectedSegments.map((segment, index) => {
-      const preserved = output.includes(segment);
-      return check(
-        `protected segment ${index + 1} unchanged`,
-        preserved,
-        preserved ? 'preserved' : 'changed or missing',
-      );
-    }),
+    ...gradeAnswerFirst(output, deterministic.answer_first),
+    ...gradeAccountableActions(
+      output,
+      deterministic.accountable_actions,
+    ),
+    ...gradeDecisionSupport(output, deterministic.decision_support),
+    ...gradeProtectedSegments(
+      output,
+      protectedSegments,
+      deterministic.protected_categories,
+    ),
     ...(deterministic.forbidden_patterns || []).map((pattern, index) => {
       const matched = compile(
         pattern,
@@ -167,103 +274,8 @@ function gradeHumanWritingResult({
   };
 }
 
-function routingObservation(output) {
-  try {
-    const value = JSON.parse(output);
-    if (value?.kind === 'to-humans-routing-observation') return value;
-  } catch {
-    // Human-facing responses are not expected to be JSON.
-  }
-  return null;
-}
-
-function normalizeDeliverables(deliverables) {
-  if (!Array.isArray(deliverables)) return null;
-  if (deliverables.some((deliverable) => (
-    !deliverable
-    || typeof deliverable.id !== 'string'
-    || typeof deliverable.primary_reader !== 'string'
-    || !Array.isArray(deliverable.outcomes)
-    || deliverable.outcomes.some((outcome) => typeof outcome !== 'string')
-  ))) {
-    return null;
-  }
-  return [...deliverables]
-    .map(({ id, primary_reader: primaryReader, outcomes }) => ({
-      id,
-      primary_reader: primaryReader,
-      outcomes: [...outcomes].sort(),
-    }))
-    .sort((left, right) => left.id.localeCompare(right.id));
-}
-
-function gradeRoutingResult({ trigger, caseDefinition, result }) {
-  validateEvaluationDefinition(trigger);
-  validateResult(result);
-  return gradeRoutingObservation({
-    caseDefinition,
-    status: result.status,
-    invokedSkills: result.observations.routing.invokedSkills,
-    output: outputFrom(result),
-  });
-}
-
-function gradeRoutingObservation({
-  caseDefinition,
-  status,
-  invokedSkills,
-  output,
-}) {
-  const expectation = caseDefinition.routing_expectation;
-  const checks = [
-    check(
-      'execution succeeded',
-      status === 'succeeded',
-      `status=${status}`,
-    ),
-    ...routingChecks(invokedSkills, expectation),
-  ];
-
-  if (expectation.deliverables) {
-    const observed = routingObservation(output);
-    const observedDeliverables = normalizeDeliverables(observed?.deliverables);
-    const expectedDeliverables = normalizeDeliverables(expectation.deliverables);
-    const deliverablesMatch = Boolean(observedDeliverables)
-      && JSON.stringify(observedDeliverables)
-        === JSON.stringify(expectedDeliverables);
-    checks.push(check(
-      'deliverables routed independently',
-      deliverablesMatch,
-      deliverablesMatch ? 'matched' : 'missing or mismatched routing observation',
-    ));
-  }
-  return {
-    passed: checks.every(({ passed }) => passed),
-    checks,
-  };
-}
-
-function gradeRoutingEvidence({ trigger, caseDefinition, evidence }) {
-  validateEvaluationDefinition(trigger);
-  if (
-    !evidence?.execution
-    || !evidence.execution.routing
-    || evidence.case_id !== caseDefinition.id
-  ) {
-    throw new TypeError('routing evidence must match the evaluated case');
-  }
-  return gradeRoutingObservation({
-    caseDefinition,
-    status: evidence.execution.status,
-    invokedSkills: evidence.execution.routing.invoked_skills,
-    output: evidence.execution.output,
-  });
-}
-
 module.exports = {
   gradeHumanWritingResult,
-  gradeRoutingEvidence,
-  gradeRoutingResult,
   loadDefinitions,
   protectedSegmentsFromPrompt,
 };

@@ -16,16 +16,19 @@ Claude Code and Cursor. The same cases and graders apply to either Adapter.
 Host-specific setup, discovery events, execution, and cleanup stay in the
 shared Adapters.
 
-`evals/index.js` grades normalized observations. It checks exact observed
-routing, requested-item preservation, structural minimums, protected work
-products, forbidden prose signals, and the no-em-dash rule. Semantic phrasing
-stays with blind judgment. Qualitative judge dimensions cover reader fit,
-completeness, decision quality, and contextual voice.
+The shared v2 trigger grader consumes exact normalized Skill lifecycle events.
+Package inventory, resolved dependency closure, generic tool use, output prose,
+and case identifiers cannot satisfy activation. Owner-local deterministic
+grading checks requested-item preservation, answer-first ordering, distinct
+accountable actions, scenario-grounded decision fields, structural minimums,
+protected code, schema, data, and quotes, forbidden prose signals, and the
+no-em-dash rule. It does not require canned headings or exact prose.
 
-The fixtures under `test/fixtures/` are dependency and Primary-selection
-tracers only. They contain no production behavior, are not named `SKILL.md`,
-and enter only temporary test packages. Trigger cases run through the shared
-trigger seam before owner-local grading of the retained routing evidence.
+The fixture under `test/fixtures/` is a dependency tracer only. It contains no
+production behavior, is not named `SKILL.md`, and enters only temporary test
+packages. Explicit normalized lifecycle fixtures test the v2 grader and
+Adapter contract. They do not prove semantic prompt routing. That evidence
+requires later adoption campaigns through real hosts.
 
 Run the local contract tests with:
 
@@ -33,5 +36,6 @@ Run the local contract tests with:
 node --test skills/to-humans/test/to-humans.test.js
 ```
 
-These static and fixture checks do not constitute adoption evidence. Paid or
-credentialed host campaigns remain part of the suite-wide adoption work.
+These static and contract-fixture checks do not constitute adoption evidence.
+Paid or credentialed host campaigns remain part of the suite-wide adoption
+work.

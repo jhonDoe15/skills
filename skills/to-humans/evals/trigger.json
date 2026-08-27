@@ -45,10 +45,8 @@
       ],
       "covers": ["audience-routing"],
       "should_trigger": true,
-      "routing_expectation": {
-        "selected": ["writing-foundation", "to-humans"],
-        "excluded": ["agent-writing", "skill-writing", "take-it-offline"]
-      }
+      "case_category": "positive",
+      "required_skill_loads": ["writing-foundation"]
     },
     {
       "id": "requested-prose",
@@ -62,10 +60,8 @@
       ],
       "covers": ["audience-routing"],
       "should_trigger": true,
-      "routing_expectation": {
-        "selected": ["writing-foundation", "to-humans"],
-        "excluded": ["agent-writing", "skill-writing", "take-it-offline"]
-      }
+      "case_category": "positive",
+      "required_skill_loads": ["writing-foundation"]
     },
     {
       "id": "canonical-direct",
@@ -79,10 +75,9 @@
       ],
       "covers": ["audience-routing"],
       "should_trigger": true,
-      "routing_expectation": {
-        "selected": ["writing-foundation", "to-humans"],
-        "excluded": []
-      }
+      "case_category": "canonical",
+      "canonical_invocation": true,
+      "required_skill_loads": ["writing-foundation"]
     },
     {
       "id": "human-engineering-guidance",
@@ -97,21 +92,11 @@
       ],
       "covers": ["primary-co-selection", "audience-routing"],
       "should_trigger": true,
-      "routing_expectation": {
-        "selected": [
-          "engineering-guidance",
-          "writing-foundation",
-          "to-humans"
-        ],
-        "excluded": [],
-        "deliverables": [
-          {
-            "id": "guidance",
-            "primary_reader": "human",
-            "outcomes": ["engineering-guidance", "to-humans"]
-          }
-        ]
-      }
+      "case_category": "audience-primary",
+      "required_skill_loads": [
+        "writing-foundation",
+        "engineering-guidance"
+      ]
     },
     {
       "id": "agent-handoff",
@@ -125,14 +110,7 @@
       ],
       "covers": ["agent-facing-exclusion"],
       "should_trigger": false,
-      "routing_expectation": {
-        "selected": [
-          "writing-foundation",
-          "agent-writing",
-          "take-it-offline"
-        ],
-        "excluded": ["to-humans"]
-      }
+      "case_category": "negative"
     },
     {
       "id": "agent-skill-package",
@@ -147,16 +125,7 @@
       ],
       "covers": ["agent-facing-exclusion"],
       "should_trigger": false,
-      "routing_expectation": {
-        "selected": [
-          "writing-foundation",
-          "agent-writing",
-          "skill-evaluation",
-          "skill-mechanics",
-          "skill-writing"
-        ],
-        "excluded": ["to-humans"]
-      }
+      "case_category": "negative"
     },
     {
       "id": "mixed-reader-deliverables",
@@ -171,27 +140,12 @@
       ],
       "covers": ["mixed-reader-routing", "agent-facing-exclusion"],
       "should_trigger": true,
-      "routing_expectation": {
-        "selected": [
-          "writing-foundation",
-          "to-humans",
-          "agent-writing",
-          "take-it-offline"
-        ],
-        "excluded": [],
-        "deliverables": [
-          {
-            "id": "status",
-            "primary_reader": "human",
-            "outcomes": ["to-humans"]
-          },
-          {
-            "id": "handoff",
-            "primary_reader": "agent",
-            "outcomes": ["take-it-offline"]
-          }
-        ]
-      }
+      "case_category": "mixed",
+      "required_skill_loads": [
+        "writing-foundation",
+        "agent-writing",
+        "take-it-offline"
+      ]
     },
     {
       "id": "ambiguous-reader",
@@ -206,10 +160,8 @@
       ],
       "covers": ["audience-routing", "mixed-reader-routing"],
       "should_trigger": true,
-      "routing_expectation": {
-        "selected": ["writing-foundation", "to-humans"],
-        "excluded": ["agent-writing", "skill-writing", "take-it-offline"]
-      }
+      "case_category": "ambiguous",
+      "required_skill_loads": ["writing-foundation"]
     },
     {
       "id": "non-prose-false-activation",
@@ -223,10 +175,7 @@
       ],
       "covers": ["non-prose-fidelity"],
       "should_trigger": false,
-      "routing_expectation": {
-        "selected": [],
-        "excluded": ["to-humans"]
-      }
+      "case_category": "negative"
     },
     {
       "id": "private-dependency-false-activation",
@@ -240,10 +189,7 @@
       ],
       "covers": ["private-dependency-false-activation"],
       "should_trigger": false,
-      "routing_expectation": {
-        "selected": [],
-        "excluded": ["writing-foundation", "to-humans"]
-      }
+      "case_category": "negative"
     }
   ]
 }

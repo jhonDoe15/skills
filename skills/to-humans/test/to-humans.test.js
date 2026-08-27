@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -14,25 +15,21 @@ const {
 } = require('../../../suite');
 const {
   createCampaignManifest,
+  gradeTriggerResult,
   runComponentEvaluation,
   runMatchedEvaluation,
   runTriggerEvaluation,
   validateEvaluationDefinition,
 } = require('../../../suite/evaluation');
-const { defineTestAdapter } = require('../../../suite/testing');
+const {
+  defineTestAdapter,
+  executeTest,
+} = require('../../../suite/testing');
 const {
   gradeHumanWritingResult,
-  gradeRoutingEvidence,
-  gradeRoutingResult,
   loadDefinitions,
   protectedSegmentsFromPrompt,
 } = require('../evals');
-const {
-  PRIMARY_TRACER_NAMES,
-  SUPPORT_TRACER_NAMES,
-  routingTraceFor,
-  tracerSkillDocument,
-} = require('./fixtures/routing-tracers');
 
 const repositoryRoot = path.resolve(__dirname, '..', '..', '..');
 const fixtureRoot = path.join(__dirname, 'fixtures');
@@ -43,18 +40,33 @@ const foundationFixturePath = path.join(
 
 function normalizedResult({
   output,
-  invokedSkills,
-  discoveredSkills = invokedSkills,
+  packageSkills = ['to-humans', 'writing-foundation'],
+  resolvedSkills = ['writing-foundation', 'to-humans'],
+  skillEvents = [],
   model = 'test-model',
   toolUses = [],
 }) {
+  const digest = (value) => createHash('sha256').update(value).digest('hex');
   return {
     status: 'succeeded',
     observations: {
-      discoveredSkills,
+      packageSkills,
+      hostAvailableSkills: null,
+      preExecutionInventory: {
+        skillDefinitions: resolvedSkills.map((name) => ({
+          name,
+          path: `.fixture/skills/${name}/SKILL.md`,
+          digest: digest(`fixture:${name}`),
+        })),
+        plugins: [],
+        ruleSources: [],
+        packageDigest: digest(packageSkills.join('\0')),
+        truncated: false,
+      },
+      skillEvents,
       routing: {
         requestedSkill: 'to-humans',
-        invokedSkills,
+        resolvedSkills,
       },
       responses: [{ text: output }],
       artifacts: [],
@@ -71,21 +83,39 @@ function normalizedResult({
   };
 }
 
+function fixtureSkillEvent(name, {
+  operation = 'load',
+  status = 'succeeded',
+  trigger = 'model',
+  callId = `fixture-${name}`,
+  host = 'fixture',
+} = {}) {
+  return {
+    name,
+    operation,
+    status,
+    trigger,
+    callId,
+    provenance: {
+      host,
+      mechanism: 'explicit-contract-fixture',
+      eventType: 'fixture.skill-lifecycle',
+      observerVersion: 'fixture-v2',
+      runId: 'fixture-run',
+      statusSource: 'observed',
+    },
+  };
+}
+
 function copySkillIntoPackage(packageRoot, skillName, sourcePath) {
   const skillDirectory = path.join(packageRoot, 'skills', skillName);
   fs.mkdirSync(skillDirectory, { recursive: true });
   fs.copyFileSync(sourcePath, path.join(skillDirectory, 'SKILL.md'));
 }
 
-function writeSkillIntoPackage(packageRoot, skillName, contents) {
-  const skillDirectory = path.join(packageRoot, 'skills', skillName);
-  fs.mkdirSync(skillDirectory, { recursive: true });
-  fs.writeFileSync(path.join(skillDirectory, 'SKILL.md'), contents);
-}
-
 function createPackageFixture(
   t,
-  { includeFoundation = true, includeRoutingTracers = false } = {},
+  { includeFoundation = true } = {},
 ) {
   const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'to-humans-package-'));
   t.after(() => fs.rmSync(packageRoot, { recursive: true, force: true }));
@@ -107,18 +137,6 @@ function createPackageFixture(
       'writing-foundation',
       foundationFixturePath,
     );
-  }
-  if (includeRoutingTracers) {
-    for (const skillName of [
-      ...PRIMARY_TRACER_NAMES,
-      ...SUPPORT_TRACER_NAMES,
-    ]) {
-      writeSkillIntoPackage(
-        packageRoot,
-        skillName,
-        tracerSkillDocument(skillName),
-      );
-    }
   }
   return packageRoot;
 }
@@ -144,40 +162,6 @@ function manifestFor(definition, host = 'claude-code') {
     limitations: [
       'Test fixtures prove contracts without making an adoption claim.',
     ],
-  });
-}
-
-function runRoutingCase({
-  packageRoot,
-  trigger,
-  caseDefinition,
-  host,
-  changeTrace = (trace) => trace,
-}) {
-  const manifest = manifestFor(trigger, host);
-  return runTriggerEvaluation({
-    repositoryRoot: packageRoot,
-    manifest,
-    definition: trigger,
-    caseDefinition,
-    cell: manifest.cells[0],
-    repetition: 1,
-    async execute({ cell, packageDefinition }) {
-      const trace = changeTrace(routingTraceFor(caseDefinition.id));
-      return normalizedResult({
-        invokedSkills: trace.invokedSkills,
-        discoveredSkills: packageDefinition.skills.map(({ name }) => name),
-        model: cell.model,
-        toolUses: trace.invokedSkills.includes('to-humans')
-          ? [{ name: 'Skill', outcome: 'invoked to-humans tracer' }]
-          : [],
-        output: JSON.stringify({
-          kind: 'to-humans-routing-observation',
-          selected: trace.invokedSkills,
-          deliverables: trace.deliverables,
-        }),
-      });
-    },
   });
 }
 
@@ -253,8 +237,11 @@ test('complete production closure invokes only To Humans and Foundation', async 
     async execute(invocation, context) {
       return normalizedResult({
         output: 'Approve option A.\n\nBasis: It meets the stated deadline.',
-        invokedSkills: context.resolvedSkills,
-        discoveredSkills: context.discoveredSkills,
+        packageSkills: [...context.packageSkills],
+        resolvedSkills: [...context.resolvedSkills],
+        skillEvents: context.resolvedSkills.map((name) => (
+          fixtureSkillEvent(name)
+        )),
         model: invocation.model,
       });
     },
@@ -271,10 +258,14 @@ test('complete production closure invokes only To Humans and Foundation', async 
     },
   });
 
-  assert.deepEqual(result.observations.routing.invokedSkills, [
+  assert.deepEqual(result.observations.routing.resolvedSkills, [
     'writing-foundation',
     'to-humans',
   ]);
+  assert.deepEqual(
+    result.observations.skillEvents.map(({ name }) => name),
+    ['writing-foundation', 'to-humans'],
+  );
 });
 
 test('test-only Foundation fixture stays outside package construction', (t) => {
@@ -316,6 +307,47 @@ test('owner-local definitions cover every To Humans contract layer', () => {
   });
 
   const trigger = definitionFor(definitions, 'trigger');
+  const expectedRoutingCases = {
+    'ordinary-human-reply': 'positive',
+    'requested-prose': 'positive',
+    'canonical-direct': 'canonical',
+    'human-engineering-guidance': 'audience-primary',
+    'agent-handoff': 'negative',
+    'agent-skill-package': 'negative',
+    'mixed-reader-deliverables': 'mixed',
+    'ambiguous-reader': 'ambiguous',
+    'non-prose-false-activation': 'negative',
+    'private-dependency-false-activation': 'negative',
+  };
+  assert.deepEqual(
+    Object.fromEntries(trigger.evals.map(({ id, case_category: category }) => (
+      [id, category]
+    ))),
+    expectedRoutingCases,
+  );
+  trigger.evals.forEach((caseDefinition) => {
+    assert.equal(
+      Object.hasOwn(caseDefinition, 'routing_expectation'),
+      false,
+      `${caseDefinition.id} must not encode a synthetic expected route`,
+    );
+  });
+  assert.equal(
+    trigger.evals.find(({ id }) => id === 'canonical-direct')
+      .canonical_invocation,
+    true,
+  );
+  assert.deepEqual(
+    trigger.evals.find(({ id }) => id === 'human-engineering-guidance')
+      .required_skill_loads,
+    ['writing-foundation', 'engineering-guidance'],
+  );
+  assert.deepEqual(
+    trigger.evals.find(({ id }) => id === 'mixed-reader-deliverables')
+      .required_skill_loads,
+    ['writing-foundation', 'agent-writing', 'take-it-offline'],
+  );
+
   const exactTriggerCoverage = {
     'non-prose-false-activation': ['non-prose-fidelity'],
     'private-dependency-false-activation': [
@@ -354,6 +386,10 @@ test('owner-local definitions cover every To Humans contract layer', () => {
     'mixed-reader-routing',
     'writing-foundation-edge',
     'matched-no-skill-control',
+    'code-fidelity',
+    'schema-fidelity',
+    'data-fidelity',
+    'quoted-source-fidelity',
   ]) {
     assert.equal(covered.has(clause), true, `missing contract clause ${clause}`);
   }
@@ -363,7 +399,6 @@ test('deterministic writing grader accepts alternate wording and keeps hard gate
   const role = definitionFor(loadDefinitions(), 'role');
   const caseDefinition = role.evals.find(({ id }) => id === 'human-status');
   const result = normalizedResult({
-    invokedSkills: ['writing-foundation', 'to-humans'],
     output: [
       'A limited rollout is the safest move today.',
       '',
@@ -398,24 +433,114 @@ test('deterministic writing grader accepts alternate wording and keeps hard gate
   assertFailedCheck(failed, 'no em dash in prose');
 });
 
+test('deterministic writing grader requires distinct accountable actions', () => {
+  const role = definitionFor(loadDefinitions(), 'role');
+  const caseDefinition = role.evals.find(({ id }) => id === 'human-status');
+  const contentFree = normalizedResult({
+    output: [
+      'Start a staged rollout today.',
+      '',
+      'Release.',
+      'Support.',
+      'Security.',
+      '',
+      'Rollback is verified. Peak traffic is untested.',
+    ].join('\n'),
+  });
+
+  const grade = gradeHumanWritingResult({
+    evaluationDefinition: role,
+    caseDefinition,
+    result: contentFree,
+  });
+  assert.equal(grade.passed, false);
+  assertFailedCheck(grade, 'accountable action release');
+  assertFailedCheck(grade, 'accountable action support');
+  assertFailedCheck(grade, 'accountable action security');
+});
+
+test('decision gates accept unlabeled alternate prose and reject hollow probes', () => {
+  const role = definitionFor(loadDefinitions(), 'role');
+  const caseDefinition = role.evals.find(({ id }) => id === 'decision-support');
+  const alternate = normalizedResult({
+    output: [
+      'Use a limited release today.',
+      '',
+      'Verified rollback and a small first cohort contain exposure.',
+      '',
+      'We have not yet exercised peak traffic.',
+      '',
+      'Move to a full deployment only when the noon load test meets its latency target.',
+    ].join('\n'),
+  });
+
+  const passing = gradeHumanWritingResult({
+    evaluationDefinition: role,
+    caseDefinition,
+    result: alternate,
+  });
+  assert.equal(passing.passed, true, JSON.stringify(passing, null, 2));
+
+  const detailFirst = structuredClone(alternate);
+  detailFirst.observations.responses[0].text = [
+    'Verified rollback and a small first cohort contain exposure.',
+    '',
+    'Use a limited release today.',
+    '',
+    'We have not yet exercised peak traffic.',
+    '',
+    'Move to a full deployment only when the noon load test meets its latency target.',
+  ].join('\n');
+  const detailFirstGrade = gradeHumanWritingResult({
+    evaluationDefinition: role,
+    caseDefinition,
+    result: detailFirst,
+  });
+  assert.equal(detailFirstGrade.passed, false);
+  assertFailedCheck(detailFirstGrade, 'answer first');
+
+  const hollow = structuredClone(alternate);
+  hollow.observations.responses[0].text = [
+    'Use staged rollout.',
+    'Verified rollback contain.',
+    'Peak traffic untested.',
+    'When load test move.',
+  ].join('\n');
+  const hollowGrade = gradeHumanWritingResult({
+    evaluationDefinition: role,
+    caseDefinition,
+    result: hollow,
+  });
+  assert.equal(hollowGrade.passed, false);
+  for (const checkName of [
+    'decision recommendation',
+    'decision basis',
+    'decision change condition',
+  ]) {
+    assertFailedCheck(hollowGrade, checkName);
+  }
+});
+
 test('deterministic writing grader preserves protected non-prose exactly', () => {
   const role = definitionFor(loadDefinitions(), 'role');
   const caseDefinition = role.evals.find(({ id }) => id === 'protected-content');
   const protectedSegments = protectedSegmentsFromPrompt(caseDefinition.prompt);
   assert.equal(Object.hasOwn(caseDefinition, 'protected_segments'), false);
-  assert.equal(protectedSegments.length, 2);
-  protectedSegments.forEach((segment) => {
-    assert.equal(caseDefinition.prompt.includes(segment), true);
+  assert.deepEqual(
+    protectedSegments.map(({ category }) => category),
+    ['code', 'schema', 'data', 'quote'],
+  );
+  protectedSegments.forEach(({ content }) => {
+    assert.equal(caseDefinition.prompt.includes(content), true);
   });
   const output = [
-    'Use the payload unchanged.',
+    'Use the supplied artifacts unchanged.',
     '',
-    ...protectedSegments,
+    ...protectedSegments.map(({ content }) => content),
     '',
     'Owner: API maintainers verify the sample before publication.',
   ].join('\n');
   const result = normalizedResult({
-    invokedSkills: ['writing-foundation', 'to-humans'],
     output,
   });
 
@@ -426,126 +551,153 @@ test('deterministic writing grader preserves protected non-prose exactly', () =>
   });
   assert.equal(grade.passed, true, JSON.stringify(grade, null, 2));
 
-  const changed = structuredClone(result);
-  changed.observations.responses[0].text = output.replace(
-    '"retry-count": 3',
-    '"retryCount": 3',
-  );
-  const failed = gradeHumanWritingResult({
-    evaluationDefinition: role,
-    caseDefinition,
-    result: changed,
-  });
-  assert.equal(failed.passed, false);
-  assertFailedCheck(failed, 'protected segment 1 unchanged');
-});
-
-test('routing cases use the trigger seam and grade exact observed routing', async (t) => {
-  const trigger = definitionFor(loadDefinitions(), 'trigger');
-  const packageRoot = createPackageFixture(t, { includeRoutingTracers: true });
-
-  for (const host of ['claude-code', 'cursor']) {
-    for (const caseDefinition of trigger.evals) {
-      const evidence = await runRoutingCase({
-        packageRoot,
-        trigger,
-        caseDefinition,
-        host,
-      });
-      const grade = gradeRoutingEvidence({
-        trigger,
-        caseDefinition,
-        evidence,
-      });
-      assert.equal(
-        evidence.deterministic.passed,
-        true,
-        `${host}/${caseDefinition.id}: shared trigger seam failed`,
-      );
-      assert.equal(
-        grade.passed,
-        true,
-        `${host}/${caseDefinition.id}: ${JSON.stringify(grade, null, 2)}`,
-      );
-    }
+  const corruptions = {
+    code: ['return payload.retry_count;', 'return payload.retryCount;'],
+    schema: ['"minimum":1', '"minimum":0'],
+    data: ['"retry-count": 3', '"retryCount": 3'],
+    quote: ['preserve this punctuation.', 'change this punctuation!'],
+  };
+  for (const [category, [before, after]] of Object.entries(corruptions)) {
+    const changed = structuredClone(result);
+    changed.observations.responses[0].text = output.replace(before, after);
+    const failed = gradeHumanWritingResult({
+      evaluationDefinition: role,
+      caseDefinition,
+      result: changed,
+    });
+    assert.equal(failed.passed, false, category);
+    assertFailedCheck(failed, `protected ${category} unchanged`);
   }
-
-  const suite = loadCanonicalSuite(repositoryRoot);
-  assert.equal(
-    suite.runtimeEdges.some(({ consumer, dependency }) => (
-      (consumer === 'to-humans' && dependency === 'engineering-guidance')
-      || (consumer === 'engineering-guidance' && dependency === 'to-humans')
-    )),
-    false,
-  );
 });
 
-test('routing evidence rejects overactivation and missing Primary co-selection', async (t) => {
+test('exact v2 trigger grader uses explicit lifecycle contract fixtures', () => {
   const trigger = definitionFor(loadDefinitions(), 'trigger');
-  const packageRoot = createPackageFixture(t, { includeRoutingTracers: true });
   const positive = trigger.evals.find(({ id }) => id === 'ordinary-human-reply');
-  const overactivated = await runRoutingCase({
-    packageRoot,
-    trigger,
-    caseDefinition: positive,
-    host: 'cursor',
-    changeTrace(trace) {
-      trace.invokedSkills.push('agent-writing');
-      return trace;
-    },
-  });
-  const overactivationGrade = gradeRoutingEvidence({
-    trigger,
-    caseDefinition: positive,
-    evidence: overactivated,
-  });
-  assert.equal(overactivationGrade.passed, false);
-  assertFailedCheck(overactivationGrade, 'selected routes exactly');
-
-  const coSelection = trigger.evals.find(({ id }) => (
-    id === 'human-engineering-guidance'
-  ));
-  const missingPrimary = await runRoutingCase({
-    packageRoot,
-    trigger,
-    caseDefinition: coSelection,
-    host: 'claude-code',
-    changeTrace(trace) {
-      trace.invokedSkills = trace.invokedSkills.filter(
-        (skill) => skill !== 'engineering-guidance',
-      );
-      trace.deliverables[0].outcomes = ['to-humans'];
-      return trace;
-    },
-  });
-  const coSelectionGrade = gradeRoutingEvidence({
-    trigger,
-    caseDefinition: coSelection,
-    evidence: missingPrimary,
-  });
-  assert.equal(coSelectionGrade.passed, false);
-  assertFailedCheck(coSelectionGrade, 'selected routes exactly');
-  assertFailedCheck(coSelectionGrade, 'deliverables routed independently');
-});
-
-test('routing grader fails malformed deliverable evidence without throwing', () => {
-  const trigger = definitionFor(loadDefinitions(), 'trigger');
-  const mixed = trigger.evals.find(({ id }) => id === 'mixed-reader-deliverables');
-  const result = normalizedResult({
-    invokedSkills: mixed.routing_expectation.selected,
-    output: JSON.stringify({
-      kind: 'to-humans-routing-observation',
-      deliverables: 'not-an-array',
+  const grade = (caseDefinition, skillEvents) => gradeTriggerResult({
+    definition: trigger,
+    caseDefinition,
+    result: normalizedResult({
+      output: 'Lifecycle contract fixture.',
+      skillEvents,
     }),
   });
 
-  const grade = gradeRoutingResult({
-    trigger,
-    caseDefinition: mixed,
-    result,
+  const exactTargetAndDependency = [
+    fixtureSkillEvent('to-humans'),
+    fixtureSkillEvent('writing-foundation'),
+  ];
+  assert.equal(grade(positive, exactTargetAndDependency).passed, true);
+  assert.equal(
+    grade(positive, [fixtureSkillEvent('writing-foundation')]).passed,
+    false,
+    'a wrong Skill cannot substitute for the target',
+  );
+  assert.equal(
+    grade(positive, [fixtureSkillEvent('to-humans')]).passed,
+    false,
+    'an omitted required dependency must fail',
+  );
+  assert.equal(
+    grade(positive, []).passed,
+    false,
+    'omitted lifecycle evidence must fail',
+  );
+
+  const negative = trigger.evals.find(({ id }) => (
+    id === 'non-prose-false-activation'
+  ));
+  assert.equal(
+    grade(negative, [fixtureSkillEvent('writing-foundation')]).passed,
+    true,
+    'sibling lifecycle remains visible on a negative case',
+  );
+  assert.equal(
+    grade(negative, [fixtureSkillEvent('to-humans', {
+      operation: 'select',
+      status: 'rejected',
+    })]).passed,
+    false,
+    'any target attempt is overactivation on a negative case',
+  );
+
+  const coLoading = trigger.evals.find(({ id }) => (
+    id === 'human-engineering-guidance'
+  ));
+  assert.equal(grade(coLoading, [
+    fixtureSkillEvent('engineering-guidance'),
+    fixtureSkillEvent('writing-foundation'),
+    fixtureSkillEvent('to-humans'),
+  ]).passed, true);
+  assert.equal(grade(coLoading, exactTargetAndDependency).passed, false);
+
+  const invalidEvidence = normalizedResult({
+    output: 'Invalid lifecycle fixture.',
+    skillEvents: [{
+      ...fixtureSkillEvent('to-humans'),
+      status: 'completed',
+    }],
   });
-  assert.equal(grade.passed, false);
-  assertFailedCheck(grade, 'deliverables routed independently');
+  assert.throws(
+    () => gradeTriggerResult({
+      definition: trigger,
+      caseDefinition: positive,
+      result: invalidEvidence,
+    }),
+    /skillEvents\[0\]\.status is invalid/,
+  );
+});
+
+test('contract fixtures validate v2 campaigns through either Adapter', async (t) => {
+  const trigger = definitionFor(loadDefinitions(), 'trigger');
+  const caseDefinition = trigger.evals.find(({ id }) => (
+    id === 'ordinary-human-reply'
+  ));
+  const packageRoot = createPackageFixture(t);
+
+  for (const host of ['claude-code', 'cursor']) {
+    const manifest = manifestFor(trigger, host);
+    const adapter = defineTestAdapter({
+      name: `${host}-lifecycle-contract-fixture`,
+      async execute(invocation, context) {
+        return normalizedResult({
+          output: 'Explicit lifecycle contract fixture.',
+          packageSkills: [...context.packageSkills],
+          resolvedSkills: [...context.resolvedSkills],
+          model: invocation.model,
+          skillEvents: [
+            fixtureSkillEvent('writing-foundation', { host }),
+            fixtureSkillEvent('to-humans', { host }),
+          ],
+        });
+      },
+    });
+    const result = await executeTest({
+      repositoryRoot: packageRoot,
+      adapter,
+      invocation: {
+        requestId: `${host}-contract-fixture`,
+        skill: 'to-humans',
+        prompt: caseDefinition.prompt,
+        model: manifest.cells[0].model,
+      },
+    });
+    const evidence = await runTriggerEvaluation({
+      repositoryRoot: packageRoot,
+      manifest,
+      definition: trigger,
+      caseDefinition,
+      cell: manifest.cells[0],
+      repetition: 1,
+      execute: async () => result,
+    });
+
+    assert.equal(evidence.schema_version, 2);
+    assert.equal(evidence.deterministic.passed, true);
+    assert.deepEqual(
+      evidence.execution.skill_events.map(({ name }) => name),
+      ['writing-foundation', 'to-humans'],
+    );
+  }
 });
 
 test('Foundation component ablation runs through either test Adapter', async (t) => {
@@ -558,8 +710,11 @@ test('Foundation component ablation runs through either test Adapter', async (t)
       name: `${host}-foundation-ablation`,
       async execute(invocation, context) {
         return normalizedResult({
-          invokedSkills: context.resolvedSkills,
-          discoveredSkills: context.discoveredSkills,
+          packageSkills: [...context.packageSkills],
+          resolvedSkills: [...context.resolvedSkills],
+          skillEvents: context.resolvedSkills.map((name) => (
+            fixtureSkillEvent(name, { host })
+          )),
           model: invocation.model,
           output: context.dependencyAblation
             ? 'Test-only ablation trace.'
@@ -592,11 +747,11 @@ test('Foundation component ablation runs through either test Adapter', async (t)
       ['treatment', 'component-ablation'],
     );
     assert.deepEqual(
-      evidence[0].execution.routing.invoked_skills,
+      evidence[0].execution.routing.resolved_skills,
       ['writing-foundation', 'to-humans'],
     );
     assert.deepEqual(
-      evidence[1].execution.routing.invoked_skills,
+      evidence[1].execution.routing.resolved_skills,
       ['to-humans'],
     );
   }
@@ -616,18 +771,27 @@ test('complete outcome retains a matched No-Skill control', async (t) => {
     async executeArm({ arm, cell }) {
       return normalizedResult({
         model: cell.model,
-        invokedSkills: arm === 'treatment'
+        packageSkills: arm === 'treatment'
+          ? ['to-humans', 'writing-foundation']
+          : [],
+        resolvedSkills: arm === 'treatment'
           ? ['writing-foundation', 'to-humans']
           : [],
-        discoveredSkills: arm === 'treatment'
-          ? ['to-humans', 'writing-foundation']
+        skillEvents: arm === 'treatment'
+          ? [
+            fixtureSkillEvent('writing-foundation'),
+            fixtureSkillEvent('to-humans'),
+          ]
           : [],
         output: arm === 'treatment'
           ? [
-            'A staged rollout is the safer approach.',
-            'Limiting the first cohort caps exposure.',
+            'Use a staged rollout today.',
+            '',
+            'Verified rollback and the limited first cohort cap exposure.',
+            '',
             'Peak traffic remains untested.',
-            'Pause the rollout if load testing fails.',
+            '',
+            'Switch to a full deployment when the noon load test meets its latency target.',
           ].join('\n')
           : 'There are several options to consider.',
       });

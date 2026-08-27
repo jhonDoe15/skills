@@ -40,7 +40,7 @@
     {
       "id": "complete-human-decision",
       "name": "complete human-facing deployment decision",
-      "prompt": "Recommend a deployment approach to the release owner. Include the basis, the untested condition that matters, and what result would change the recommendation.",
+      "prompt": "Recommend a deployment approach to the release owner. A staged rollout has verified rollback and a limited first cohort. Peak traffic remains untested, and the noon load test will report latency. Include the basis, the untested condition that matters, and what result would change the recommendation.",
       "expected_output": "The treatment provides a complete human-facing decision with its canonical dependency, while the matched No-Skill control receives the same scenario without writing Skills.",
       "files": [],
       "expectations": [
@@ -57,11 +57,52 @@
         "requested-breadth",
         "no-em-dash"
       ],
-      "routing_expectation": {
-        "selected": ["writing-foundation", "to-humans"],
-        "excluded": []
-      },
       "deterministic": {
+        "answer_first": {
+          "topic_patterns": [
+            "\\b(?:staged|limited|full) (?:release|rollout|deployment)\\b"
+          ],
+          "answer_patterns": [
+            "\\b(?:recommend|choose|prefer|use|start|proceed|safer|safest|hold|delay)\\b"
+          ]
+        },
+        "decision_support": {
+          "recommendation": [
+            [
+              "\\b(?:staged|limited|full) (?:release|rollout|deployment)\\b"
+            ],
+            [
+              "\\b(?:recommend|choose|prefer|use|start|proceed|safer|safest|hold|delay)\\b"
+            ]
+          ],
+          "basis": [
+            [
+              "\\b(?:verified rollback|rollback (?:is|was) verified|limited first cohort|small first cohort)\\b"
+            ],
+            [
+              "\\b(?:contain|cap|limit|reduce|because|since|protect)\\w*\\b"
+            ]
+          ],
+          "material_uncertainty": [
+            [
+              "\\bpeak (?:traffic|demand|load)\\b"
+            ],
+            [
+              "\\b(?:untested|unknown|uncertain|not (?:yet )?(?:tested|exercised|known))\\b"
+            ]
+          ],
+          "change_condition": [
+            [
+              "\\b(?:if|when|unless|only when)\\b"
+            ],
+            [
+              "\\b(?:load test|latency (?:result|target)|error rate)\\b"
+            ],
+            [
+              "\\b(?:move|switch|change|reconsider|pause|stop|choose|deploy)\\w*\\b"
+            ]
+          ]
+        },
         "minimum_nonempty_lines": 4,
         "forbidden_patterns": [],
         "no_em_dash": true

@@ -40,7 +40,7 @@
     {
       "id": "human-status",
       "name": "human project status with complete actions",
-      "prompt": "Write a status reply for an experienced release lead. Recommend whether to start a staged rollout today and preserve separate requested actions for release, support, and security owners.",
+      "prompt": "Write a status reply for an experienced release lead. Rollback is verified, but peak demand remains untested. Recommend whether to start a staged rollout today and preserve separate requested actions for release, support, and security owners.",
       "expected_output": "The answer appears first, all three requested owner actions remain visible, the basis follows, and the prose is direct and easy to scan.",
       "files": [],
       "expectations": [
@@ -60,15 +60,51 @@
         "concrete-attribution",
         "no-em-dash"
       ],
-      "routing_expectation": {
-        "selected": ["writing-foundation", "to-humans"],
-        "excluded": []
-      },
       "deterministic": {
         "required_terms": [
           {"name": "requested item release", "term": "release"},
           {"name": "requested item support", "term": "support"},
           {"name": "requested item security", "term": "security"}
+        ],
+        "answer_first": {
+          "topic_patterns": [
+            "\\b(?:staged|limited|canary) rollout\\b"
+          ],
+          "answer_patterns": [
+            "\\b(?:start|proceed|approve|use|choose|delay|hold|pause|safer|safest)\\b"
+          ]
+        },
+        "accountable_actions": [
+          {
+            "name": "release",
+            "owner_patterns": [
+              "\\brelease(?: engineering| lead| owner)?\\b"
+            ],
+            "action_patterns": [
+              "\\b(?:starts?|stages?|deploys?|rolls? out|approves?|coordinates?)\\b"
+            ],
+            "minimum_words": 4
+          },
+          {
+            "name": "support",
+            "owner_patterns": [
+              "\\b(?:customer )?support(?: team| lead| owner)?\\b"
+            ],
+            "action_patterns": [
+              "\\b(?:confirms?|prepares?|notifies?|publishes?|monitors?|opens?)\\b"
+            ],
+            "minimum_words": 4
+          },
+          {
+            "name": "security",
+            "owner_patterns": [
+              "\\bsecurity(?: team| lead| owner)?\\b"
+            ],
+            "action_patterns": [
+              "\\b(?:verifies?|checks?|reviews?|confirms?|expires?|approves?)\\b"
+            ],
+            "minimum_words": 4
+          }
         ],
         "minimum_nonempty_lines": 4,
         "forbidden_patterns": [],
@@ -78,7 +114,7 @@
     {
       "id": "decision-support",
       "name": "decision support with bounded recommendation",
-      "prompt": "Recommend one of two deployment options to an engineering manager. Include the basis, material uncertainty, and the evidence that would change the recommendation.",
+      "prompt": "Recommend one of two deployment options to an engineering manager. A limited release uses a verified rollback and a small first cohort; a full deployment reaches everyone at once. Peak traffic remains untested, and the noon load test will report latency. Include the basis, material uncertainty, and the evidence that would change the recommendation.",
       "expected_output": "The response states one recommendation, its basis, material uncertainty, and a concrete condition that would change it.",
       "files": [],
       "expectations": [
@@ -88,11 +124,52 @@
         "The response says what could change the recommendation."
       ],
       "covers": ["decision-support", "answer-first", "concrete-attribution"],
-      "routing_expectation": {
-        "selected": ["writing-foundation", "to-humans"],
-        "excluded": []
-      },
       "deterministic": {
+        "answer_first": {
+          "topic_patterns": [
+            "\\b(?:limited|staged|full) (?:release|rollout|deployment)\\b"
+          ],
+          "answer_patterns": [
+            "\\b(?:recommend|choose|prefer|use|start|proceed|safer|safest|hold|delay)\\b"
+          ]
+        },
+        "decision_support": {
+          "recommendation": [
+            [
+              "\\b(?:limited|staged|full) (?:release|rollout|deployment)\\b"
+            ],
+            [
+              "\\b(?:recommend|choose|prefer|use|start|proceed|safer|safest|hold|delay)\\b"
+            ]
+          ],
+          "basis": [
+            [
+              "\\b(?:verified rollback|rollback (?:is|was) verified|small first cohort|limited first cohort)\\b"
+            ],
+            [
+              "\\b(?:contain|cap|limit|reduce|because|since|protect)\\w*\\b"
+            ]
+          ],
+          "material_uncertainty": [
+            [
+              "\\bpeak (?:traffic|demand|load)\\b"
+            ],
+            [
+              "\\b(?:untested|unknown|uncertain|not (?:yet )?(?:tested|exercised|known))\\b"
+            ]
+          ],
+          "change_condition": [
+            [
+              "\\b(?:if|when|unless|only when)\\b"
+            ],
+            [
+              "\\b(?:load test|latency (?:result|target)|error rate)\\b"
+            ],
+            [
+              "\\b(?:move|switch|change|reconsider|pause|stop|choose|deploy)\\w*\\b"
+            ]
+          ]
+        },
         "minimum_nonempty_lines": 4,
         "forbidden_patterns": [],
         "no_em_dash": true
@@ -101,7 +178,7 @@
     {
       "id": "neutral-record",
       "name": "neutral incident record without invented opinion",
-      "prompt": "Record the supplied incident facts for a post-incident timeline. Do not recommend remediation or add an opinion.",
+      "prompt": "Record these supplied incident facts for a post-incident timeline: at 09:10 the release lead paused deployment; at 09:14 the security owner confirmed the signing key was unchanged; at 09:18 the support owner opened incident INC-42. Do not recommend remediation or add an opinion.",
       "expected_output": "The record preserves the facts and accountable attribution without manufacturing a recommendation.",
       "files": [],
       "expectations": [
@@ -110,11 +187,13 @@
         "The record does not manufacture a recommendation."
       ],
       "covers": ["neutral-record", "concrete-attribution"],
-      "routing_expectation": {
-        "selected": ["writing-foundation", "to-humans"],
-        "excluded": []
-      },
       "deterministic": {
+        "required_terms": [
+          {"name": "release fact", "term": "release"},
+          {"name": "security fact", "term": "security"},
+          {"name": "support fact", "term": "support"},
+          {"name": "incident identifier", "term": "INC-42"}
+        ],
         "forbidden_patterns": [
           "\\bI recommend\\b",
           "^Recommendation:",
@@ -126,7 +205,7 @@
     {
       "id": "contextual-voice",
       "name": "personal note retains contextual voice",
-      "prompt": "Revise my first-person note to remove filler while retaining its candid voice and uneven sentence rhythm.",
+      "prompt": "Revise my first-person note to remove filler while retaining its candid voice and uneven sentence rhythm. Source note: \"I want us to move fast. I also don't trust the noon numbers yet, and honestly, that bothers me.\"",
       "expected_output": "The revision is direct but still sounds like a candid first-person note rather than a standardized corporate template.",
       "files": [],
       "expectations": [
@@ -136,10 +215,6 @@
         "The prose contains no em dash."
       ],
       "covers": ["contextual-voice", "plain-wording", "no-em-dash"],
-      "routing_expectation": {
-        "selected": ["writing-foundation", "to-humans"],
-        "excluded": []
-      },
       "deterministic": {
         "forbidden_patterns": [
           "\\bIt is important to note that\\b",
@@ -151,7 +226,7 @@
     {
       "id": "protected-content",
       "name": "non-prose and quoted source remain unchanged",
-      "prompt": "Explain the supplied payload to a person. Preserve each segment between marker lines exactly in your response.\n\nBEGIN PROTECTED\n{\"retry-count\": 3, \"note\": \"keep—exact\"}\nEND PROTECTED\n\nBEGIN PROTECTED\n\"Quoted source — preserve this punctuation.\"\nEND PROTECTED",
+      "prompt": "Explain the supplied artifacts to a person. Preserve each category between its marker lines exactly in your response.\n\nBEGIN PROTECTED CODE\nfunction retryCount(payload) {\n  return payload.retry_count;\n}\nEND PROTECTED CODE\n\nBEGIN PROTECTED SCHEMA\n{\"type\":\"integer\",\"minimum\":1}\nEND PROTECTED SCHEMA\n\nBEGIN PROTECTED DATA\n{\"retry-count\": 3, \"note\": \"keep—exact\"}\nEND PROTECTED DATA\n\nBEGIN PROTECTED QUOTE\n\"Quoted source — preserve this punctuation.\"\nEND PROTECTED QUOTE",
       "expected_output": "The explanation is human-facing prose while protected code, schema, data, and quoted source material remain byte-for-byte unchanged.",
       "files": [],
       "expectations": [
@@ -159,12 +234,25 @@
         "Every protected segment remains unchanged.",
         "Human-writing rules do not alter punctuation inside protected content."
       ],
-      "covers": ["non-prose-fidelity", "answer-first", "no-em-dash"],
-      "routing_expectation": {
-        "selected": ["writing-foundation", "to-humans"],
-        "excluded": []
-      },
+      "covers": [
+        "non-prose-fidelity",
+        "code-fidelity",
+        "schema-fidelity",
+        "data-fidelity",
+        "quoted-source-fidelity",
+        "answer-first",
+        "no-em-dash"
+      ],
       "deterministic": {
+        "answer_first": {
+          "topic_patterns": [
+            "\\b(?:artifacts?|payload|examples?|inputs?)\\b"
+          ],
+          "answer_patterns": [
+            "\\b(?:use|keep|preserve|unchanged|valid|invalid)\\b"
+          ]
+        },
+        "protected_categories": ["code", "schema", "data", "quote"],
         "forbidden_patterns": [],
         "no_em_dash": true
       }
