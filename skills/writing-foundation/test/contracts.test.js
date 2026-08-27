@@ -264,11 +264,11 @@ test('writing-foundation rejects conflicting literals and invented concurrency',
   const adversarialOutputs = [
     `${validOutput}\nFallback policy: {"maxAttempts":4}.`,
     `${validOutput}\nFallback policy: {"maxAttempts": 7}.`,
-    `${validOutput}\nUntil the owner responds, use a cap of 8.`,
+    `${validOutput}\nUntil the owner responds, use a concurrency cap of 8.`,
     `${validOutput}\nRun no more than 12 at once.`,
     `${validOutput}\nParallelism ceiling: 6.`,
     `${validOutput}\nThrottle deployments to 9 concurrent tickets.`,
-    `${validOutput}\nUse a batch size of 5.`,
+    `${validOutput}\nUse a deployment batch size of 5.`,
     `${validOutput}\nAllow 7 deployments in flight.`,
   ];
   assert.deepEqual(
@@ -285,6 +285,42 @@ test('writing-foundation rejects conflicting literals and invented concurrency',
     validNumberUses.map((output) => grade(output).passed),
     validNumberUses.map(() => true),
     'unrelated or explicitly rejected numbers must remain valid',
+  );
+});
+
+test('writing-foundation scopes numeric limits and their negation', () => {
+  const definition = readJson('evals/role.json');
+  const caseDefinition = definition.evals[0];
+  const validOutput = fs.readFileSync(
+    path.join(skillRoot, 'evals', 'fixtures', 'role-output.md'),
+    'utf8',
+  );
+  const grade = (suffix) => gradeDeterministicOutput({
+    definition,
+    caseDefinition,
+    output: `${validOutput}\n${suffix}`,
+  }).passed;
+
+  const validProbes = [
+    'No concurrency cap of 8 is authorized.',
+    'Concurrency remains unresolved; the storage-retention cap is 8 days.',
+    'Do not invent concurrency; storage retention has a cap of 8 days.',
+  ];
+  const corruptProbes = [
+    'Do not remove uncertainty; set a concurrency cap of 8.',
+    'Concurrency cap of 8.',
+    'Do not remove `DAG frontier`; fallback policy is {"maxAttempts":4}.',
+    'Do not remove source wording; allow 7 deployments in flight.',
+  ];
+  assert.deepEqual(
+    {
+      valid: validProbes.map(grade),
+      corrupt: corruptProbes.map(grade),
+    },
+    {
+      valid: validProbes.map(() => true),
+      corrupt: corruptProbes.map(() => false),
+    },
   );
 });
 

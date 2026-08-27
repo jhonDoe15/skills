@@ -45,15 +45,11 @@
   "global_order": [],
   "forbidden_patterns": [
     "Historical background: the legacy deployer used a weekly batch window that does not control this deployment\\.",
-    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*concurrency limit\\s+(?:is|=)\\s*\\d+",
-    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\"maxAttempts\"\\s*:\\s*(?!3\\s*[},])\\d+",
-    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b(?:cap|ceiling|maximum|max)\\s*(?:of|is|=|:)?\\s*\\d+\\b",
-    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\bno more than\\s+\\d+\\b",
-    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b(?:parallelism|concurrency)\\b.*\\b\\d+\\b",
-    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b(?:throttle|limit|restrict)\\b.*\\b\\d+\\b.*\\b(?:concurrent|parallel|at once)\\b",
-    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b\\d+\\s+(?:concurrent|in parallel|at once)\\b",
-    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\bbatch size\\s*(?:of|is|=|:)?\\s*\\d+\\b",
-    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b\\d+\\s+(?:deployments?\\s+)?in flight\\b",
+    "(?<!do not use )(?<!don't use )(?<!never use )(?<!must not use )\\{\\s*\"maxAttempts\"\\s*:\\s*(?!3\\s*[},])\\d+\\s*\\}",
+    "(?<!no )(?<!without )\\b(?:concurrency|parallelism)\\b[^.;]*\\b(?:cap|limit|ceiling|max(?:imum)?)\\b\\s*(?:is|=|:)\\s*\\d+\\b",
+    "(?<!no )(?<!do not invent )(?<!do not invent a )(?<!don't invent )(?<!don't invent a )(?<!never set )(?<!never set a )(?<!must not set )(?<!must not set a )\\b(?:concurrency|parallelism)\\b[^.;]*\\b(?:cap|limit|ceiling|max(?:imum)?)\\b\\s+of\\s+\\d+\\b",
+    "(?<!do not )(?<!don't )(?<!never )(?<!must not )(?<!or )\\b(?:use|set|apply|enforce|allow|run|process|throttle|restrict)\\b[^.;]*\\b(?:concurrency|parallelism|concurrent|at once|in parallel|in flight|deployments?|deployment batch|tickets?)\\b[^.;]*\\b\\d+\\b",
+    "(?<!do not )(?<!don't )(?<!never )(?<!must not )(?<!or )\\b(?:use|set|apply|enforce|allow|run|process|throttle|restrict)\\b[^.;]*\\b\\d+\\b[^.;]*\\b(?:concurrent|at once|in parallel|in flight|deployments?|tickets?)\\b",
     "\\b(?:customer-friendly|executive voice|Skill routing|fresh-context handoff)\\b"
   ],
   "judge": {

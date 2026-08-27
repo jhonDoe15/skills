@@ -62,13 +62,16 @@
     ["aw-completion"]
   ],
   "forbidden_patterns": [
-    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b(?:if|when|on|for)\\b.*\\b(?:valid|success|successful|succeeds|succeeded|passing)\\b.*\\b(?:recovery|recover|rollback|repair|remediation|troubleshoot(?:ing)?|diagnostic|failure[- ](?:handling|steps|guide|playbook|procedure|instructions)|incident (?:repair|response))\\b",
-    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b(?:recovery|recover|rollback|repair|remediation|troubleshoot(?:ing)?|diagnostic|failure[- ](?:handling|steps|guide|playbook|procedure|instructions)|incident (?:repair|response))\\b.*\\b(?:if|when|on|for)\\b.*\\b(?:valid|success|successful|succeeds|succeeded|passing)\\b",
-    "^(?!.*\\b(?:never|not|without|read-only)\\b).*\\b(?:modify|write|edit|replace|delete)\\b.*deploy-plan\\.json",
-    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b(?:cache|persist|store|save|write|copy)\\b.*\\b(?:environment|schema command)\\b",
-    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\\b(?:environment|schema command)\\b.*\\b(?:cache|persist|store|save|write|copy)\\b",
-    "^(?!.*\\b(?:do not|don't|never|must not|without)\\b).*\"maxAttempts\"\\s*:\\s*(?!3\\s*[},])\\d+",
-    "schema command\\s*(?:is|=|:)\\s*`?[^`\\s]+"
+    "\\b(?:if|when|on|for)\\b[^.;]*\\b(?:valid|success|successful|succeeds|succeeded|passing)\\b[^.;]*(?<!do not )(?<!don't )(?<!never )(?<!must not )(?<!or )\\b(?:consult|open|load|preload|follow|use|read|include|attach|provide|run|apply|invoke)\\b[^.;]*\\b(?:recovery|rollback|repair|remediation|troubleshoot(?:ing)?|diagnostic|failure[- ](?:handling|steps|guide|playbook|procedure|instructions)|incident (?:repair|response))\\b",
+    "(?<!do not )(?<!don't )(?<!never )(?<!must not )(?<!or )\\b(?:consult|open|load|preload|follow|use|read|include|attach|provide|run|apply|invoke)\\b[^.;]*\\b(?:recovery|rollback|repair|remediation|troubleshoot(?:ing)?|diagnostic|failure[- ](?:handling|steps|guide|playbook|procedure|instructions)|incident (?:repair|response))\\b[^.;]*\\b(?:if|when|on|for)\\b[^.;]*\\b(?:valid|success|successful|succeeds|succeeded|passing)\\b",
+    "\\b(?:if|when|on|for)\\b[^.;]*\\b(?:valid|success|successful|succeeds|succeeded|passing)\\b[^.;]*(?<!no )\\b(?:recovery|rollback|repair|remediation|troubleshoot(?:ing)?|diagnostic)\\b[^.;]*\\b(?:applies|applicable|available|belongs|used)\\b",
+    "(?<!no )\\b(?:recovery|rollback|repair|remediation|troubleshoot(?:ing)?|diagnostic)\\b[^.;]*\\b(?:applies|applicable|available|belongs|used)\\b[^.;]*\\b(?:if|when|on|for)\\b[^.;]*\\b(?:valid|success|successful|succeeds|succeeded|passing)\\b",
+    "(?<!do not )(?<!don't )(?<!never )(?<!must not )(?<!or )\\b(?:modify|write|edit|replace|delete|overwrite|mutate)\\b[^.;]*\\b(?:deploy-plan\\.json|input)\\b",
+    "(?<!do not )(?<!don't )(?<!never )(?<!must not )(?<!or )\\b(?:cache|persist|store|save|write|copy|retain)\\b[^.;]*\\b(?:environment|schema command)\\b",
+    "\\b(?:environment|schema command)\\b[^.;]*(?<!do not )(?<!don't )(?<!never )(?<!must not )(?<!or )\\b(?:cache|persist|store|save|write|copy|retain)\\b",
+    "\\b(?:environment|schema command)\\b[^.;]*\\b(?:is|must be|should be|gets?)\\s*(?<!not )(?<!never )\\b(?:cached|persisted|stored|saved|written|copied|retained)\\b",
+    "(?<!do not use )(?<!don't use )(?<!never use )(?<!must not use )\\{\\s*\"maxAttempts\"\\s*:\\s*(?!3\\s*[},])\\d+\\s*\\}",
+    "schema command\\s*(?:is|=|:)\\s*(?!not\\b|never\\b|unavailable\\b)`?[^`\\s]+"
   ],
   "judge": {
     "score_range": [0, 2],

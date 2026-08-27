@@ -735,3 +735,42 @@ test('Agent Writing outcome rejects conflicting and polarity-reversed guidance',
     'negative or failure-scoped guidance must remain valid',
   );
 });
+
+test('Agent Writing outcome scopes negation to each semantic predicate', () => {
+  const definition = loadDefinition('agent-writing', 'outcome.json');
+  const caseDefinition = definition.evals[0];
+  const validOutput = fs.readFileSync(
+    path.join(skillRoot, 'evals', 'fixtures', 'outcome-output.md'),
+    'utf8',
+  );
+  const grade = (suffix) => gradeDeterministicOutput({
+    definition,
+    caseDefinition,
+    output: `${validOutput}\n${suffix}`,
+  }).passed;
+
+  const validProbes = [
+    'No recovery procedure applies when validation succeeds.',
+    'If validation is valid, no recovery procedure applies; if invalid, consult the recovery guide.',
+    'Do not modify the input; if validation is valid, do not consult recovery guidance.',
+    'The environment schema command is not cached or persisted.',
+  ];
+  const corruptProbes = [
+    'Do not modify the input; emergency retries use {"maxAttempts":4}.',
+    'Do not modify the input; if validation is valid, consult the recovery guide.',
+    'Recovery procedure applies when validation succeeds.',
+    'Do not modify the input; cache the environment-provided schema command.',
+    'Never edit deploy-plan.json; write the schema command from the environment to local state.',
+    'Do not modify the input; the environment schema command is cached locally.',
+  ];
+  assert.deepEqual(
+    {
+      valid: validProbes.map(grade),
+      corrupt: corruptProbes.map(grade),
+    },
+    {
+      valid: validProbes.map(() => true),
+      corrupt: corruptProbes.map(() => false),
+    },
+  );
+});
