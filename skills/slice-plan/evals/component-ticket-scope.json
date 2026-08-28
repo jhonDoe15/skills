@@ -1,0 +1,52 @@
+{
+  "skill_name": "slice-plan",
+  "version": 1,
+  "evaluation": {
+    "scope": "slice-plan-to-ticket-scope",
+    "layer": "component",
+    "skill": "slice-plan",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment", "component-ablation"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "slice-plan-ticket-scope-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "candidate-quality",
+        "description": "Blindly compare whether the complete consumer uses bounded candidate judgments to produce independently verifiable vertical slices or concrete prerequisites and rejects a convenience foundation. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "ownership-boundary",
+        "description": "Assess whether Slice Plan retains set-level reconciliation while Ticket Scope contributes only one-candidate judgments. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "bounded-judgments-improve-set",
+      "name": "candidate-scope-component",
+      "prompt": "Decompose settled account time-zone requirements into one-context tickets. Candidate proposals include a shared-interface foundation with no direct consumer-visible or prerequisite result, a schema prerequisite, and an API vertical slice. Return a ready internal plan without tracker writes.",
+      "expected_output": "The complete consumer invokes Ticket Scope for bounded judgments, rejects the convenience foundation, and reconciles the candidate set into complete independently verifiable tickets.",
+      "files": [],
+      "expectations": [
+        "Both arms receive the same neutral planning task; only the Ticket Scope dependency load differs.",
+        "The blind judge assesses candidate quality and responsibility boundaries rather than exact wording.",
+        "Missing production dependencies are not component controls.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks the candidate seams."
+      ],
+      "covered_clauses": ["sp-ticket-scope-edge"],
+      "ablated_dependency": "ticket-scope"
+    }
+  ]
+}

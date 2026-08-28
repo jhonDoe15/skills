@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jhonDoe15.github.io/skills/schemas/slice-plan-v1.json",
+  "title": "Slice Plan ready plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "status",
+    "migration_strategy",
+    "requirements",
+    "coverage_ledger",
+    "tickets",
+    "initial_frontier"
+  ],
+  "properties": {
+    "schema": {
+      "const": "slice-plan/v1"
+    },
+    "status": {
+      "const": "ready"
+    },
+    "migration_strategy": {
+      "const": "normal"
+    },
+    "requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "text"],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "text": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    },
+    "coverage_ledger": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["requirement_id", "disposition", "ticket_ids", "reason"],
+        "properties": {
+          "requirement_id": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "disposition": {
+            "enum": ["covered", "excluded"]
+          },
+          "ticket_ids": {
+            "$ref": "#/$defs/uniqueStrings"
+          },
+          "reason": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    },
+    "tickets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "outcome",
+          "shape",
+          "in_scope",
+          "out_of_scope",
+          "acceptance",
+          "validation",
+          "replaces",
+          "blockers",
+          "consumes",
+          "collisions"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "title": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "outcome": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "shape": {
+            "enum": ["vertical", "prerequisite"]
+          },
+          "in_scope": {
+            "$ref": "#/$defs/nonEmptyUniqueStrings"
+          },
+          "out_of_scope": {
+            "$ref": "#/$defs/nonEmptyUniqueStrings"
+          },
+          "acceptance": {
+            "$ref": "#/$defs/nonEmptyUniqueStrings"
+          },
+          "validation": {
+            "$ref": "#/$defs/nonEmptyUniqueStrings"
+          },
+          "replaces": {
+            "$ref": "#/$defs/uniqueStrings"
+          },
+          "blockers": {
+            "$ref": "#/$defs/uniqueStrings"
+          },
+          "consumes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ticket_id", "output"],
+              "properties": {
+                "ticket_id": {
+                  "$ref": "#/$defs/nonEmptyString"
+                },
+                "output": {
+                  "$ref": "#/$defs/nonEmptyString"
+                }
+              }
+            }
+          },
+          "collisions": {
+            "$ref": "#/$defs/uniqueStrings"
+          }
+        }
+      }
+    },
+    "initial_frontier": {
+      "$ref": "#/$defs/nonEmptyUniqueStrings"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "uniqueStrings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "nonEmptyUniqueStrings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    }
+  }
+}

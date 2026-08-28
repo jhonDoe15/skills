@@ -1,0 +1,99 @@
+{
+  "skill_name": "carve",
+  "version": 1,
+  "evaluation": {
+    "scope": "carve-outcome",
+    "layer": "outcome",
+    "skill": "carve",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "carve-outcome-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "ready-plan-quality",
+        "description": "Semantically assess exhaustive coverage, natural one-context ticket seams, observable vertical outcomes or genuine prerequisites, normal migration metadata, direct blockers, and frontier correctness. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "publication-integrity",
+        "description": "Semantically assess whether authorized publication creates every planned ticket and direct blocker, reads them back, reports partial failures exactly, and never implies dispatch authority. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "authorized-ordinary-publication",
+      "name": "publish-complete-normal-migration-dag",
+      "prompt": "/carve\n\nThe supplied account time-zone requirements are settled. Use the normal migration strategy and publish the resulting tickets to the named sandbox tracker. Publication of only the validated tickets, direct blockers, and collision metadata is authorized. Dispatch and all repository or PR changes are not authorized.",
+      "expected_output": "A complete validated ready plan followed by publication of every planned ticket and only its direct native blockers, read-back evidence, and the observed initial frontier, with no dispatch.",
+      "files": [],
+      "publication_authorized": true,
+      "required_skill_loads": [
+        "carve",
+        "slice-plan",
+        "ticket-scope",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "Every source requirement is covered or deliberately excluded with no silent omission.",
+        "Tickets are independently verifiable vertical slices or genuine concrete prerequisites and each fits one fresh context.",
+        "Ticket shape and normal migration strategy remain separate.",
+        "Every published blocker represents direct concrete-output consumption; the graph is acyclic, transitively minimal, and yields the reported initial frontier.",
+        "The tracker read-back accounts for every planned ticket and direct blocker; any partial write is reported as failure rather than publication success.",
+        "Publication does not authorize or invoke dispatch, implementation, branches, pull requests, or issue closure.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks ticket independence and publication fidelity."
+      ],
+      "covered_clauses": [
+        "cv-ready-plan",
+        "cv-coverage",
+        "cv-ticket-quality",
+        "cv-normal-migration",
+        "cv-direct-dag",
+        "cv-publication",
+        "cv-read-back",
+        "cv-no-dispatch"
+      ]
+    },
+    {
+      "id": "assessment-no-publication",
+      "name": "assess-complete-plan-without-writes",
+      "prompt": "/carve\n\nThe account time-zone requirements are settled. Produce and assess the complete normal-migration plan. Do not publish or mutate the tracker.",
+      "expected_output": "A complete validated ready plan with coverage, tickets, blockers, collisions, and frontier, plus explicit evidence that no tracker write occurred.",
+      "files": [],
+      "publication_authorized": false,
+      "required_skill_loads": [
+        "carve",
+        "slice-plan",
+        "ticket-scope",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "The same complete plan contract applies without publication.",
+        "The run performs no tracker or later-workflow mutation.",
+        "The response distinguishes ready from published.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks plan quality and write absence."
+      ],
+      "covered_clauses": [
+        "cv-ready-plan",
+        "cv-assessment-no-write",
+        "cv-authority-separation"
+      ]
+    }
+  ]
+}
