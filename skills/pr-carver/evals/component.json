@@ -1,0 +1,59 @@
+{
+  "skill_name": "pr-carver",
+  "version": 1,
+  "evaluation": {
+    "scope": "pr-carver-to-ticket-scope",
+    "layer": "component",
+    "skill": "pr-carver",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment", "component-ablation"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "pr-carver-ticket-scope-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "dependency-contribution",
+        "description": "Blindly compare whether canonical Ticket Scope contributes bounded fit, split, combine, or flag judgments with concrete seams and validation for every proposed PR unit. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "consumer-ownership",
+        "description": "Assess whether PR Carver retains topology, migration ordering, collision serialization, and read-only authority without copying or recreating Ticket Scope behavior in the ablated arm. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "ticket-scope-ablation",
+      "name": "canonical Ticket Scope component",
+      "prompt": "Assess an existing expand-contract branch containing a compatible schema expansion, an API consumer, and a later contraction. Recommend PR topology from the supplied evidence without mutating any repository or pull request.",
+      "expected_output": "The treatment loads Ticket Scope and returns bounded unit judgments before topology; the test-only ablation exposes the missing contribution without copied fit, split, combine, or flag behavior.",
+      "files": [
+        "test/fixtures/pr-carver/expand-contract.json",
+        "test/fixtures/pr-carver/assessment-adapter.js"
+      ],
+      "expectations": [
+        "The treatment loads ticket-scope by canonical name before recommending topology.",
+        "The component control removes only the pr-carver to ticket-scope runtime edge.",
+        "The test-only Adapter supplies canned observations and contains no copied Ticket Scope judgment behavior.",
+        "Missing production dependency failure remains a separate package-closure case.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks the dependency contribution."
+      ],
+      "covered_clauses": [
+        "pc-ticket-scope-edge",
+        "pc-no-ticket-scope-copy"
+      ],
+      "ablated_dependency": "ticket-scope"
+    }
+  ]
+}

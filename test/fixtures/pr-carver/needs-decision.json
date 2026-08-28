@@ -1,0 +1,23 @@
+{
+  "schema": "pr-carver-assessment/v1",
+  "status": "needs-decision",
+  "subject": {
+    "kind": "branch",
+    "identity": "fixture/contradictory-prerequisites",
+    "base": "fixture/main"
+  },
+  "units": [],
+  "ordering_edges": [],
+  "collisions": [],
+  "structure": "needs-decision",
+  "flags": [
+    {
+      "decision": "Resolve whether the account API is compatible before the schema migration lands.",
+      "owner": "account API and persistence maintainers"
+    }
+  ],
+  "authorization": {
+    "mode": "assessment-only",
+    "allowed_mutations": []
+  }
+}

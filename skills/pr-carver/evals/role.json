@@ -1,0 +1,65 @@
+{
+  "skill_name": "pr-carver",
+  "version": 1,
+  "evaluation": {
+    "scope": "pr-carver-role",
+    "layer": "role",
+    "skill": "pr-carver",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "pr-carver-role-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "bounded-topology",
+        "description": "Semantically assess whether the response recommends bounded PR units and direct ordering from concrete prerequisites, natural mergeable seams, migration treatment, and collision metadata rather than mechanical size. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "read-only-authority",
+        "description": "Semantically assess whether assessment remains read-only and keeps every repository, branch, pull-request, publication, and tracker mutation behind separate operation-and-target authorization. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "existing-branch-read-only-topology",
+      "name": "existing branch topology assessment",
+      "prompt": "Assess the supplied account-time-zone branch for PR topology. The diff contains independently verifiable API and documentation outcomes plus one schema prerequisite. Use the supplied normal migration metadata and shared-schema collision record. Return an assessment only; no mutation is authorized.",
+      "expected_output": "A bounded read-only assessment that uses Ticket Scope for each candidate, proposes mergeable PR units, records only concrete direct ordering, and keeps collision serialization separate from dependencies.",
+      "files": [
+        "test/fixtures/pr-carver/normal-parallel.json"
+      ],
+      "required_skill_loads": [
+        "pr-carver",
+        "ticket-scope"
+      ],
+      "expectations": [
+        "Every proposed PR unit has a bounded Ticket Scope judgment and independently observable validation.",
+        "Ordering follows named consumed outputs while the shared-schema collision remains non-directional serialization metadata.",
+        "File count, diff size, directory boundaries, and a fixed PR count do not determine the recommendation.",
+        "No repository, branch, pull-request, publication, or tracker mutation is attempted.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks topology quality and authority boundaries."
+      ],
+      "covered_clauses": [
+        "pc-bounded-assessment",
+        "pc-ticket-scope-edge",
+        "pc-natural-seams",
+        "pc-direct-edges",
+        "pc-collision-separation",
+        "pc-read-only"
+      ]
+    }
+  ]
+}
