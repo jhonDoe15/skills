@@ -7,7 +7,7 @@ Agent Skills including these documented planning surfaces:
 - **`slice-plan`** — private set-level decomposition loaded by Carve.
 - **`/carve`** — explicitly invoked to turn settled requirements into a ready ticket DAG.
 - **`pr-carver`** — model-invoked PR size and structure guidance for parallel and stacked pull requests.
-- **`/dispatch-work`** — explicitly invoked to run an already-sized tracker in parallel and carry each piece through implementation, review, and PR approval.
+- **`/dispatch-work`** — explicitly invoked to run an authorized published ticket DAG through moving parallel Take Ticket frontiers.
 - **`/incident-investigation`** — explicitly invoked, investigation-only guidance for evidence-led production incident and hard-to-localize bug analysis.
 
 Lean and pr-carver are selected automatically by the model when their
@@ -39,10 +39,11 @@ The repository layout supports both installers: each skill lives under
 `skills/<name>/SKILL.md`, while `.claude-plugin/` exposes the tree as one
 Claude Code marketplace plugin.
 
-The workflow skills reference companion skills when their branches are used:
-`/to-tickets`, `/to-spec`, `/wayfinder`, `/implement`, `/code-review`,
-`/handoff`, and `/autopilot`. Install those separately in the host that runs
-the workflows.
+The workflow skills reference companion skills when their branches are used.
+Dispatch Work requires the canonical Take Ticket (`take-ticket`) and Take It
+Offline (`take-it-offline`) skills. Other workflows may also require
+`/to-tickets`, `/to-spec`, `/wayfinder`, `/implement`, `/code-review`, or
+`/autopilot`; install those separately in the host that runs the workflows.
 
 ### Upgrading from hook/card releases
 
@@ -98,18 +99,18 @@ requires confirmation; branch and PR mutations always require authorization.
 
 ## `/dispatch-work` — run the tracker
 
-Dispatch-work takes an already-carved tracker and keeps a small batch of
-independent pieces in flight. Each piece is implemented, independently
-reviewed, and babysat through PR approval in separate subagent contexts.
-Invoking it again resumes from live tracker, branch, and PR state.
+Dispatch Work consumes explicit execution authorization and a published ready
+ticket DAG. It starts each independent eligible ticket through canonical Take
+Ticket, then advances dependencies and starts newly unblocked tickets on each
+complete authoritative reviewed-ticket completion event without waiting for
+unrelated work. Completed-frontier synthesis consumes compact implementation
+handoffs and Review briefs without repeating per-ticket review.
 
 Invoke `/dispatch-work` explicitly.
 
-Carve and dispatch-work use the repository model policy when one exists.
-Otherwise they read `subagent.model` and `subagent.effort` from the active
-`lean.config.json`. Those values apply to every implementation, review, and
-PR-babysitting spawn; there is no routing ladder. Lean, ticket-scope, and
-pr-carver do not read that config.
+Carve uses the repository model policy when one exists. Otherwise it reads
+`subagent.model` and `subagent.effort` from the active `lean.config.json`.
+Lean, ticket-scope, and pr-carver do not read that config.
 
 ## `/incident-investigation` — isolate incident causes
 

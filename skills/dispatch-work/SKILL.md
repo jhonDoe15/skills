@@ -1,93 +1,177 @@
 ---
 name: dispatch-work
-description: Run an already-sized tracker — a few tickets in parallel (default 3), each on the configured main-tier sub-agent that builds with /implement, gets an independent /code-review, then babysits its PR to approval; resumable, so re-invoking picks each ticket up at its current checkpoint. The main session never implements. Invoke explicitly.
+description: Use only when explicitly authorized to run a published ready ticket DAG through moving parallel Take Ticket frontiers and aggregate synthesis. Excludes planning, per-ticket implementation or review, tracker and PR topology changes, and release work.
 disable-model-invocation: true
 ---
 
-# Dispatch-work
+# Dispatch Work
 
-You have a **sized tracker** — tickets each cut to fit one main-tier sub-agent, with files, acceptance, blocking edges, and collision coordination (shared file or state, from `/carve`). Dispatch-work runs the crew: it keeps a few independent tickets in flight at once, each on a main-tier sub-agent that builds with **`/implement`**, gives the diff an **independent review**, and **babysits** the resulting PR to approval. It dispatches and verifies; it never builds.
+Run one authorized published ticket DAG through concurrent Take Ticket
+lifecycles. Compute and advance the DAG frontier whenever an authoritative
+ticket completion arrives; never impose a fixed stage barrier.
 
-Like `/carve`, it runs only when you invoke it.
+## Required authority and inputs
 
-## How many at once
+Require all of:
 
-Keep up to **3 pieces in flight** by default; the invoking prompt overrides the number ("dispatch 5", "one at a time"). Spawn the batch's sub-agents in one turn so they run concurrently. The pieces in flight must be **mutually independent** — no shared file, and no shared mutable state (the same migration, fixture, config key, or port; or one piece's change altering another's outcome) — so parallel sub-agents can't collide.
+- explicit dispatch authorization whose source can be retained;
+- one published ready DAG with a stable source identity, tickets, and direct
+  dependency edges;
+- repository and tracker boundaries for each ticket; and
+- canonical `take-ticket` and `take-it-offline` dependencies.
 
-## Pin the model
+A plan, ready-plan artifact, issue list, or publication request does not grant
+dispatch authority. If authorization is absent or ambiguous, stop before any
+ticket lifecycle starts. If the DAG is unpublished, not ready, internally
+inconsistent, cyclic, or lacks a stable identity, stop before execution.
 
-Every spawn names its model explicitly — the **main tier** this machine defines (`lean.config.json` / the repo's `subagent-model-tiers` rule). A sub-agent that inherits the parent model looks routed and can cost far more. **Never run a Claude model at `max`.** The main tier is cheap by design, so spend it freely — a separate sub-agent per implementation, per review, per PR keeps each one's context small and its scope tight.
+Load `take-ticket` and `take-it-offline` by their exact canonical Skill names
+before dispatch. If either is absent or unavailable, stop before ticket work
+with the applicable exact message:
 
-## Staying in the smart zone
+- `Missing internal dependency "take-ticket"`
+- `Missing internal dependency "take-it-offline"`
 
-Every stage runs inside its own sub-agent's window — `/implement` drives `/tdd` and closes with `/code-review`, the review pass reads the diff fresh, the babysitter watches the PR — none of it in yours. Stay low-effort: vet each report and let it go. Your state lives in the tracker (which tickets are open) plus the live PRs, not in this window — so if your window ever fills, re-seed a fresh dispatch-work and it recovers from that state (see *Read the state first*).
+Never select a test Adapter, copied fallback, direct Implement path, or direct
+Code Review path in production.
 
-## One tier, two exits
+## Establish dispatch state
 
-Every piece rides the same main tier — there is no cheaper or higher rung. When a sub-agent hits something beyond one main-tier's reach, the answer is never an escalation; it is one of carve's two exits:
-- **split** — the piece outgrew a single sub-agent; send it back to `/carve` to break down.
-- **flag** — it turns on an open design choice or a risk boundary; surface it to a **human** to decide.
+Retain the source DAG identity, explicit authorization source, and initial
+state of every ticket and direct dependency, including dependency edges
+already satisfied before this run. A ticket is:
 
-## Read the state first — every invocation
+- `blocked` while any direct dependency remains open;
+- `eligible` when it is open, inactive, and every direct dependency is
+  satisfied;
+- `active` only after its Take Ticket lifecycle starts;
+- `completed` only after Take Ticket returns a complete authoritative
+  reviewed-ticket result; or
+- `held` when its lifecycle returns incomplete authority or reaches a
+  user-owned decision; or
+- `failed` when its lifecycle terminates unsuccessfully.
 
-Dispatch-work is **resumable**: a first run finds every ticket not-started, but a re-trigger (a filled window, a new session, an interrupted run) finds them scattered across stages. Before filling the batch, reconcile the tracker against **live PR state** (`gh pr list`, `gh pr view`, `gh pr checks`) and the branches already pushed, and place every ready piece at the checkpoint it actually reached — never restart a piece that has progress. Each state enters the loop at its matching stage:
+Ordinary success, an implementation handoff alone, a passing check, a commit,
+or a Review brief alone is not completion. Never bypass Implement, full Code
+Review, correction when required, or targeted re-review; those stages remain
+owned by Take Ticket.
 
-- **not started** (ticket open, no branch, no PR) → step 2: spawn `/implement` fresh.
-- **in progress** (branch or commits pushed, or a returned handoff, but no PR) → step 2: resume from its Remaining work, don't restart.
-- **diff ready, unreviewed** (implementation returned, or a PR is open but had no independent review) → step 3: review the diff.
-- **PR open with unresolved comments or red CI** → step 4: babysit to approval.
-- **PR approved, not yet merged** → step 5: merge + integration.
-- **merged or closed** → done; skip it and pull the next ready piece.
+An initially failed ticket retains its actionable recovery and ordering
+sequence. An initially completed dependency has every outgoing retained edge
+marked pre-satisfied; no other edge may be pre-satisfied. In-run completions
+produce exactly the outgoing open-to-satisfied transitions they authorize.
 
-A piece whose blocking links are still open stays parked whatever partial state it shows.
+## Run the moving frontier
 
-## The run loop
+1. Calculate the current DAG frontier from retained ticket and direct
+   dependency state.
+2. Give each calculation a retained identity. Start every independent eligible
+   ticket concurrently through one canonical Take Ticket lifecycle per ticket.
+   Every start references exactly that one prior calculation and its explicit
+   selection.
+3. Observe each lifecycle independently. Process a completion as soon as it
+   arrives, without waiting for unrelated active tickets.
+4. Verify that the returned reviewed-ticket result is complete and
+   authoritative. Retain its implementation handoff and Review brief.
+5. Mark only that ticket complete, satisfy only dependency edges that consume
+   that ticket, and record the completion and dependency transitions.
+6. Recalculate the frontier immediately. Start every newly unblocked eligible
+   ticket without waiting for unrelated active tickets.
+7. Continue until every ticket reaches a terminal state or no ticket can
+   advance.
 
-### 1. Fill the batch
-Count pieces already in flight first — on a resume, anything mid-implementation, under review, or being babysat (steps 2–4) already holds a slot. Then fill the free slots up to the batch size (default 3) with **ready** pieces: unblocked (its blocking links all closed) and independent of every piece in flight — no `Relates`/collision link or shared-resource label ties it to one already running. A carve `group` counts as one piece; colliding pieces serialize.
-*Done when:* the batch is full or no more pieces are ready.
+Do not use frontier-wide joins, fixed waves, fixed batches, or completion
+barriers. Concurrency is limited only by explicit invocation limits and
+published collision or shared-state constraints. Such a constraint can delay a
+ticket's eligibility, but it does not turn the DAG into stages.
 
-### 2. Start or resume the implementation
-Hand each **not-started** piece the ticket plus the brief; a set carve marked as a **`group`** goes to one sub-agent as a single stacked unit. The sub-agent runs **`/implement`**, which drives `/tdd` red-green and closes with `/code-review` on the diff. An **in-progress** piece resumes from its handoff's Remaining work — hand the sub-agent the pushed branch and that handoff, not a blank start. A piece carve **flagged** (a research or human-decision piece) isn't dispatched blind — resolve its open decision or endpoint question with the human, record the answer on the ticket, then unblock the impl piece.
-*Done when:* every piece in the batch is dispatched, resumed, or resolved.
+When a lifecycle fails or returns an incomplete or non-authoritative result,
+retain the observed failed or held state. Do not satisfy its outgoing
+dependencies. If the remaining graph has no eligible or active ticket, retain
+which tickets are open, blocked, held, or failed and name the first recovery or
+human decision.
 
-### 3. Verify what returned
-First vet the report in the main session, lightly: does the validation demonstrate what it claims; did it stay inside the stated boundary; do its assumptions contradict anything you know but didn't tell it; is the remaining-work estimate credible against the diff. Then, for real correctness, always spawn a **second** main-tier sub-agent to `/code-review` the diff with **fresh context** — the implementer reviews what it meant, not what it wrote. Across the batch, watch for a **systematic error** — the same tier repeating one mistake on every piece it touched. Fixes go back to a main-tier sub-agent; a finding it can't settle returns for a **split** or a **flag**.
-*Done when:* the report is vetted, the diff independently reviewed, and every finding fixed or bounced back.
+## Synthesize completed frontiers
 
-### 4. Babysit the PR to approval
-Once a piece's PR is open, hand it to **`/autopilot`** in its own main-tier sub-agent. Autopilot refreshes live PR state each pass and works blockers in order — merge conflicts, then unresolved **bot and human** comments, then failing CI — fixing what's in this PR's scope and surfacing what isn't. Run it on a **5-minute cadence** between passes (watch running checks to completion rather than tight-looping), and keep going until the **PR is approved** — mergeable, required CI green, every thread triaged — or you are **explicitly stopped**. A comment on security, auth, data, migration, or concurrency is a **flag**: surface it to the human, don't guess.
-*Done when:* the PR is approved and merge-ready, or the run is explicitly stopped, or a comment is flagged for a human.
+Synthesis is aggregate-only. Bind each synthesis to one unique frontier
+calculation. Consume exactly the completed subset of that calculation's
+selected tickets after their retained completion events, even when another
+selected member is held or failed. Use only those completed tickets' compact
+implementation handoffs and Review briefs. Retain the synthesis sequence after
+those events.
+Record cross-ticket or systematic concerns and recommend one or more of:
 
-### 5. Merge and refill
-Merge respecting collision order (autopilot leaves the merge to you), then pull the next ready piece into the freed slot. Once a batch has landed, verify **integration** — run the full build/suite; pieces that each passed alone can still break together.
-*Done when (exhaustive):* every ticket is implemented, independently reviewed, and its PR approved, and the integrated whole builds green — or a ticket is explicitly parked naming what unblocks it (a split or a human decision).
+- acceptance;
+- fixes;
+- a ticket split; or
+- a human decision.
 
-## The brief every spawn carries
+Frontier synthesis does not repeat per-ticket Code Review, alter a reviewed
+finding, or invent missing ticket authority. It may complete after later work
+has already started; synthesis never becomes a barrier to a newly runnable
+ticket unless its output identifies an explicit held decision.
 
-Reuse the workspace's `/handoff` skill for what to carry, redact, and reference. Two things it must always state:
-- the **boundary** — which files are in scope, and what to do on hitting something outside them (stop, report, return); and
-- the **return contract**, verbatim:
-> When you finish, stop and reply with the handoff. Do not start work beyond Remaining work. If you hit an unresolved design choice, an unexpected boundary, or repo behaviour that contradicts these instructions, stop, report, and recommend a split (back to /carve) or a human decision.
+Use canonical Take It Offline only when a context boundary requires a compact
+continuation of current dispatch state. The continuation references retained
+dispatch artifacts and does not replace them.
 
-That last sentence is what makes a sub-agent out of its depth return instead of guess.
+## Retain an inspectable dispatch artifact
 
-## Checkpoints and holds
+Retain enough structured state for deterministic inspection and offline replay:
 
-Reassess a piece only at a **seam** — exploration finished, approach clear, a coherent patch landed, or validation changed the diagnosis. With one tier there's no rung to climb: a piece that outgrows a single sub-agent goes back to `/carve` for a **split**, or to a human for a **decision**. Surfacing a design question or a risk flag is never blocked, however little work is left.
+- source DAG identity and published-ready state;
+- explicit authorization and its source;
+- every frontier calculation, including eligible, selected, and active tickets;
+- every ticket lifecycle state, its selecting frontier calculation, and its
+  canonical Take Ticket invocation;
+- completion events and complete authoritative reviewed-ticket identities;
+- dependency transitions tied to the completion that authorized each one;
+- synthesis inputs, including implementation handoffs and Review briefs;
+- aggregate concerns and acceptance, fix, split, or human-decision
+  recommendations; and
+- initial and pre-satisfied ticket and edge state; and
+- final open, active, completed, held, blocked, and failed ticket state plus
+  the first recovery action when the dispatch is incomplete.
 
-## Avoid
+Keep event ordering explicit. Preserve artifact references rather than copying
+their full contents. Do not include credentials, secrets, unrelated sensitive
+data, or unbounded model transcripts.
 
-- Delegating work you'll re-read line by line anyway — the review costs what the delegation saved.
-- Restarting a piece from scratch at a handoff instead of resuming from its Remaining work.
+## Boundaries
 
-## Reuse
+Dispatch Work owns frontier calculation, Take Ticket invocation, event-driven
+advancement, aggregate synthesis, and retained dispatch state. It does not own:
 
-- `/implement` — the sub-agent's build; drives `/tdd` and closes with `/code-review`.
-- `/autopilot` — the PR babysitter: triages bot and human comments, resolves conflicts, fixes CI to merge-ready.
-- `/handoff` — the brief for every spawn, and the seed to resume a run.
-- `/carve` — upstream: produces the sized, related tickets this loop consumes, and the split target when a piece outgrows one sub-agent.
+- plan creation, sizing, or DAG publication;
+- per-ticket implementation, Code Review, correction, or re-review;
+- issue dependency, assignment, or closure changes;
+- branch, pull-request, CI, merge, or release topology;
+- migration or persistence decisions; or
+- a new shared Interface.
 
-## Supersedes admino
+Deterministic evaluation Adapters run only through the canonical test Adapter
+and test execution boundaries. They return normalized artifact references,
+observed successful Skill loads, and observed tool and attempted-mutation
+evidence. Every selected ticket has exactly one fixture-local Take Ticket
+invocation/completion artifact proving ticket identity and the complete
+implementation, full-review, required correction, and targeted re-review
+phases with their ranges and artifacts. Owner-local grading executes the
+declared artifact checks against those bodies and observations; matching
+response prose is not evidence. These fixtures do not define a shared Take
+Ticket schema or a production fallback.
 
-Dispatch-work is the delegate-and-verify half of admino's ladder — collapsed to a single main tier: the handoff, the report-vetting, an independent review, and the PR babysit, run on a sized batch. When a piece outgrows the tier the answer is a **split** or a **human**, not a rung up. Paired with `/carve`, the two retire admino's auto-loaded card.
+Stop for a shared-interface, security-sensitive, migration, persistence,
+release, or cross-ticket ownership decision. Do not start an unrelated ticket
+or mutate tracker or PR topology as a side effect of dispatch.
+
+## Completion
+
+Claim a completed dispatch only when every published ticket has a complete
+authoritative reviewed-ticket result, every in-run direct dependency transition
+is backed by such a completion, all completed frontiers have compact synthesis,
+and the retained artifact exposes the final dispatch state. A partial replay is
+still valid when it faithfully retains pre-satisfied edges and completed, open,
+held, blocked, or failed ticket states. Its final status must match those exact
+categories, and its first recovery action must be the earliest retained
+actionable recovery by sequence. Return that state without claiming dispatch
+completion.

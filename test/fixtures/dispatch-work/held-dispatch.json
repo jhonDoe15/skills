@@ -1,0 +1,67 @@
+{
+  "schema": "dispatch-work-artifact/v1",
+  "dispatch_id": "dispatch-partial-1",
+  "authorization": {
+    "explicit": true,
+    "granted": true,
+    "source": "fixture authorization"
+  },
+  "source_dag": {
+    "identity": "fixture://published-dag/partial-frontier-v1",
+    "published": true,
+    "ready": true,
+    "tickets": [
+      { "id": "A", "dependencies": [], "initial_state": "completed" },
+      { "id": "B", "dependencies": ["A"], "initial_state": "open" },
+      { "id": "C", "dependencies": ["B"], "initial_state": "open" },
+      {
+        "id": "D",
+        "dependencies": [],
+        "initial_state": "failed",
+        "initial_recovery": {
+          "sequence": 0,
+          "action": "Repair the retained failure for ticket D, then resume dispatch."
+        }
+      }
+    ],
+    "dependencies": [
+      { "ticket": "B", "depends_on": "A", "initial_state": "satisfied" },
+      { "ticket": "C", "depends_on": "B", "initial_state": "open" }
+    ]
+  },
+  "frontier_calculations": [
+    {
+      "id": "frontier-1",
+      "sequence": 1,
+      "eligible": ["B"],
+      "active": [],
+      "selected": ["B"]
+    }
+  ],
+  "ticket_lifecycles": [
+    {
+      "ticket": "B",
+      "state": "held",
+      "frontier_calculation": "frontier-1",
+      "started_sequence": 2,
+      "terminal_sequence": 3,
+      "result": {
+        "status": "held",
+        "recovery_action": "Resolve the human decision recorded by ticket B, then resume B."
+      }
+    }
+  ],
+  "completion_events": [],
+  "dependency_transitions": [],
+  "synthesis": [],
+  "final_state": {
+    "status": "failed",
+    "open_tickets": [],
+    "active_tickets": [],
+    "completed_tickets": ["A"],
+    "held_tickets": ["B"],
+    "blocked_tickets": ["C"],
+    "failed_tickets": ["D"],
+    "first_recovery_action": "Repair the retained failure for ticket D, then resume dispatch."
+  }
+}
