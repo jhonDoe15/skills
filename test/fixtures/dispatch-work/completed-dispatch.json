@@ -1,0 +1,202 @@
+{
+  "schema": "dispatch-work-artifact/v1",
+  "source_dag": {
+    "identity": "fixture://published-dag/ordinary-frontier-v1",
+    "published": true,
+    "ready": true,
+    "tickets": [
+      { "id": "A", "dependencies": [] },
+      { "id": "B", "dependencies": ["A"] },
+      { "id": "C", "dependencies": [] },
+      { "id": "D", "dependencies": ["B", "C"] }
+    ],
+    "dependencies": [
+      { "ticket": "B", "depends_on": "A" },
+      { "ticket": "D", "depends_on": "B" },
+      { "ticket": "D", "depends_on": "C" }
+    ]
+  },
+  "authorization": {
+    "explicit": true,
+    "granted": true,
+    "source": "fixture://authorization/dispatch-ordinary-frontier"
+  },
+  "frontier_calculations": [
+    {
+      "sequence": 1,
+      "eligible": ["A", "C"],
+      "selected": ["A", "C"],
+      "active": []
+    },
+    {
+      "sequence": 6,
+      "eligible": ["B"],
+      "selected": ["B"],
+      "active": ["C"]
+    },
+    {
+      "sequence": 12,
+      "eligible": ["D"],
+      "selected": ["D"],
+      "active": []
+    },
+    {
+      "sequence": 15,
+      "eligible": [],
+      "selected": [],
+      "active": []
+    }
+  ],
+  "ticket_lifecycles": [
+    {
+      "ticket": "A",
+      "state": "completed",
+      "started_sequence": 2,
+      "completed_sequence": 4,
+      "result": {
+        "status": "complete",
+        "authority": "reviewed-ticket",
+        "implementation_handoff": "artifact://implement/A.json",
+        "review_brief": "artifact://review/A.json"
+      }
+    },
+    {
+      "ticket": "B",
+      "state": "completed",
+      "started_sequence": 7,
+      "completed_sequence": 10,
+      "result": {
+        "status": "complete",
+        "authority": "reviewed-ticket",
+        "implementation_handoff": "artifact://implement/B.json",
+        "review_brief": "artifact://review/B.json"
+      }
+    },
+    {
+      "ticket": "C",
+      "state": "completed",
+      "started_sequence": 3,
+      "completed_sequence": 8,
+      "result": {
+        "status": "complete",
+        "authority": "reviewed-ticket",
+        "implementation_handoff": "artifact://implement/C.json",
+        "review_brief": "artifact://review/C.json"
+      }
+    },
+    {
+      "ticket": "D",
+      "state": "completed",
+      "started_sequence": 13,
+      "completed_sequence": 14,
+      "result": {
+        "status": "complete",
+        "authority": "reviewed-ticket",
+        "implementation_handoff": "artifact://implement/D.json",
+        "review_brief": "artifact://review/D.json"
+      }
+    }
+  ],
+  "completion_events": [
+    {
+      "sequence": 4,
+      "ticket": "A",
+      "result_status": "complete",
+      "authority": "reviewed-ticket"
+    },
+    {
+      "sequence": 8,
+      "ticket": "C",
+      "result_status": "complete",
+      "authority": "reviewed-ticket"
+    },
+    {
+      "sequence": 10,
+      "ticket": "B",
+      "result_status": "complete",
+      "authority": "reviewed-ticket"
+    },
+    {
+      "sequence": 14,
+      "ticket": "D",
+      "result_status": "complete",
+      "authority": "reviewed-ticket"
+    }
+  ],
+  "dependency_transitions": [
+    {
+      "sequence": 5,
+      "ticket": "B",
+      "dependency": "A",
+      "from": "open",
+      "to": "satisfied",
+      "completion_sequence": 4
+    },
+    {
+      "sequence": 9,
+      "ticket": "D",
+      "dependency": "C",
+      "from": "open",
+      "to": "satisfied",
+      "completion_sequence": 8
+    },
+    {
+      "sequence": 11,
+      "ticket": "D",
+      "dependency": "B",
+      "from": "open",
+      "to": "satisfied",
+      "completion_sequence": 10
+    }
+  ],
+  "synthesis": [
+    {
+      "frontier_id": "frontier-1",
+      "tickets": ["A", "C"],
+      "inputs": {
+        "implementation_handoffs": [
+          "artifact://implement/A.json",
+          "artifact://implement/C.json"
+        ],
+        "review_briefs": [
+          "artifact://review/A.json",
+          "artifact://review/C.json"
+        ]
+      },
+      "concerns": [
+        "A and C both change the same follow-up verification surface."
+      ],
+      "recommendations": [
+        "accept A",
+        "accept C",
+        "human decision: verify the shared follow-up surface before D"
+      ]
+    },
+    {
+      "frontier_id": "frontier-2",
+      "tickets": ["B"],
+      "inputs": {
+        "implementation_handoffs": ["artifact://implement/B.json"],
+        "review_briefs": ["artifact://review/B.json"]
+      },
+      "concerns": [],
+      "recommendations": ["accept B"]
+    },
+    {
+      "frontier_id": "frontier-3",
+      "tickets": ["D"],
+      "inputs": {
+        "implementation_handoffs": ["artifact://implement/D.json"],
+        "review_briefs": ["artifact://review/D.json"]
+      },
+      "concerns": [],
+      "recommendations": ["accept D"]
+    }
+  ],
+  "final_state": {
+    "status": "completed",
+    "open_tickets": [],
+    "active_tickets": [],
+    "completed_tickets": ["A", "B", "C", "D"]
+  }
+}

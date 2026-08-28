@@ -1,0 +1,5 @@
+{
+  "sandboxed": true,
+  "reviewed_results": ["A", "B", "C", "D"],
+  "writes_allowed": false
+}

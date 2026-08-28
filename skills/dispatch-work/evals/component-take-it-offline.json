@@ -1,0 +1,52 @@
+{
+  "skill_name": "dispatch-work",
+  "version": 1,
+  "evaluation": {
+    "scope": "dispatch-work-to-take-it-offline",
+    "layer": "component",
+    "skill": "dispatch-work",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment", "component-ablation"]
+  },
+  "config": {
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "dispatch-work-take-it-offline-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "dependency-contribution",
+        "description": "The complete consumer invokes canonical Take It Offline only for a compact continuation across a context boundary."
+      },
+      {
+        "id": "consumer-boundary",
+        "description": "Dispatch Work retains authoritative dispatch state and references it rather than copying continuation-writing behavior."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "take-it-offline-ablation",
+      "name": "canonical Take It Offline component",
+      "prompt": "Continue an in-progress authorized dispatch in a fresh context using retained dispatch artifacts.",
+      "expected_output": "The treatment invokes canonical Take It Offline for a compact continuation; the test-only ablation exposes the missing continuation contribution without replacing retained dispatch state.",
+      "files": [
+        "test/fixtures/dispatch-work/completed-dispatch.json"
+      ],
+      "expectations": [
+        "The treatment loads take-it-offline by canonical name when a context boundary requires a continuation.",
+        "The component control removes only the dispatch-work to take-it-offline edge.",
+        "The continuation references retained dispatch artifacts and does not become the source of dispatch truth.",
+        "Production never selects an Adapter or copied fallback."
+      ],
+      "ablated_dependency": "take-it-offline"
+    }
+  ]
+}

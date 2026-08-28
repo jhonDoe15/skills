@@ -1,0 +1,5 @@
+{
+  "sandboxed": true,
+  "tickets": ["A", "B", "C", "D"],
+  "writes_allowed": false
+}
