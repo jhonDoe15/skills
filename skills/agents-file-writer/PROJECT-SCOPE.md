@@ -5,14 +5,13 @@ README for people deciding whether to use the project.
 
 ## Build the project mental model
 
-Use a repository-evidence-led flow: exhaust existing instructions, configuration, documentation,
-representative source, and history before asking the maintainer. Ask only about policy choices those
-sources cannot resolve. Discovery is complete when architecture, commands, ownership, recurring
-failure modes, and remaining policy gaps all have an explicit disposition.
+Use a repository-evidence-led flow. Inspect applicable instructions and the smallest representative
+set of configuration, documentation, source, and history needed to disposition architecture,
+commands, ownership, recurring failure modes, and policy gaps. Ask only about policy choices those
+sources cannot resolve. Discovery is complete when each of those concerns has an explicit
+disposition.
 
-Read the repository, existing instructions, config, docs, history, and representative source before
-writing. Use the failure-audit workflow from the main skill. Do not accept a generated draft as
-authority.
+Use the failure-audit workflow from the main skill. Do not accept generated guidance as authority.
 
 Keep enough project description to prevent repeated blind exploration:
 
@@ -39,7 +38,7 @@ domain-specific concepts. Use the team's vocabulary consistently.
 Prefer verified repository traps over generic style advice. Name the failure, where it appears, and
 the completion check that prevents it.
 
-When applicable, require an explicit decision for each branch in a completeness matrix:
+When applicable, require an explicit decision for each task case in a completeness matrix:
 
 - user entry points: settings, commands, keybindings, APIs
 - clients and surfaces: web, desktop, mobile, CLI
@@ -50,7 +49,7 @@ When applicable, require an explicit decision for each branch in a completeness 
 - connection or deployment modes
 - user and maintainer documentation
 
-"Unsupported here" is a valid decision; silently skipping a branch is not.
+"Unsupported here" is a valid decision; silently skipping a task case is not.
 
 ## Preserve operational gotchas
 
@@ -81,16 +80,28 @@ details to maintainer docs so they do not leak into user-facing material.
 
 ## Layer the files
 
-Keep the repository root for cross-project invariants and routing. Use nested `AGENTS.md` files for
+Keep the repository root for repository-wide invariants and routing. Use nested `AGENTS.md` files for
 service or component boundaries that map to directories. Use subject references for substantial
 architecture, dependencies, communication, testing, deployment, or environment material.
 
 Every pointer names its trigger. Every nested file states its scope and authority. Avoid repeating
 root rules in service files.
 
+Shape a service main file for the next agent's reading path. A useful order is:
+
+1. the service's scope, ownership, and boundary;
+2. decision criteria and non-negotiable qualities;
+3. recurring failure modes and observable completion checks;
+4. triggered pointers to substantial task-specific detail.
+
+This is an organizing default, not a fixed template or content cap. Include maintainer intent,
+vocabulary, exact commands, security constraints, compatibility facts, or operational gotchas when
+the evidence requires them. Omit empty headings and inventories that source or configuration exposes
+more reliably.
+
 ## Verify representative changes
 
-Test the guidance with at least:
+Select applicable cases from this list:
 
 - a change that touches one surface
 - a feature spanning adapters or clients
@@ -99,5 +110,6 @@ Test the guidance with at least:
 - a documentation change
 - a dev-server or integrated-verification task
 
-The file passes when agents identify every applicable branch, use the correct commands, preserve
-the environment, and explain the result in the project's vocabulary.
+Record unsupported cases as not applicable rather than inventing project behavior. The file passes
+when agents identify every applicable task case, use the correct commands, preserve the environment,
+and explain the result in the project's vocabulary.

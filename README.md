@@ -1,6 +1,6 @@
 # skills
 
-One Claude Code plugin with seven agent skills:
+One Claude Code plugin with eight agent skills:
 
 - **Lean** — model-invoked writing guidance for response density and shape.
 - **`ticket-scope`** — internal model-invoked evaluation of cohesive, independently verifiable ticket and PR units.
@@ -9,10 +9,12 @@ One Claude Code plugin with seven agent skills:
 - **`/dispatch-work`** — explicitly invoked to run an already-sized tracker in parallel and carry each piece through implementation, review, and PR approval.
 - **`/incident-investigation`** — explicitly invoked, investigation-only guidance for evidence-led production incident and hard-to-localize bug analysis.
 - **`agents-file-writer`** — model-invoked guidance for private and project-scoped agent files.
+- **`maintaining-agent-guidance`** — model-invoked final-change gate for durable agent-guidance updates.
 
-Lean, ticket-scope, pr-carver, and agents-file-writer are selected automatically
-by the model when their descriptions match the work. Carve, dispatch-work, and
-incident-investigation run only when the user invokes them.
+Lean, ticket-scope, pr-carver, agents-file-writer, and maintaining-agent-guidance
+are selected automatically by the model when their descriptions match the work.
+Carve, dispatch-work, and incident-investigation run only when the user invokes
+them.
 
 ## Install
 
@@ -80,6 +82,13 @@ Agents-file-writer creates, migrates, and refines private or project-scoped
 agent guidance. It derives rules from observed failures, preserves
 non-derivable facts during migrations, and moves subject-specific detail behind
 triggered references so broad instruction files stay focused.
+
+## `maintaining-agent-guidance` — final-change guidance gate
+
+Maintaining-agent-guidance runs once when a substantial project change reaches a
+stable finish or merge boundary. It ignores routine changes and code-derivable
+facts, then dispatches one isolated worker to use agents-file-writer when the
+change introduced durable agent-facing knowledge.
 
 ## `/carve` — size the work
 
