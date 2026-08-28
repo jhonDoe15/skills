@@ -13,10 +13,8 @@
     "minimum_treatment_win_rate": 0.6,
     "randomization_seed": "dispatch-work-take-it-offline-v1"
   },
-  "signals": {
-    "dispatch_artifact": ["^dispatch-artifact: fixture://dispatch/completed$"]
-  },
-  "global_required_signals": ["dispatch_artifact"],
+  "signals": {},
+  "global_required_signals": [],
   "global_order": [],
   "forbidden_patterns": [],
   "judge": {

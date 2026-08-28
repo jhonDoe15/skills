@@ -35,7 +35,7 @@ function createNormalizedResult(
       },
       skillEvents: context.resolvedSkills.map((name) => ({
         name,
-        operation: name === invocation.skill ? 'select' : 'load',
+        operation: 'load',
         status: 'succeeded',
         provenance: OBSERVED_PROVENANCE,
       })),

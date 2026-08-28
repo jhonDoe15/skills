@@ -13,10 +13,8 @@
     "minimum_treatment_win_rate": 0.6,
     "randomization_seed": "dispatch-work-role-v1"
   },
-  "signals": {
-    "dispatch_artifact": ["^dispatch-artifact: fixture://dispatch/completed$"]
-  },
-  "global_required_signals": ["dispatch_artifact"],
+  "signals": {},
+  "global_required_signals": [],
   "global_order": [],
   "forbidden_patterns": [],
   "judge": {
@@ -45,6 +43,8 @@
       "expected_output": "Independent initial tickets start concurrently; each completion immediately updates dependencies and starts newly eligible work without waiting for unrelated active tickets.",
       "files": [
         "test/fixtures/dispatch-work/completed-dispatch.json",
+        "test/fixtures/dispatch-work/held-dispatch.json",
+        "test/fixtures/dispatch-work/mixed-frontier-dispatch.json",
         "test/fixtures/dispatch-work/sandbox/tracker.json",
         "test/fixtures/dispatch-work/sandbox/pr.json",
         "test/fixtures/dispatch-work/sandbox/ci.json",

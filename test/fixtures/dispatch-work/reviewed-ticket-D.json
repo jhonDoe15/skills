@@ -1,17 +1,17 @@
 {
   "schema": "fixture-reviewed-ticket/v1",
-  "ticket": "B",
+  "ticket": "D",
   "status": "complete",
   "authority": "reviewed-ticket",
   "invocation": {
-    "ticket": "B",
+    "ticket": "D",
     "skill": "take-ticket",
-    "sequence": 7,
+    "sequence": 13,
     "status": "succeeded"
   },
   "completion": {
-    "ticket": "B",
-    "sequence": 10,
+    "ticket": "D",
+    "sequence": 14,
     "status": "complete",
     "authority": "reviewed-ticket"
   },
@@ -23,7 +23,7 @@
         "base": "1111111111111111111111111111111111111111",
         "head": "2222222222222222222222222222222222222222"
       },
-      "artifact": "artifact://implement/B.json"
+      "artifact": "artifact://implement/D.json"
     },
     {
       "name": "full-review",
@@ -32,7 +32,7 @@
         "base": "1111111111111111111111111111111111111111",
         "head": "2222222222222222222222222222222222222222"
       },
-      "artifact": "artifact://review/B.json"
+      "artifact": "artifact://review/D.json"
     },
     {
       "name": "correction",
@@ -42,7 +42,7 @@
         "base": "2222222222222222222222222222222222222222",
         "head": "3333333333333333333333333333333333333333"
       },
-      "artifact": "artifact://correction/B.json"
+      "artifact": "artifact://correction/D.json"
     },
     {
       "name": "targeted-re-review",
@@ -52,7 +52,7 @@
         "base": "2222222222222222222222222222222222222222",
         "head": "3333333333333333333333333333333333333333"
       },
-      "artifact": "artifact://targeted-review/B.json"
+      "artifact": "artifact://targeted-review/D.json"
     }
   ]
 }

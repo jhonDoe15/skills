@@ -56,6 +56,11 @@ or a Review brief alone is not completion. Never bypass Implement, full Code
 Review, correction when required, or targeted re-review; those stages remain
 owned by Take Ticket.
 
+An initially failed ticket retains its actionable recovery and ordering
+sequence. An initially completed dependency has every outgoing retained edge
+marked pre-satisfied; no other edge may be pre-satisfied. In-run completions
+produce exactly the outgoing open-to-satisfied transitions they authorize.
+
 ## Run the moving frontier
 
 1. Calculate the current DAG frontier from retained ticket and direct
@@ -89,9 +94,11 @@ human decision.
 ## Synthesize completed frontiers
 
 Synthesis is aggregate-only. Bind each synthesis to one unique frontier
-calculation. After every ticket selected by that calculation has a retained
-completion event, consume exactly those tickets' compact implementation
-handoffs and Review briefs. Retain the synthesis sequence after those events.
+calculation. Consume exactly the completed subset of that calculation's
+selected tickets after their retained completion events, even when another
+selected member is held or failed. Use only those completed tickets' compact
+implementation handoffs and Review briefs. Retain the synthesis sequence after
+those events.
 Record cross-ticket or systematic concerns and recommend one or more of:
 
 - acceptance;
@@ -143,11 +150,15 @@ advancement, aggregate synthesis, and retained dispatch state. It does not own:
 - a new shared Interface.
 
 Deterministic evaluation Adapters run only through the canonical test Adapter
-and test execution boundaries. They return normalized artifact references and
-observed Skill, tool, and attempted-mutation evidence. A fixture-local reviewed
-ticket artifact may prove the complete implementation, full-review, required
-correction, and targeted re-review phases with their ranges and artifacts; it
-does not define a shared Take Ticket schema or a production fallback.
+and test execution boundaries. They return normalized artifact references,
+observed successful Skill loads, and observed tool and attempted-mutation
+evidence. Every selected ticket has exactly one fixture-local Take Ticket
+invocation/completion artifact proving ticket identity and the complete
+implementation, full-review, required correction, and targeted re-review
+phases with their ranges and artifacts. Owner-local grading executes the
+declared artifact checks against those bodies and observations; matching
+response prose is not evidence. These fixtures do not define a shared Take
+Ticket schema or a production fallback.
 
 Stop for a shared-interface, security-sensitive, migration, persistence,
 release, or cross-ticket ownership decision. Do not start an unrelated ticket
@@ -160,5 +171,7 @@ authoritative reviewed-ticket result, every in-run direct dependency transition
 is backed by such a completion, all completed frontiers have compact synthesis,
 and the retained artifact exposes the final dispatch state. A partial replay is
 still valid when it faithfully retains pre-satisfied edges and completed, open,
-held, blocked, or failed ticket states. Return its first recovery action without
-claiming dispatch completion.
+held, blocked, or failed ticket states. Its final status must match those exact
+categories, and its first recovery action must be the earliest retained
+actionable recovery by sequence. Return that state without claiming dispatch
+completion.

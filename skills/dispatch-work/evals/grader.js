@@ -85,6 +85,22 @@ function validateSourceDag(sourceDag) {
         `source DAG tickets[${index}].initial_state is invalid`,
       );
     }
+    if (ticket.initial_state === 'failed') {
+      requireObject(
+        ticket.initial_recovery,
+        `source DAG tickets[${index}].initial_recovery`,
+      );
+      if (!Number.isInteger(ticket.initial_recovery.sequence)
+        || ticket.initial_recovery.sequence < 0) {
+        throw new DispatchArtifactError(
+          `source DAG tickets[${index}].initial_recovery.sequence is invalid`,
+        );
+      }
+      requireString(
+        ticket.initial_recovery.action,
+        `source DAG tickets[${index}].initial_recovery.action`,
+      );
+    }
     return ticket.id;
   });
   assertUnique(ticketIds, 'source DAG ticket identities');
@@ -112,10 +128,11 @@ function validateSourceDag(sourceDag) {
         `source DAG dependencies[${index}].initial_state is invalid`,
       );
     }
-    if (edge.initial_state === 'satisfied'
-      && ticketStates.get(edge.depends_on) !== 'completed') {
+    const dependencyWasCompleted =
+      ticketStates.get(edge.depends_on) === 'completed';
+    if ((edge.initial_state === 'satisfied') !== dependencyWasCompleted) {
       throw new DispatchArtifactError(
-        `source DAG dependencies[${index}] is pre-satisfied without a completed dependency`,
+        `source DAG dependencies[${index}] has inconsistent pre-satisfied edge state`,
       );
     }
     return dependencyKey(edge.ticket, edge.depends_on);
@@ -136,6 +153,13 @@ function completedTicketIds(lifecycles) {
   return [...lifecycles.values()]
     .filter(({ state }) => state === 'completed')
     .map(({ ticket }) => ticket);
+}
+
+function calculateFinalStatus(expected, ticketCount) {
+  if (expected.completed_tickets.length === ticketCount) return 'completed';
+  if (expected.failed_tickets.length > 0) return 'failed';
+  if (expected.held_tickets.length > 0) return 'held';
+  return 'blocked';
 }
 
 function validateTicketLifecycles(artifact, ticketIds, ticketStates) {
@@ -263,6 +287,19 @@ function validateDependencyTransitions(artifact, sourceDag, completionEvents) {
     }
     transitions.set(edge, transition);
   }
+  const expectedTransitions = sourceDag.dependencies
+    .filter((edge) => (
+      edge.initial_state === 'open'
+      && completionEvents.has(edge.depends_on)
+    ))
+    .map(({ ticket, depends_on: dependency }) => (
+      dependencyKey(ticket, dependency)
+    ));
+  assertSameMembers(
+    [...transitions.keys()],
+    expectedTransitions,
+    'dependency transition identities',
+  );
   return transitions;
 }
 
@@ -395,10 +432,13 @@ function validateSynthesis(artifact, lifecycles, completionEvents) {
         `${field} does not reference a unique frontier calculation`,
       );
     }
+    const completedSelection = calculation.selected.filter(
+      (ticket) => completionEvents.has(ticket),
+    );
     assertSameMembers(
       synthesis.tickets,
-      calculation.selected,
-      `${field}.tickets selected by its frontier calculation`,
+      completedSelection,
+      `${field}.completed tickets selected by its frontier calculation`,
     );
     for (const ticket of synthesis.tickets) {
       const completion = completionEvents.get(ticket);
@@ -444,7 +484,7 @@ function validateSynthesis(artifact, lifecycles, completionEvents) {
   const expectedFrontiers = artifact.frontier_calculations
     .filter(({ selected }) => (
       selected.length > 0
-      && selected.every((ticket) => completedTicketSet.has(ticket))
+      && selected.some((ticket) => completedTicketSet.has(ticket))
     ))
     .map(({ id }) => id);
   assertSameMembers(
@@ -528,11 +568,39 @@ function validateFinalState(
     'final active_tickets',
   );
   const incomplete = expected.completed_tickets.length !== ticketIds.length;
-  if (incomplete) {
-    requireString(
-      artifact.final_state.first_recovery_action,
-      'final first_recovery_action',
+  const expectedStatus = calculateFinalStatus(expected, ticketIds.length);
+  if (artifact.final_state.status !== expectedStatus) {
+    throw new DispatchArtifactError(
+      'final dispatch status does not match retained ticket state',
     );
+  }
+  const recoveryActions = [
+    ...sourceDag.tickets
+      .filter(({ initial_state: state }) => state === 'failed')
+      .map(({ id: ticket, initial_recovery: recovery }) => ({
+        ticket,
+        state: 'failed',
+        sequence: recovery.sequence,
+        action: recovery.action,
+      })),
+    ...[...lifecycles.values()]
+      .filter(({ state }) => ['held', 'failed'].includes(state))
+      .map((lifecycle) => ({
+        ticket: lifecycle.ticket,
+        state: lifecycle.state,
+        sequence: lifecycleTerminalSequence(lifecycle),
+        action: lifecycle.result.recovery_action,
+      })),
+  ].sort((left, right) => (
+    left.sequence - right.sequence || left.ticket.localeCompare(right.ticket)
+  ));
+  if (incomplete) {
+    if (recoveryActions.length === 0
+      || artifact.final_state.first_recovery_action !== recoveryActions[0].action) {
+      throw new DispatchArtifactError(
+        'final state must retain the earliest retained recovery action',
+      );
+    }
   } else if (artifact.final_state.first_recovery_action !== null) {
     throw new DispatchArtifactError(
       'completed dispatch cannot retain a recovery action',
@@ -540,7 +608,7 @@ function validateFinalState(
   }
 }
 
-function validateFixtureReviewedTicket(reviewedTicket) {
+function validateFixtureReviewedTicket(reviewedTicket, lifecycle) {
   requireObject(reviewedTicket, 'fixture reviewed-ticket artifact');
   if (reviewedTicket.schema !== 'fixture-reviewed-ticket/v1'
     || reviewedTicket.status !== 'complete'
@@ -550,6 +618,29 @@ function validateFixtureReviewedTicket(reviewedTicket) {
     );
   }
   requireString(reviewedTicket.ticket, 'fixture reviewed-ticket ticket');
+  if (!lifecycle || reviewedTicket.ticket !== lifecycle.ticket) {
+    throw new DispatchArtifactError(
+      'fixture reviewed-ticket identity does not match its selected ticket',
+    );
+  }
+  requireObject(reviewedTicket.invocation, 'fixture reviewed-ticket invocation');
+  requireObject(reviewedTicket.completion, 'fixture reviewed-ticket completion');
+  if (reviewedTicket.invocation.ticket !== lifecycle.ticket
+    || reviewedTicket.invocation.skill !== 'take-ticket'
+    || reviewedTicket.invocation.status !== 'succeeded'
+    || reviewedTicket.invocation.sequence !== lifecycle.started_sequence) {
+    throw new DispatchArtifactError(
+      'fixture reviewed-ticket invocation is not authoritative',
+    );
+  }
+  if (reviewedTicket.completion.ticket !== lifecycle.ticket
+    || reviewedTicket.completion.status !== 'complete'
+    || reviewedTicket.completion.authority !== 'reviewed-ticket'
+    || reviewedTicket.completion.sequence !== lifecycle.completed_sequence) {
+    throw new DispatchArtifactError(
+      'fixture reviewed-ticket completion is not authoritative',
+    );
+  }
   requireArray(reviewedTicket.phases, 'fixture reviewed-ticket phases');
   const expectedPhases = [
     'implementation',
@@ -580,10 +671,102 @@ function validateFixtureReviewedTicket(reviewedTicket) {
       'fixture correction requires a targeted re-review',
     );
   }
+  if (reviewedTicket.phases[0].artifact
+      !== lifecycle.result.implementation_handoff
+    || reviewedTicket.phases[1].artifact !== lifecycle.result.review_brief) {
+    throw new DispatchArtifactError(
+      'fixture reviewed-ticket phases contradict the dispatch lifecycle result',
+    );
+  }
   return reviewedTicket;
 }
 
-function gradeDispatchResult(result, { resolveArtifact }) {
+function requireSingleSuccessfulToolUse(toolUses, name) {
+  const matchingTools = toolUses.filter(
+    (tool) => tool.name === name && tool.outcome === 'succeeded',
+  );
+  if (matchingTools.length !== 1) {
+    throw new DispatchArtifactError(
+      `normalized result requires one observed "${name}" tool event`,
+    );
+  }
+}
+
+function executeArtifactChecks(artifactChecks, evidence) {
+  requireArray(artifactChecks, 'artifact checks');
+  assertUnique(artifactChecks, 'artifact checks');
+  const {
+    artifact,
+    dispatchReference,
+    observedLoads,
+    result,
+    reviewedTickets,
+    selectedTickets,
+  } = evidence;
+  const checks = {
+    authorization: () => (
+      artifact.authorization.explicit === true
+      && artifact.authorization.granted === true
+    ),
+    'frontier-causality': () => artifact.ticket_lifecycles.every(
+      ({ frontier_calculation: calculation }) => (
+        typeof calculation === 'string' && calculation.length > 0
+      ),
+    ),
+    'reviewed-lifecycle': () => (
+      reviewedTickets.length === selectedTickets.length
+    ),
+    'synthesis-timing': () => artifact.synthesis.every((synthesis) => (
+      synthesis.tickets.every((ticket) => (
+        artifact.completion_events.some((event) => (
+          event.ticket === ticket && event.sequence < synthesis.sequence
+        ))
+      ))
+    )),
+    'replay-state': () => (
+      artifact.final_state
+      && typeof artifact.final_state.status === 'string'
+    ),
+    'moving-frontier': () => artifact.frontier_calculations.some(
+      ({ active, selected }) => active.length > 0 && selected.length > 0,
+    ),
+    'observed-effects': () => (
+      result.observations.toolUses.length > 0
+      && result.observations.attemptedMutations.length > 0
+    ),
+    'observed-skill-loads': () => (
+      observedLoads.length === result.observations.skillEvents.length
+    ),
+    'observed-tools': () => result.observations.toolUses.length > 0,
+    'observed-mutations': () => (
+      result.observations.attemptedMutations.length > 0
+    ),
+    'retained-source-state': () => (
+      typeof artifact.source_dag.identity === 'string'
+      && artifact.source_dag.tickets.every(
+        ({ initial_state: state }) => typeof state === 'string',
+      )
+    ),
+    'retained-frontier-state': () => artifact.frontier_calculations.every(
+      ({ id, selected }) => typeof id === 'string' && Array.isArray(selected),
+    ),
+    'retained-continuation-boundary': () => (
+      typeof dispatchReference === 'string' && dispatchReference.length > 0
+    ),
+  };
+  return artifactChecks.map((id) => {
+    const check = checks[id];
+    if (!check) {
+      throw new DispatchArtifactError(`unknown artifact check "${id}"`);
+    }
+    if (!check()) {
+      throw new DispatchArtifactError(`artifact check "${id}" failed`);
+    }
+    return { id, passed: true };
+  });
+}
+
+function gradeDispatchResult(result, { resolveArtifact, artifactChecks }) {
   requireObject(result, 'normalized dispatch result');
   if (result.status !== 'succeeded' || typeof resolveArtifact !== 'function') {
     throw new DispatchArtifactError(
@@ -591,20 +774,20 @@ function gradeDispatchResult(result, { resolveArtifact }) {
     );
   }
   requireObject(result.observations, 'normalized dispatch observations');
-  const observedLoads = result.observations.skillEvents.filter(
-    ({ provenance }) => provenance.statusSource === 'observed',
-  );
+  const observedLoads = result.observations.skillEvents.filter((event) => (
+    event.operation === 'load'
+    && event.status === 'succeeded'
+    && event.provenance.statusSource === 'observed'
+  ));
+  if (observedLoads.length !== result.observations.skillEvents.length) {
+    throw new DispatchArtifactError(
+      'normalized Skill events must be observed successful load operations',
+    );
+  }
   if (!observedLoads.some(({ name }) => name === 'dispatch-work')
     || !observedLoads.some(({ name }) => name === 'take-ticket')) {
     throw new DispatchArtifactError(
       'normalized result lacks observed Dispatch Work and Take Ticket evidence',
-    );
-  }
-  if (!result.observations.toolUses.some(
-    ({ name, outcome }) => name === 'take-ticket.start' && outcome === 'succeeded',
-  )) {
-    throw new DispatchArtifactError(
-      'normalized result lacks observed Take Ticket tool evidence',
     );
   }
   if (result.observations.attemptedMutations.length === 0) {
@@ -615,16 +798,54 @@ function gradeDispatchResult(result, { resolveArtifact }) {
   const dispatchReference = result.observations.artifacts.find(
     ({ mediaType }) => mediaType === 'application/vnd.dispatch-work+json',
   )?.reference;
-  const reviewedReference = result.observations.artifacts.find(
+  const reviewedDescriptors = result.observations.artifacts.filter(
     ({ mediaType }) => mediaType === 'application/vnd.fixture-reviewed-ticket+json',
-  )?.reference;
+  );
   requireString(dispatchReference, 'normalized dispatch artifact reference');
-  requireString(reviewedReference, 'normalized reviewed-ticket artifact reference');
+  const artifact = validateDispatchArtifact(resolveArtifact(dispatchReference));
+  const selectedTickets = artifact.frontier_calculations.flatMap(
+    ({ selected }) => selected,
+  );
+  assertUnique(selectedTickets, 'selected ticket identities');
+  if (reviewedDescriptors.length !== selectedTickets.length) {
+    throw new DispatchArtifactError(
+      'normalized result requires one reviewed-ticket artifact per selected ticket',
+    );
+  }
+  const lifecycles = new Map(
+    artifact.ticket_lifecycles.map((lifecycle) => [
+      lifecycle.ticket,
+      lifecycle,
+    ]),
+  );
+  const reviewedTickets = reviewedDescriptors.map(({ reference }) => {
+    requireString(reference, 'normalized reviewed-ticket artifact reference');
+    const reviewedTicket = resolveArtifact(reference);
+    const lifecycle = lifecycles.get(reviewedTicket.ticket);
+    const invocationTool = `take-ticket.invoke:${reviewedTicket.ticket}`;
+    const completionTool = `take-ticket.complete:${reviewedTicket.ticket}`;
+    for (const name of [invocationTool, completionTool]) {
+      requireSingleSuccessfulToolUse(result.observations.toolUses, name);
+    }
+    return validateFixtureReviewedTicket(reviewedTicket, lifecycle);
+  });
+  assertSameMembers(
+    reviewedTickets.map(({ ticket }) => ticket),
+    selectedTickets,
+    'reviewed-ticket artifact identities',
+  );
+  const checks = executeArtifactChecks(artifactChecks, {
+    artifact,
+    dispatchReference,
+    observedLoads,
+    result,
+    reviewedTickets,
+    selectedTickets,
+  });
   return {
-    artifact: validateDispatchArtifact(resolveArtifact(dispatchReference)),
-    reviewedTicket: validateFixtureReviewedTicket(
-      resolveArtifact(reviewedReference),
-    ),
+    artifact,
+    checks,
+    reviewedTickets,
   };
 }
 

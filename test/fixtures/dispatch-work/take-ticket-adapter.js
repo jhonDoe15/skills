@@ -5,6 +5,8 @@ const path = require('node:path');
 const { defineTestAdapter } = require('../../../suite/testing');
 const { createNormalizedResult } = require('./normalized-result');
 
+const TICKET_EXECUTION_ORDER = ['A', 'C', 'B', 'D'];
+
 function readBoundary(name) {
   return JSON.parse(fs.readFileSync(
     path.join(__dirname, 'sandbox', `${name}.json`),
@@ -27,17 +29,20 @@ function createTakeTicketAdapter({ repository }) {
             reference: 'fixture://dispatch/completed',
             mediaType: 'application/vnd.dispatch-work+json',
           },
-          {
-            reference: 'fixture://reviewed-ticket/B',
+          ...TICKET_EXECUTION_ORDER.map((ticket) => ({
+            reference: `fixture://reviewed-ticket/${ticket}`,
             mediaType: 'application/vnd.fixture-reviewed-ticket+json',
-          },
+          })),
         ],
         toolUses: [
-          { name: 'take-ticket.start', outcome: 'succeeded' },
+          ...TICKET_EXECUTION_ORDER.flatMap((ticket) => [
+            { name: `take-ticket.invoke:${ticket}`, outcome: 'succeeded' },
+            { name: `take-ticket.complete:${ticket}`, outcome: 'succeeded' },
+          ]),
           ...boundaries.flatMap(({ observations }) => observations.toolUses),
         ],
         attemptedMutations: [
-          ...['A', 'C', 'B', 'D'].map((ticket) => ({
+          ...TICKET_EXECUTION_ORDER.map((ticket) => ({
             operation: 'write',
             target: `fixture-repository:${ticket}`,
             outcome: 'succeeded-in-sandbox',

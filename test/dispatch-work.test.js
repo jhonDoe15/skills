@@ -43,9 +43,23 @@ const COMPLETE_DISPATCH_CLOSURE = [
   'agent-writing',
   'writing-foundation',
 ];
+const COMPLETED_DISPATCH_ARTIFACTS = {
+  'fixture://dispatch/completed': 'completed-dispatch.json',
+  'fixture://reviewed-ticket/A': 'reviewed-ticket-A.json',
+  'fixture://reviewed-ticket/B': 'reviewed-ticket-B.json',
+  'fixture://reviewed-ticket/C': 'reviewed-ticket-C.json',
+  'fixture://reviewed-ticket/D': 'reviewed-ticket-D.json',
+};
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+}
+
+function resolveCompletedDispatchArtifact(reference) {
+  return readJson(path.join(
+    DISPATCH_FIXTURE_ROOT,
+    COMPLETED_DISPATCH_ARTIFACTS[reference],
+  ));
 }
 
 function minimalArtifact() {
@@ -137,21 +151,28 @@ test('fixture Adapters normalize observed dispatch and reviewed-ticket evidence'
     adapter: createTakeTicketAdapter({ repository }),
     invocation,
   });
-  const artifactFiles = {
-    'fixture://dispatch/completed': 'completed-dispatch.json',
-    'fixture://reviewed-ticket/B': 'reviewed-ticket-B.json',
-  };
-  function resolveArtifact(reference) {
-    return readJson(path.join(DISPATCH_FIXTURE_ROOT, artifactFiles[reference]));
-  }
-  const graded = gradeDispatchResult(takeTicketResult, { resolveArtifact });
+  const artifactChecks = readJson(
+    path.join(EVALUATION_ROOT, 'outcome.json'),
+  ).evals[0].artifact_checks;
+  const graded = gradeDispatchResult(takeTicketResult, {
+    resolveArtifact: resolveCompletedDispatchArtifact,
+    artifactChecks,
+  });
 
   assert.deepEqual(
     publishedDagResult.observations.toolUses,
     [{ name: 'published-dag.read', outcome: 'succeeded' }],
   );
   assert.strictEqual(graded.artifact.schema, 'dispatch-work-artifact/v1');
-  assert.equal(graded.reviewedTicket.ticket, 'B');
+  assert.ok(takeTicketResult.observations.skillEvents.every((event) => (
+    event.operation === 'load'
+    && event.status === 'succeeded'
+    && event.provenance.statusSource === 'observed'
+  )));
+  assert.deepEqual(
+    graded.reviewedTickets.map(({ ticket }) => ticket),
+    ['A', 'C', 'B', 'D'],
+  );
   assert.deepEqual(
     takeTicketResult.observations.attemptedMutations
       .filter(({ target }) => target.startsWith('fixture-repository:'))
@@ -258,7 +279,8 @@ test('evaluation catalog separates role, both components, outcome, and routing',
     COMPLETE_DISPATCH_CLOSURE,
   );
   for (const definition of definitions) {
-    assert.notEqual(Object.keys(definition.signals).length, 0);
+    assert.deepEqual(definition.signals, {});
+    assert.deepEqual(definition.global_required_signals, []);
   }
   assert.deepEqual(
     definitions[0].evals[0].artifact_checks,
@@ -269,6 +291,79 @@ test('evaluation catalog separates role, both components, outcome, and routing',
       'synthesis-timing',
       'replay-state',
     ],
+  );
+});
+
+test('owner artifact checks reject matching prose with invalid evidence', async (t) => {
+  const repository = fs.mkdtempSync(path.join(os.tmpdir(), 'dispatch-evidence-'));
+  t.after(() => fs.rmSync(repository, { recursive: true, force: true }));
+  fs.copyFileSync(
+    path.join(DISPATCH_FIXTURE_ROOT, 'repository', 'app.txt'),
+    path.join(repository, 'app.txt'),
+  );
+  assert.equal(
+    spawnSync('git', ['init', '--quiet'], { cwd: repository }).status,
+    0,
+  );
+  const packageRoot = createPackageFixture(t, COMPLETE_DISPATCH_CLOSURE);
+  const {
+    createTakeTicketAdapter,
+  } = require('./fixtures/dispatch-work/take-ticket-adapter');
+  const result = await executeTest({
+    repositoryRoot: packageRoot,
+    adapter: createTakeTicketAdapter({ repository }),
+    invocation: {
+      requestId: 'dispatch-adversarial-evidence',
+      skill: 'dispatch-work',
+      prompt: 'Dispatch the authorized published ready fixture DAG.',
+      model: 'fixture-model',
+    },
+  });
+  const artifactChecks = [
+    ...new Set([
+      'role.json',
+      'component-take-ticket.json',
+      'component-take-it-offline.json',
+      'outcome.json',
+    ].flatMap((fileName) => (
+      readJson(path.join(EVALUATION_ROOT, fileName))
+        .evals[0].artifact_checks
+    ))),
+  ];
+  const graded = gradeDispatchResult(result, {
+    resolveArtifact: resolveCompletedDispatchArtifact,
+    artifactChecks,
+  });
+
+  assert.deepEqual(
+    graded.checks.map(({ id, passed }) => ({ id, passed })),
+    artifactChecks.map((id) => ({ id, passed: true })),
+  );
+
+  const invalidEvents = structuredClone(result);
+  invalidEvents.observations.skillEvents[0].operation = 'select';
+  assert.throws(
+    () => gradeDispatchResult(invalidEvents, {
+      resolveArtifact: resolveCompletedDispatchArtifact,
+      artifactChecks,
+    }),
+    /observed successful load operations/,
+  );
+
+  const invalidArtifact = readJson(
+    path.join(DISPATCH_FIXTURE_ROOT, 'completed-dispatch.json'),
+  );
+  invalidArtifact.authorization.granted = false;
+  assert.throws(
+    () => gradeDispatchResult(result, {
+      artifactChecks,
+      resolveArtifact(reference) {
+        return reference === 'fixture://dispatch/completed'
+          ? invalidArtifact
+          : resolveCompletedDispatchArtifact(reference);
+      },
+    }),
+    /explicit dispatch authorization is required/,
   );
 });
 
@@ -296,7 +391,7 @@ test('replay retains pre-satisfied state and non-complete terminal recovery', ()
   assert.deepEqual(artifact.final_state.failed_tickets, ['D']);
   assert.equal(
     artifact.final_state.first_recovery_action,
-    'Resolve the human decision recorded by ticket B, then resume B.',
+    'Repair the retained failure for ticket D, then resume dispatch.',
   );
 
   const misclassified = readJson(
@@ -307,6 +402,44 @@ test('replay retains pre-satisfied state and non-complete terminal recovery', ()
   assert.throws(
     () => validateDispatchArtifact(misclassified),
     /final (?:open|blocked)_tickets/,
+  );
+});
+
+test('final replay status, recovery, and edge transitions are derived exactly', () => {
+  const wrongStatus = readJson(
+    path.join(DISPATCH_FIXTURE_ROOT, 'held-dispatch.json'),
+  );
+  wrongStatus.final_state.status = 'blocked';
+  assert.throws(
+    () => validateDispatchArtifact(wrongStatus),
+    /final dispatch status/,
+  );
+
+  const wrongRecovery = readJson(
+    path.join(DISPATCH_FIXTURE_ROOT, 'held-dispatch.json'),
+  );
+  wrongRecovery.final_state.first_recovery_action = 'Retry something later.';
+  assert.throws(
+    () => validateDispatchArtifact(wrongRecovery),
+    /earliest retained recovery action/,
+  );
+
+  const missingPreSatisfiedState = readJson(
+    path.join(DISPATCH_FIXTURE_ROOT, 'held-dispatch.json'),
+  );
+  missingPreSatisfiedState.source_dag.dependencies[0].initial_state = 'open';
+  assert.throws(
+    () => validateDispatchArtifact(missingPreSatisfiedState),
+    /pre-satisfied edge state/,
+  );
+
+  const missingTransition = readJson(
+    path.join(DISPATCH_FIXTURE_ROOT, 'completed-dispatch.json'),
+  );
+  missingTransition.dependency_transitions.pop();
+  assert.throws(
+    () => validateDispatchArtifact(missingTransition),
+    /dependency transition identities/,
   );
 });
 
@@ -353,6 +486,19 @@ test('frontier synthesis binds exact selections after their completion events', 
     () => validateDispatchArtifact(duplicateFrontier),
     /unique frontier calculation/,
   );
+});
+
+test('mixed terminal frontier synthesizes its completed subset and still advances', () => {
+  const artifact = readJson(
+    path.join(DISPATCH_FIXTURE_ROOT, 'mixed-frontier-dispatch.json'),
+  );
+
+  assert.strictEqual(validateDispatchArtifact(artifact), artifact);
+  assert.deepEqual(artifact.synthesis[0].tickets, ['A']);
+  assert.deepEqual(artifact.frontier_calculations[1].active, ['B']);
+  assert.deepEqual(artifact.frontier_calculations[1].selected, ['C']);
+  assert.deepEqual(artifact.final_state.completed_tickets, ['A', 'C']);
+  assert.deepEqual(artifact.final_state.held_tickets, ['B']);
 });
 
 test('completed fixture does not retain an unmodeled gate before ticket D', () => {
