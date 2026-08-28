@@ -25,6 +25,8 @@ const PHASE_STATUSES = new Set([
   'incomplete',
   'not-required',
 ]);
+const PARTIAL_TARGETED_REVIEW_ERROR
+  = 'partial targeted re-review progress contradicts correction effects';
 
 class TakeTicketEvaluationError extends Error {
   constructor(message) {
@@ -77,6 +79,12 @@ function haveExactUniqueMembers(left, right) {
   return actual.size === left.length
     && expected.size === right.length
     && [...actual].every((value) => expected.has(value));
+}
+
+function isUniqueSubset(values, allowedValues) {
+  const allowed = new Set(allowedValues);
+  return new Set(values).size === values.length
+    && values.every((value) => allowed.has(value));
 }
 
 function validateDescriptor(value, field, fields = ['reference', 'mediaType']) {
@@ -188,6 +196,48 @@ function acceptedFindingRegions(fullReview) {
   );
 }
 
+function validateCorrectionScopes(scopes, fullReview, incomplete = false) {
+  if (!Array.isArray(scopes)) {
+    throw new TakeTicketEvaluationError('result.correction.scopes must be an array');
+  }
+  const accepted = acceptedFindingIds(fullReview);
+  const authoritativeRegions = acceptedFindingRegions(fullReview);
+  const scopedFindings = [];
+  scopes.forEach((scope, index) => {
+    const field = `result.correction.scopes[${index}]`;
+    requireExactFields(
+      scope,
+      ['finding_id', 'regions', 'materially_affected_regions'],
+      field,
+    );
+    requireString(scope.finding_id, `${field}.finding_id`);
+    requireStringArray(scope.regions, `${field}.regions`);
+    requireStringArray(
+      scope.materially_affected_regions,
+      `${field}.materially_affected_regions`,
+      true,
+    );
+    if (!haveExactUniqueMembers(
+      scope.regions,
+      authoritativeRegions.get(scope.finding_id) || [],
+    )) {
+      throw new TakeTicketEvaluationError(
+        incomplete
+          ? 'partial correction scope must match accepted Review findings'
+          : 'corrected regions must exactly match the full Review finding regions',
+      );
+    }
+    scopedFindings.push(scope.finding_id);
+  });
+  if (!haveExactUniqueMembers(scopedFindings, accepted)) {
+    throw new TakeTicketEvaluationError(
+      incomplete
+        ? 'partial correction scope must match accepted Review findings'
+        : 'correction scope must match every accepted finding',
+    );
+  }
+}
+
 function validateCorrection(value, fullReview, implementation) {
   requireExactFields(
     value,
@@ -220,37 +270,7 @@ function validateCorrection(value, fullReview, implementation) {
       'correction range must start at the implementation head',
     );
   }
-  const scopedFindings = [];
-  const authoritativeRegions = acceptedFindingRegions(fullReview);
-  value.scopes.forEach((scope, index) => {
-    const field = `result.correction.scopes[${index}]`;
-    requireExactFields(
-      scope,
-      ['finding_id', 'regions', 'materially_affected_regions'],
-      field,
-    );
-    requireString(scope.finding_id, `${field}.finding_id`);
-    requireStringArray(scope.regions, `${field}.regions`);
-    requireStringArray(
-      scope.materially_affected_regions,
-      `${field}.materially_affected_regions`,
-      true,
-    );
-    if (!haveExactUniqueMembers(
-      scope.regions,
-      authoritativeRegions.get(scope.finding_id) || [],
-    )) {
-      throw new TakeTicketEvaluationError(
-        'corrected regions must exactly match the full Review finding regions',
-      );
-    }
-    scopedFindings.push(scope.finding_id);
-  });
-  if (!haveExactUniqueMembers(scopedFindings, accepted)) {
-    throw new TakeTicketEvaluationError(
-      'correction scope must match every accepted finding',
-    );
-  }
+  validateCorrectionScopes(value.scopes, fullReview);
   if (value.evidence.length === 0) {
     throw new TakeTicketEvaluationError('correction evidence is incomplete');
   }
@@ -279,6 +299,64 @@ function requiredTargetRegions(correction) {
   ]);
 }
 
+function validateTargetRegions(regions, correction, incomplete = false) {
+  requireStringArray(regions, 'result.targeted_re_review.regions');
+  const required = requiredTargetRegions(correction);
+  if (incomplete) {
+    if (!haveExactUniqueMembers(regions, [...new Set(required)])) {
+      throw new TakeTicketEvaluationError(PARTIAL_TARGETED_REVIEW_ERROR);
+    }
+    return;
+  }
+  if (!required.every((region) => regions.includes(region))) {
+    throw new TakeTicketEvaluationError(
+      'targeted re-review must cover every corrected and materially affected region',
+    );
+  }
+  if (regions.length !== new Set(required).size) {
+    throw new TakeTicketEvaluationError(
+      'targeted re-review regions must exactly match correction effects',
+    );
+  }
+}
+
+function validateTargetedDispositions(dispositions, correction, allowSubset = false) {
+  if (!Array.isArray(dispositions)) {
+    throw new TakeTicketEvaluationError(
+      'result.targeted_re_review.dispositions must be an array',
+    );
+  }
+  const dispositionIdentities = [];
+  dispositions.forEach((disposition, index) => {
+    const field = `result.targeted_re_review.dispositions[${index}]`;
+    requireExactFields(disposition, ['finding_id', 'region', 'outcome'], field);
+    requireString(disposition.finding_id, `${field}.finding_id`);
+    requireString(disposition.region, `${field}.region`);
+    if (disposition.outcome !== 'accepted') {
+      const message = allowSubset
+        ? PARTIAL_TARGETED_REVIEW_ERROR
+        : 'reviewed result requires accepted targeted dispositions';
+      throw new TakeTicketEvaluationError(message);
+    }
+    dispositionIdentities.push(
+      `${disposition.finding_id}\0${disposition.region}`,
+    );
+  });
+  const expectedIdentities = correction.scopes.flatMap((scope) => (
+    [...scope.regions, ...scope.materially_affected_regions]
+      .map((region) => `${scope.finding_id}\0${region}`)
+  ));
+  const dispositionsAreValid = allowSubset
+    ? isUniqueSubset(dispositionIdentities, expectedIdentities)
+    : haveExactUniqueMembers(dispositionIdentities, expectedIdentities);
+  if (!dispositionsAreValid) {
+    const message = allowSubset
+      ? PARTIAL_TARGETED_REVIEW_ERROR
+      : 'targeted re-review dispositions must exactly match correction effects';
+    throw new TakeTicketEvaluationError(message);
+  }
+}
+
 function validateLifecyclePosition(event, index) {
   const field = `result.lifecycle[${index}]`;
   requireExactFields(event, ['sequence', 'phase', 'status', 'reference'], field);
@@ -296,7 +374,6 @@ function validateTargetedReview(value, correction, fullReview) {
     'result.targeted_re_review',
   );
   const accepted = acceptedFindingIds(fullReview);
-  const required = requiredTargetRegions(correction);
   const reviewRequired = accepted.length > 0;
   const expectedState = reviewRequired ? 'completed' : 'not-required';
   if (value.state !== expectedState) {
@@ -304,62 +381,24 @@ function validateTargetedReview(value, correction, fullReview) {
       `targeted re-review must be ${expectedState}`,
     );
   }
-  requireStringArray(
-    value.regions,
-    'result.targeted_re_review.regions',
-    !reviewRequired,
-  );
-  if (!Array.isArray(value.dispositions)) {
-    throw new TakeTicketEvaluationError(
-      'result.targeted_re_review.dispositions must be an array',
-    );
-  }
   if (!reviewRequired) {
-    if (value.artifact !== null || value.dispositions.length > 0) {
+    requireStringArray(
+      value.regions,
+      'result.targeted_re_review.regions',
+      true,
+    );
+    if (!Array.isArray(value.dispositions)
+      || value.artifact !== null
+      || value.dispositions.length > 0) {
       throw new TakeTicketEvaluationError(
         'clean Review cannot contain targeted re-review work',
       );
     }
     return;
   }
-  if (!required.every((region) => value.regions.includes(region))) {
-    throw new TakeTicketEvaluationError(
-      'targeted re-review must cover every corrected and materially affected region',
-    );
-  }
-  if (value.regions.length !== new Set(required).size) {
-    throw new TakeTicketEvaluationError(
-      'targeted re-review regions must exactly match correction effects',
-    );
-  }
+  validateTargetRegions(value.regions, correction);
   validateDescriptor(value.artifact, 'result.targeted_re_review.artifact');
-  const dispositionIdentities = [];
-  value.dispositions.forEach((disposition, index) => {
-    const field = `result.targeted_re_review.dispositions[${index}]`;
-    requireExactFields(disposition, ['finding_id', 'region', 'outcome'], field);
-    requireString(disposition.finding_id, `${field}.finding_id`);
-    requireString(disposition.region, `${field}.region`);
-    if (disposition.outcome !== 'accepted') {
-      throw new TakeTicketEvaluationError(
-        'reviewed result requires accepted targeted dispositions',
-      );
-    }
-    dispositionIdentities.push(
-      `${disposition.finding_id}\0${disposition.region}`,
-    );
-  });
-  const expectedDispositionIdentities = correction.scopes.flatMap((scope) => (
-    [...scope.regions, ...scope.materially_affected_regions]
-      .map((region) => `${scope.finding_id}\0${region}`)
-  ));
-  if (!haveExactUniqueMembers(
-    dispositionIdentities,
-    expectedDispositionIdentities,
-  )) {
-    throw new TakeTicketEvaluationError(
-      'targeted re-review dispositions must exactly match correction effects',
-    );
-  }
+  validateTargetedDispositions(value.dispositions, correction);
 }
 
 function validateLifecycle(value, correctionRequired, result) {
@@ -517,12 +556,12 @@ function validateNonReviewedPhaseData(result, phaseIndex) {
     if (result.correction.state !== result.failure.status
       || result.correction.range !== null
       || result.correction.evidence.length !== 0
-      || !Array.isArray(result.correction.scopes)
-      || result.correction.scopes.length === 0) {
+      || !Array.isArray(result.correction.scopes)) {
       throw new TakeTicketEvaluationError(
         'failed correction must preserve scope without claiming completion',
       );
     }
+    validateCorrectionScopes(result.correction.scopes, result.full_review, true);
   }
   if (phaseIndex === 3) {
     validateCorrection(
@@ -538,12 +577,21 @@ function validateNonReviewedPhaseData(result, phaseIndex) {
     if (result.targeted_re_review.state !== result.failure.status
       || result.targeted_re_review.artifact !== null
       || !Array.isArray(result.targeted_re_review.regions)
-      || result.targeted_re_review.regions.length === 0
       || !Array.isArray(result.targeted_re_review.dispositions)) {
       throw new TakeTicketEvaluationError(
         'incomplete targeted re-review must preserve its required regions',
       );
     }
+    validateTargetRegions(
+      result.targeted_re_review.regions,
+      result.correction,
+      true,
+    );
+    validateTargetedDispositions(
+      result.targeted_re_review.dispositions,
+      result.correction,
+      true,
+    );
   }
 }
 
@@ -649,6 +697,16 @@ function validateNonReviewedResult(result) {
       );
     }
   });
+  for (let index = phaseIndex; index < PHASES.length; index += 1) {
+    const expectedReference = index === phaseIndex
+      ? `${result.failure.status}:${result.failure.phase}`
+      : 'not-started';
+    if (result.lifecycle[index].reference !== expectedReference) {
+      throw new TakeTicketEvaluationError(
+        'failed and future lifecycle references must be explicit',
+      );
+    }
+  }
 
   requireExactFields(
     result.completeness,

@@ -5,10 +5,37 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
+function isolatedGitEnvironment(root, environment) {
+  const isolationRoot = path.join(root, '.git-fixture-isolation');
+  const hooksRoot = path.join(isolationRoot, 'hooks');
+  const templateRoot = path.join(isolationRoot, 'template');
+  fs.mkdirSync(hooksRoot, { recursive: true });
+  fs.mkdirSync(templateRoot, { recursive: true });
+
+  return {
+    ...environment,
+    GIT_ASKPASS: '/usr/bin/false',
+    GIT_CONFIG_COUNT: '3',
+    GIT_CONFIG_GLOBAL: os.devNull,
+    GIT_CONFIG_KEY_0: 'core.hooksPath',
+    GIT_CONFIG_KEY_1: 'commit.gpgSign',
+    GIT_CONFIG_KEY_2: 'tag.gpgSign',
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_CONFIG_SYSTEM: os.devNull,
+    GIT_CONFIG_VALUE_0: hooksRoot,
+    GIT_CONFIG_VALUE_1: 'false',
+    GIT_CONFIG_VALUE_2: 'false',
+    GIT_TEMPLATE_DIR: templateRoot,
+    GIT_TERMINAL_PROMPT: '0',
+    GCM_INTERACTIVE: 'Never',
+    SSH_ASKPASS: '/usr/bin/false',
+  };
+}
+
 function runGit(root, arguments_, environment = process.env) {
   const result = spawnSync('git', arguments_, {
     cwd: root,
-    env: environment,
+    env: isolatedGitEnvironment(root, environment),
     encoding: 'utf8',
   });
   if (result.status !== 0) {

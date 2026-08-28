@@ -274,8 +274,14 @@ function nonReviewedResult(phase, status = 'failed', ranges = null) {
     recovery: `Resume the ${phase} phase from retained evidence.`,
   };
   result.lifecycle.forEach((event, index) => {
-    if (index === phaseIndex) event.status = status;
-    if (index > phaseIndex) event.status = 'incomplete';
+    if (index === phaseIndex) {
+      event.status = status;
+      event.reference = `${status}:${phase}`;
+    }
+    if (index > phaseIndex) {
+      event.status = 'incomplete';
+      event.reference = 'not-started';
+    }
   });
   result.completeness.completed_phases
     = result.completeness.required_phases.slice(0, phaseIndex);
@@ -628,6 +634,75 @@ test('failed and incomplete phases remain visible and never become reviewed', ()
   );
 });
 
+test('partial correction and targeted review retain only authoritative progress', () => {
+  for (const mutate of [
+    (result) => {
+      result.correction.scopes[0].regions = ['region:fabricated'];
+    },
+    (result) => {
+      result.correction.scopes.push({
+        finding_id: 'finding-fabricated',
+        regions: ['region:fabricated'],
+        materially_affected_regions: [],
+      });
+    },
+  ]) {
+    const result = nonReviewedResult('correction');
+    mutate(result);
+    assert.throws(
+      () => validateTakeTicketResult(result),
+      /partial correction scope must match accepted Review findings/,
+    );
+  }
+
+  for (const mutate of [
+    (result) => {
+      result.targeted_re_review.regions.pop();
+    },
+    (result) => {
+      result.targeted_re_review.regions.push('region:fabricated');
+    },
+    (result) => {
+      result.targeted_re_review.dispositions.push({
+        finding_id: 'finding-fabricated',
+        region: 'region:fabricated',
+        outcome: 'accepted',
+      });
+    },
+    (result) => {
+      const disposition = {
+        finding_id: 'finding-1',
+        region: 'region:finding-1',
+        outcome: 'accepted',
+      };
+      result.targeted_re_review.dispositions.push(disposition, {
+        ...disposition,
+      });
+    },
+  ]) {
+    const result = nonReviewedResult('targeted-re-review', 'incomplete');
+    mutate(result);
+    assert.throws(
+      () => validateTakeTicketResult(result),
+      /partial targeted re-review progress contradicts correction effects/,
+    );
+  }
+
+  const validPartialProgress = nonReviewedResult(
+    'targeted-re-review',
+    'incomplete',
+  );
+  validPartialProgress.targeted_re_review.dispositions.push({
+    finding_id: 'finding-1',
+    region: 'region:finding-1',
+    outcome: 'accepted',
+  });
+  assert.strictEqual(
+    validateTakeTicketResult(validPartialProgress),
+    validPartialProgress,
+  );
+});
+
 test('non-reviewed results keep every completed prefix cross-consistent', () => {
   const wrongImplementationRange = nonReviewedResult('full-review');
   wrongImplementationRange.lifecycle[0].reference
@@ -697,6 +772,109 @@ test('outcome sandbox derives immutable ranges from real changed commits', (t) =
     assert.deepEqual(changedPaths, ['src/ticket-change.js']);
   }
   assert.equal(sandbox.repository.head, correction.head);
+});
+
+test('full-review failure retains no synthetic future correction evidence', (t) => {
+  const sandbox = createOutcomeSandbox(t);
+  const result = nonReviewedResult(
+    'full-review',
+    'failed',
+    sandbox.repository.ranges,
+  );
+
+  assert.strictEqual(validateTakeTicketResult(result), result);
+  assert.equal(
+    result.lifecycle[0].reference,
+    `${sandbox.repository.ranges.implementation.base}`
+      + `..${sandbox.repository.ranges.implementation.head}`,
+  );
+  assert.equal(result.lifecycle[1].reference, 'failed:full-review');
+  assert.equal(result.lifecycle[2].reference, 'not-started');
+  assert.equal(result.lifecycle[3].reference, 'not-started');
+  assert.equal(result.correction, null);
+  assert.equal(result.targeted_re_review, null);
+  assert.deepEqual(Object.keys(sandbox.repository.ranges), ['implementation']);
+  assert.equal(
+    fixtureGit(sandbox.repository.root, ['rev-list', '--count', 'HEAD']),
+    '2',
+  );
+  assert.deepEqual(
+    result.artifacts.map(({ kind }) => kind),
+    ['implementation-handoff'],
+  );
+
+  const fabricatedFuture = structuredClone(result);
+  fabricatedFuture.lifecycle[2].reference
+    = `${'b'.repeat(40)}..${'c'.repeat(40)}`;
+  assert.throws(
+    () => validateTakeTicketResult(fabricatedFuture),
+    /failed and future lifecycle references must be explicit/,
+  );
+});
+
+test('outcome sandbox ignores hostile inherited Git configuration', (t) => {
+  const hostileRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'take-ticket-hostile-git-'));
+  t.after(() => fs.rmSync(hostileRoot, { recursive: true, force: true }));
+  const hooksRoot = path.join(hostileRoot, 'hooks');
+  const templateRoot = path.join(hostileRoot, 'template');
+  const hookMarker = path.join(hostileRoot, 'hook-ran');
+  const signingMarker = path.join(hostileRoot, 'signing-ran');
+  fs.mkdirSync(hooksRoot, { recursive: true });
+  fs.mkdirSync(path.join(templateRoot, 'hooks'), { recursive: true });
+  for (const [filePath, marker] of [
+    [path.join(hooksRoot, 'pre-commit'), hookMarker],
+    [path.join(templateRoot, 'hooks', 'pre-commit'), hookMarker],
+    [path.join(hostileRoot, 'signing-program'), signingMarker],
+  ]) {
+    fs.writeFileSync(
+      filePath,
+      `#!/bin/sh\nprintf ran > "${marker}"\nexit 1\n`,
+      { mode: 0o755 },
+    );
+  }
+  const globalConfig = path.join(hostileRoot, 'global.gitconfig');
+  fs.writeFileSync(
+    globalConfig,
+    [
+      '[core]',
+      `\thooksPath = ${hooksRoot}`,
+      '[commit]',
+      '\tgpgSign = true',
+      '[gpg]',
+      `\tprogram = ${path.join(hostileRoot, 'signing-program')}`,
+      '[init]',
+      `\ttemplateDir = ${templateRoot}`,
+      '[user]',
+      '\tsigningKey = hostile-fixture-key',
+      '',
+    ].join('\n'),
+  );
+
+  const inheritedKeys = {
+    GIT_CONFIG_GLOBAL: globalConfig,
+    GIT_CONFIG_SYSTEM: globalConfig,
+    GIT_TEMPLATE_DIR: templateRoot,
+  };
+  const previousValues = new Map(
+    Object.keys(inheritedKeys).map((key) => [key, process.env[key]]),
+  );
+  Object.assign(process.env, inheritedKeys);
+  let sandbox;
+  try {
+    sandbox = createOutcomeSandbox(t, { includeCorrection: true });
+  } finally {
+    for (const [key, value] of previousValues) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+
+  assert.equal(fs.existsSync(hookMarker), false);
+  assert.equal(fs.existsSync(signingMarker), false);
+  assert.equal(
+    fixtureGit(sandbox.repository.root, ['rev-list', '--count', 'HEAD']),
+    '3',
+  );
 });
 
 test('test-only dependency Adapters drive clean, correction, and failure outcomes', async (t) => {
@@ -827,6 +1005,17 @@ test('test-only dependency Adapters drive clean, correction, and failure outcome
       assert.deepEqual(
         scenarioResult.correction.range,
         sandbox.repository.ranges.correction,
+        scenario.name,
+      );
+    } else if (scenario.failedPhase === 'full-review') {
+      assert.deepEqual(
+        Object.keys(sandbox.repository.ranges),
+        ['implementation'],
+        scenario.name,
+      );
+      assert.deepEqual(
+        scenarioResult.lifecycle.slice(1).map(({ reference }) => reference),
+        ['failed:full-review', 'not-started', 'not-started'],
         scenario.name,
       );
     }
