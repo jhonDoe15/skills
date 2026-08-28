@@ -1,0 +1,88 @@
+{
+  "skill_name": "skill-writing",
+  "version": 1,
+  "evaluation": {
+    "scope": "skill-writing-outcome",
+    "layer": "outcome",
+    "skill": "skill-writing",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "skill-writing-outcome-v1"
+  },
+  "signals": {
+    "sw-outcome-artifact": ["skills/deployment-triage/SKILL\\.md"],
+    "sw-outcome-name": ["name: deployment-triage"],
+    "sw-outcome-dependency": ["incident-investigation"],
+    "sw-outcome-mechanics": ["Mechanics:"],
+    "sw-outcome-evidence": ["Behavioral evidence:"]
+  },
+  "global_required_signals": [
+    "sw-outcome-artifact",
+    "sw-outcome-name",
+    "sw-outcome-dependency",
+    "sw-outcome-mechanics",
+    "sw-outcome-evidence"
+  ],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "complete-skill",
+        "description": "Semantically assess whether the output contains a justified, portable, executable Agent Skill whose observable trigger, outcome, branches, completion criteria, dependencies, and degrees of freedom follow the supplied need. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "honest-verification",
+        "description": "Semantically assess whether mechanics checks and behavioral evidence are separate, evidence is proportionate to claims, absent model evidence is explicitly unverified, and unresolved decisions or limits remain visible. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "complete-skill-writing-outcome",
+      "name": "host-neutral-created-skill-and-verification",
+      "prompt": "Create the `deployment-triage` Agent Skill from `evals/fixtures/skill-request.json`. First justify the Skill against existing Skills, recurrence, and cheap environment lookup. Decide the behavior contract before prose. Produce `skills/deployment-triage/SKILL.md` with its named `incident-investigation` dependency, then return a concise verification result that separates mechanics from behavioral evidence. Do not install, publish, or run paid evaluations.",
+      "expected_output": "The created or revised portable Skill plus a concise verification result with mechanics and behavioral evidence as separate conclusions, explicit unverified status where evidence was not run, and unresolved decisions and limits.",
+      "files": ["evals/fixtures/skill-request.json"],
+      "required_skill_loads": [
+        "skill-writing",
+        "agent-writing",
+        "writing-foundation",
+        "skill-mechanics",
+        "skill-evaluation"
+      ],
+      "expectations": [
+        "Exact lifecycle evidence establishes Skill Writing, Agent Writing, Writing Foundation, Skill Mechanics, and Skill Evaluation activation.",
+        "The deterministic gate establishes only the artifact path, canonical Skill name, dependency name, and separate verification labels.",
+        "The blind judge assesses justification, observable behavior, branches, completion, dependencies, degrees of freedom, and faithful production prose.",
+        "The blind judge verifies that mechanics validity is not presented as proof of routing or runtime behavior.",
+        "The blind judge verifies proportionate evidence or an explicit unverified status and visible unresolved decisions and limits.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness.",
+        "Failed critical mechanical gates are non-overridable, and the matched No-Skill control receives the same task without the Skill or its behavior-carrying dependencies."
+      ],
+      "covered_clauses": [
+        "sw-justification",
+        "sw-behavior-contract",
+        "sw-trigger-boundaries",
+        "sw-branches",
+        "sw-completion-criteria",
+        "sw-dependencies",
+        "sw-degrees-of-freedom",
+        "sw-evidence-needs",
+        "sw-authoring-workflow",
+        "sw-canonical-composition",
+        "sw-output",
+        "sw-verification-separation",
+        "sw-completion"
+      ],
+      "required_signals": []
+    }
+  ]
+}

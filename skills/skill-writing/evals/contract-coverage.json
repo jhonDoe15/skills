@@ -1,0 +1,267 @@
+{
+  "version": 1,
+  "clauses": [
+    {
+      "id": "sm-accepted-contract",
+      "owner": "skill-mechanics",
+      "kind": "behavior",
+      "cases": [{ "scope": "skill-mechanics-role", "id": "represent-decided-contract" }]
+    },
+    {
+      "id": "sm-portable-representation",
+      "owner": "skill-mechanics",
+      "kind": "behavior",
+      "cases": [{ "scope": "skill-mechanics-role", "id": "represent-decided-contract" }]
+    },
+    {
+      "id": "sm-routing-description",
+      "owner": "skill-mechanics",
+      "kind": "behavior",
+      "cases": [{ "scope": "skill-mechanics-role", "id": "represent-decided-contract" }]
+    },
+    {
+      "id": "sm-ordered-steps",
+      "owner": "skill-mechanics",
+      "kind": "behavior",
+      "cases": [{ "scope": "skill-mechanics-role", "id": "represent-decided-contract" }]
+    },
+    {
+      "id": "sm-conditional-references",
+      "owner": "skill-mechanics",
+      "kind": "behavior",
+      "cases": [{ "scope": "skill-mechanics-role", "id": "represent-decided-contract" }]
+    },
+    {
+      "id": "sm-named-dependencies",
+      "owner": "skill-mechanics",
+      "kind": "behavior",
+      "cases": [{ "scope": "skill-mechanics-role", "id": "represent-decided-contract" }]
+    },
+    {
+      "id": "sm-resolvable-pointers",
+      "owner": "skill-mechanics",
+      "kind": "behavior",
+      "cases": [{ "scope": "skill-mechanics-role", "id": "represent-decided-contract" }]
+    },
+    {
+      "id": "sm-structural-validation",
+      "owner": "skill-mechanics",
+      "kind": "behavior",
+      "cases": [{ "scope": "skill-mechanics-role", "id": "represent-decided-contract" }]
+    },
+    {
+      "id": "sm-mechanics-result",
+      "owner": "skill-mechanics",
+      "kind": "behavior",
+      "cases": [{ "scope": "skill-mechanics-role", "id": "represent-decided-contract" }]
+    },
+    {
+      "id": "sm-no-behavior-design",
+      "owner": "skill-mechanics",
+      "kind": "exclusion",
+      "cases": [{ "scope": "skill-mechanics-role", "id": "represent-decided-contract" }]
+    },
+    {
+      "id": "sm-no-behavior-proof",
+      "owner": "skill-mechanics",
+      "kind": "exclusion",
+      "cases": [{ "scope": "skill-mechanics-role", "id": "represent-decided-contract" }]
+    },
+    {
+      "id": "sm-routing-consumer",
+      "owner": "skill-mechanics",
+      "kind": "routing-boundary",
+      "cases": [{ "scope": "skill-mechanics-trigger", "id": "skill-mechanics-canonical" }]
+    },
+    {
+      "id": "sm-private-routing-exclusion",
+      "owner": "skill-mechanics",
+      "kind": "routing-boundary",
+      "cases": [{ "scope": "skill-mechanics-trigger", "id": "skill-mechanics-private-false-activation" }]
+    },
+    {
+      "id": "sw-justification",
+      "owner": "skill-writing",
+      "kind": "behavior",
+      "cases": [
+        { "scope": "skill-writing-role", "id": "skill-writing-owned-contract" },
+        { "scope": "skill-writing-outcome", "id": "complete-skill-writing-outcome" }
+      ]
+    },
+    {
+      "id": "sw-behavior-contract",
+      "owner": "skill-writing",
+      "kind": "behavior",
+      "cases": [
+        { "scope": "skill-writing-role", "id": "skill-writing-owned-contract" },
+        { "scope": "skill-writing-outcome", "id": "complete-skill-writing-outcome" }
+      ]
+    },
+    {
+      "id": "sw-trigger-boundaries",
+      "owner": "skill-writing",
+      "kind": "behavior",
+      "cases": [
+        { "scope": "skill-writing-role", "id": "skill-writing-owned-contract" },
+        { "scope": "skill-writing-outcome", "id": "complete-skill-writing-outcome" }
+      ]
+    },
+    {
+      "id": "sw-branches",
+      "owner": "skill-writing",
+      "kind": "behavior",
+      "cases": [
+        { "scope": "skill-writing-role", "id": "skill-writing-owned-contract" },
+        { "scope": "skill-writing-outcome", "id": "complete-skill-writing-outcome" }
+      ]
+    },
+    {
+      "id": "sw-completion-criteria",
+      "owner": "skill-writing",
+      "kind": "behavior",
+      "cases": [
+        { "scope": "skill-writing-role", "id": "skill-writing-owned-contract" },
+        { "scope": "skill-writing-outcome", "id": "complete-skill-writing-outcome" }
+      ]
+    },
+    {
+      "id": "sw-dependencies",
+      "owner": "skill-writing",
+      "kind": "behavior",
+      "cases": [
+        { "scope": "skill-writing-role", "id": "skill-writing-owned-contract" },
+        { "scope": "skill-writing-outcome", "id": "complete-skill-writing-outcome" }
+      ]
+    },
+    {
+      "id": "sw-degrees-of-freedom",
+      "owner": "skill-writing",
+      "kind": "behavior",
+      "cases": [
+        { "scope": "skill-writing-role", "id": "skill-writing-owned-contract" },
+        { "scope": "skill-writing-outcome", "id": "complete-skill-writing-outcome" }
+      ]
+    },
+    {
+      "id": "sw-evidence-needs",
+      "owner": "skill-writing",
+      "kind": "behavior",
+      "cases": [
+        { "scope": "skill-writing-role", "id": "skill-writing-owned-contract" },
+        { "scope": "skill-writing-outcome", "id": "complete-skill-writing-outcome" }
+      ]
+    },
+    {
+      "id": "sw-authoring-workflow",
+      "owner": "skill-writing",
+      "kind": "behavior",
+      "cases": [
+        { "scope": "skill-writing-role", "id": "skill-writing-owned-contract" },
+        { "scope": "skill-writing-outcome", "id": "complete-skill-writing-outcome" }
+      ]
+    },
+    {
+      "id": "sw-canonical-composition",
+      "owner": "skill-writing",
+      "kind": "dependency-edge",
+      "cases": [
+        { "scope": "skill-writing-role", "id": "skill-writing-owned-contract" },
+        { "scope": "skill-writing-outcome", "id": "complete-skill-writing-outcome" }
+      ]
+    },
+    {
+      "id": "sw-agent-writing-edge",
+      "owner": "skill-writing",
+      "kind": "dependency-edge",
+      "cases": [{ "scope": "skill-writing-components", "id": "agent-writing-edge" }]
+    },
+    {
+      "id": "sw-skill-mechanics-edge",
+      "owner": "skill-writing",
+      "kind": "dependency-edge",
+      "cases": [{ "scope": "skill-writing-components", "id": "skill-mechanics-edge" }]
+    },
+    {
+      "id": "sw-skill-evaluation-edge",
+      "owner": "skill-writing",
+      "kind": "dependency-edge",
+      "cases": [{ "scope": "skill-writing-components", "id": "skill-evaluation-edge" }]
+    },
+    {
+      "id": "sw-missing-dependencies",
+      "owner": "skill-writing",
+      "kind": "failure",
+      "cases": [
+        { "scope": "skill-writing-package-closure", "id": "missing-agent-writing" },
+        { "scope": "skill-writing-package-closure", "id": "missing-skill-evaluation" },
+        { "scope": "skill-writing-package-closure", "id": "missing-skill-mechanics" }
+      ]
+    },
+    {
+      "id": "sw-output",
+      "owner": "skill-writing",
+      "kind": "behavior",
+      "cases": [
+        { "scope": "skill-writing-role", "id": "skill-writing-owned-contract" },
+        { "scope": "skill-writing-outcome", "id": "complete-skill-writing-outcome" }
+      ]
+    },
+    {
+      "id": "sw-verification-separation",
+      "owner": "skill-writing",
+      "kind": "behavior",
+      "cases": [
+        { "scope": "skill-writing-role", "id": "skill-writing-owned-contract" },
+        { "scope": "skill-writing-outcome", "id": "complete-skill-writing-outcome" }
+      ]
+    },
+    {
+      "id": "sw-completion",
+      "owner": "skill-writing",
+      "kind": "behavior",
+      "cases": [
+        { "scope": "skill-writing-role", "id": "skill-writing-owned-contract" },
+        { "scope": "skill-writing-outcome", "id": "complete-skill-writing-outcome" }
+      ]
+    },
+    {
+      "id": "sw-routing-positive",
+      "owner": "skill-writing",
+      "kind": "routing-boundary",
+      "cases": [
+        { "scope": "skill-writing-trigger", "id": "skill-writing-positive" },
+        { "scope": "skill-writing-trigger", "id": "skill-writing-revision" }
+      ]
+    },
+    {
+      "id": "sw-routing-agent-artifact-exclusion",
+      "owner": "skill-writing",
+      "kind": "routing-boundary",
+      "cases": [{ "scope": "skill-writing-trigger", "id": "skill-writing-agent-artifact-exclusion" }]
+    },
+    {
+      "id": "sw-routing-handoff-exclusion",
+      "owner": "skill-writing",
+      "kind": "routing-boundary",
+      "cases": [{ "scope": "skill-writing-trigger", "id": "skill-writing-handoff-exclusion" }]
+    },
+    {
+      "id": "sw-routing-installation-exclusion",
+      "owner": "skill-writing",
+      "kind": "routing-boundary",
+      "cases": [{ "scope": "skill-writing-trigger", "id": "skill-writing-install-exclusion" }]
+    },
+    {
+      "id": "sw-routing-publication-exclusion",
+      "owner": "skill-writing",
+      "kind": "routing-boundary",
+      "cases": [{ "scope": "skill-writing-trigger", "id": "skill-writing-publication-exclusion" }]
+    },
+    {
+      "id": "sw-routing-canonical",
+      "owner": "skill-writing",
+      "kind": "routing-boundary",
+      "cases": [{ "scope": "skill-writing-trigger", "id": "skill-writing-canonical" }]
+    }
+  ]
+}
