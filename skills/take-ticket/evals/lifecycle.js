@@ -292,18 +292,29 @@ function validateCorrection(value, fullReview, implementation) {
   }
 }
 
-function requiredTargetRegions(correction) {
-  return correction.scopes.flatMap((scope) => [
+function requiredRegionsForScope(scope) {
+  return [...new Set([
     ...scope.regions,
     ...scope.materially_affected_regions,
-  ]);
+  ])];
+}
+
+function requiredTargetRegions(correction) {
+  return [...new Set(correction.scopes.flatMap(requiredRegionsForScope))];
+}
+
+function requiredDispositionIdentities(correction) {
+  return correction.scopes.flatMap((scope) => (
+    requiredRegionsForScope(scope)
+      .map((region) => `${scope.finding_id}\0${region}`)
+  ));
 }
 
 function validateTargetRegions(regions, correction, incomplete = false) {
   requireStringArray(regions, 'result.targeted_re_review.regions');
   const required = requiredTargetRegions(correction);
   if (incomplete) {
-    if (!haveExactUniqueMembers(regions, [...new Set(required)])) {
+    if (!haveExactUniqueMembers(regions, required)) {
       throw new TakeTicketEvaluationError(PARTIAL_TARGETED_REVIEW_ERROR);
     }
     return;
@@ -313,7 +324,7 @@ function validateTargetRegions(regions, correction, incomplete = false) {
       'targeted re-review must cover every corrected and materially affected region',
     );
   }
-  if (regions.length !== new Set(required).size) {
+  if (regions.length !== required.length) {
     throw new TakeTicketEvaluationError(
       'targeted re-review regions must exactly match correction effects',
     );
@@ -342,10 +353,7 @@ function validateTargetedDispositions(dispositions, correction, allowSubset = fa
       `${disposition.finding_id}\0${disposition.region}`,
     );
   });
-  const expectedIdentities = correction.scopes.flatMap((scope) => (
-    [...scope.regions, ...scope.materially_affected_regions]
-      .map((region) => `${scope.finding_id}\0${region}`)
-  ));
+  const expectedIdentities = requiredDispositionIdentities(correction);
   const dispositionsAreValid = allowSubset
     ? isUniqueSubset(dispositionIdentities, expectedIdentities)
     : haveExactUniqueMembers(dispositionIdentities, expectedIdentities);
@@ -535,7 +543,6 @@ function validateNonReviewedPhaseData(result, phaseIndex) {
     }
   }
   if (phaseIndex > 0) validateImplementation(result.implementation);
-  if (phaseIndex > 1) validateReview(result.full_review);
 
   if (phaseIndex === 0 && result.implementation !== null) {
     throw new TakeTicketEvaluationError(
@@ -678,6 +685,14 @@ function validateNonReviewedResult(result) {
   requireString(result.failure.message, 'result.failure.message');
   requireString(result.failure.recovery, 'result.failure.recovery');
   const phaseIndex = PHASES.indexOf(result.failure.phase);
+  if (phaseIndex > 1) {
+    validateReview(result.full_review);
+    if (acceptedFindingIds(result.full_review).length === 0) {
+      throw new TakeTicketEvaluationError(
+        'correction and targeted re-review cannot fail without accepted full Review findings',
+      );
+    }
+  }
 
   if (!Array.isArray(result.lifecycle) || result.lifecycle.length !== PHASES.length) {
     throw new TakeTicketEvaluationError('result.lifecycle must cover every phase');

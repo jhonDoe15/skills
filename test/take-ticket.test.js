@@ -319,6 +319,48 @@ function nonReviewedResult(phase, status = 'failed', ranges = null) {
   return result;
 }
 
+function cleanReviewFailureResult(phase) {
+  const status = phase === 'targeted-re-review' ? 'incomplete' : 'failed';
+  const result = successfulResult();
+  const phaseIndex = PHASES.indexOf(phase);
+  result.status = status;
+  result.failure = {
+    phase,
+    status,
+    message: `${phase} failed after a clean Review.`,
+    recovery: 'Correct the impossible lifecycle state.',
+  };
+  result.lifecycle.forEach((event, index) => {
+    if (index === phaseIndex) {
+      event.status = status;
+      event.reference = `${status}:${phase}`;
+    } else if (index > phaseIndex) {
+      event.status = 'incomplete';
+      event.reference = 'not-started';
+    }
+  });
+  result.completeness.completed_phases = PHASES.slice(0, phaseIndex);
+  result.completeness.reviewed = false;
+  result.artifacts = result.artifacts.slice(0, 2);
+  if (phase === 'correction') {
+    result.correction = {
+      state: status,
+      range: null,
+      scopes: [],
+      evidence: [],
+    };
+    result.targeted_re_review = null;
+  } else {
+    result.targeted_re_review = {
+      state: status,
+      regions: [],
+      dispositions: [],
+      artifact: null,
+    };
+  }
+  return result;
+}
+
 function createArtifact(t, value) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'take-ticket-artifact-'));
   const filePath = path.join(root, 'result.json');
@@ -611,6 +653,44 @@ test('correction and targeted re-review preserve authoritative finding regions',
   }
 });
 
+test('overlapping correction effects require one disposition per finding-region', () => {
+  const completed = successfulResult({ acceptedFindings: ['finding-1'] });
+  completed.correction.scopes[0].materially_affected_regions.unshift(
+    'region:finding-1',
+  );
+  assert.strictEqual(validateTakeTicketResult(completed), completed);
+
+  const partial = nonReviewedResult('targeted-re-review', 'incomplete');
+  partial.correction.scopes[0].materially_affected_regions.unshift(
+    'region:finding-1',
+  );
+  partial.targeted_re_review.dispositions.push({
+    finding_id: 'finding-1',
+    region: 'region:finding-1',
+    outcome: 'accepted',
+  });
+  assert.strictEqual(validateTakeTicketResult(partial), partial);
+
+  for (const [result, expectedError] of [
+    [
+      completed,
+      /targeted re-review dispositions must exactly match correction effects/,
+    ],
+    [
+      partial,
+      /partial targeted re-review progress contradicts correction effects/,
+    ],
+  ]) {
+    result.targeted_re_review.dispositions.push({
+      ...result.targeted_re_review.dispositions[0],
+    });
+    assert.throws(
+      () => validateTakeTicketResult(result),
+      expectedError,
+    );
+  }
+});
+
 test('failed and incomplete phases remain visible and never become reviewed', () => {
   for (const phase of PHASES) {
     const result = nonReviewedResult(
@@ -632,6 +712,16 @@ test('failed and incomplete phases remain visible and never become reviewed', ()
     () => validateTakeTicketResult(falseSuccess),
     /non-reviewed result cannot claim reviewed completeness/,
   );
+});
+
+test('clean Review cannot fail correction or targeted re-review', () => {
+  for (const phase of ['correction', 'targeted-re-review']) {
+    assert.throws(
+      () => validateTakeTicketResult(cleanReviewFailureResult(phase)),
+      /cannot fail without accepted full Review findings/,
+      phase,
+    );
+  }
 });
 
 test('partial correction and targeted review retain only authoritative progress', () => {
@@ -852,6 +942,11 @@ test('outcome sandbox ignores hostile inherited Git configuration', (t) => {
 
   const inheritedKeys = {
     GIT_CONFIG_GLOBAL: globalConfig,
+    GIT_CONFIG_PARAMETERS: [
+      `'core.hooksPath=${hooksRoot}'`,
+      "'commit.gpgSign=true'",
+      `'gpg.program=${path.join(hostileRoot, 'signing-program')}'`,
+    ].join(' '),
     GIT_CONFIG_SYSTEM: globalConfig,
     GIT_TEMPLATE_DIR: templateRoot,
   };

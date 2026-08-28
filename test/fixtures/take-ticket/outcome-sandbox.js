@@ -12,7 +12,7 @@ function isolatedGitEnvironment(root, environment) {
   fs.mkdirSync(hooksRoot, { recursive: true });
   fs.mkdirSync(templateRoot, { recursive: true });
 
-  return {
+  const isolated = {
     ...environment,
     GIT_ASKPASS: '/usr/bin/false',
     GIT_CONFIG_COUNT: '3',
@@ -30,6 +30,8 @@ function isolatedGitEnvironment(root, environment) {
     GCM_INTERACTIVE: 'Never',
     SSH_ASKPASS: '/usr/bin/false',
   };
+  delete isolated.GIT_CONFIG_PARAMETERS;
+  return isolated;
 }
 
 function runGit(root, arguments_, environment = process.env) {
