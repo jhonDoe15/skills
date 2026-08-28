@@ -1,6 +1,6 @@
 ---
 name: take-ticket
-description: Use when one settled ticket must reach a reviewed-ticket result through Implement, one fresh independent full Code Review, accepted-finding correction, and targeted re-review. Preserves incomplete and failed lifecycle evidence. Excludes ticket topology, publication, release, and multi-ticket dispatch.
+description: Use when a settled ticket must reach a reviewed-ticket result. Used directly or by Dispatch Work. Excludes implementation-only work, review-only work, ticket topology, publication, release, and multi-ticket dispatch.
 disable-model-invocation: false
 ---
 

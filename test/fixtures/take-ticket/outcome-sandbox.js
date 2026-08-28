@@ -17,6 +17,18 @@ function runGit(root, arguments_, environment = process.env) {
   return result.stdout.trim();
 }
 
+function commitTicketState(root, state, message, environment) {
+  const sourcePath = path.join(root, 'src', 'ticket-change.js');
+  fs.mkdirSync(path.dirname(sourcePath), { recursive: true });
+  fs.writeFileSync(
+    sourcePath,
+    `'use strict';\n\nmodule.exports = { state: '${state}' };\n`,
+  );
+  runGit(root, ['add', 'src/ticket-change.js']);
+  runGit(root, ['commit', '--quiet', '-m', message], environment);
+  return runGit(root, ['rev-parse', 'HEAD']);
+}
+
 function createBoundary(methods) {
   const calls = [];
   const boundary = { calls };
@@ -29,16 +41,10 @@ function createBoundary(methods) {
   return boundary;
 }
 
-function createOutcomeSandbox(t) {
+function createOutcomeSandbox(t, { includeCorrection = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'take-ticket-outcome-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   runGit(root, ['init', '--quiet']);
-  fs.mkdirSync(path.join(root, 'src'), { recursive: true });
-  fs.writeFileSync(
-    path.join(root, 'src', 'ticket-change.js'),
-    "'use strict';\n\nmodule.exports = { state: 'settled' };\n",
-  );
-  runGit(root, ['add', 'src/ticket-change.js']);
   const identity = {
     ...process.env,
     GIT_AUTHOR_NAME: 'Take Ticket Fixture',
@@ -46,12 +52,37 @@ function createOutcomeSandbox(t) {
     GIT_COMMITTER_NAME: 'Take Ticket Fixture',
     GIT_COMMITTER_EMAIL: 'fixture@example.invalid',
   };
-  runGit(root, ['commit', '--quiet', '-m', 'fixture base'], identity);
+  const base = commitTicketState(root, 'settled', 'fixture base', identity);
+  const implementationHead = commitTicketState(
+    root,
+    'implemented',
+    'implement ticket',
+    identity,
+  );
+  const ranges = {
+    implementation: {
+      base,
+      head: implementationHead,
+    },
+  };
+
+  if (includeCorrection) {
+    ranges.correction = {
+      base: implementationHead,
+      head: commitTicketState(
+        root,
+        'corrected',
+        'correct ticket',
+        identity,
+      ),
+    };
+  }
 
   return {
     repository: Object.freeze({
       root,
       head: runGit(root, ['rev-parse', 'HEAD']),
+      ranges,
     }),
     tracker: createBoundary({
       readTicket: { number: 43, state: 'open', blocked: false },

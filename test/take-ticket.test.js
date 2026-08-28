@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 const { pathToFileURL } = require('node:url');
 
@@ -90,12 +91,34 @@ function invocation() {
   };
 }
 
+function takeTicketDescription() {
+  const source = fs.readFileSync(path.join(skillRoot, 'SKILL.md'), 'utf8');
+  return source.match(/^description:\s*(.+)$/m)?.[1] || '';
+}
+
+function fixtureGit(root, arguments_) {
+  const result = spawnSync('git', arguments_, {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout.trim();
+}
+
 function regionsForScope(scope) {
   return [...scope.regions, ...scope.materially_affected_regions];
 }
 
-function successfulResult({ acceptedFindings = [] } = {}) {
+function successfulResult({ acceptedFindings = [], ranges = null } = {}) {
   const needsCorrection = acceptedFindings.length > 0;
+  const implementationRange = ranges?.implementation || {
+    base: 'a'.repeat(40),
+    head: 'b'.repeat(40),
+  };
+  const correctionRange = ranges?.correction || {
+    base: implementationRange.head,
+    head: 'c'.repeat(40),
+  };
   const findingDispositions = acceptedFindings.map((id) => ({
     id,
     disposition: 'accepted',
@@ -119,7 +142,7 @@ function successfulResult({ acceptedFindings = [] } = {}) {
       sequence: 1,
       phase: 'implementation',
       status: 'completed',
-      reference: `${'a'.repeat(40)}..${'b'.repeat(40)}`,
+      reference: `${implementationRange.base}..${implementationRange.head}`,
     },
     {
       sequence: 2,
@@ -132,7 +155,7 @@ function successfulResult({ acceptedFindings = [] } = {}) {
       phase: 'correction',
       status: needsCorrection ? 'completed' : 'not-required',
       reference: needsCorrection
-        ? `${'b'.repeat(40)}..${'c'.repeat(40)}`
+        ? `${correctionRange.base}..${correctionRange.head}`
         : 'clean-review',
     },
     {
@@ -155,8 +178,7 @@ function successfulResult({ acceptedFindings = [] } = {}) {
     },
     implementation: {
       range: {
-        base: 'a'.repeat(40),
-        head: 'b'.repeat(40),
+        ...implementationRange,
       },
       handoff: {
         reference: 'artifact://implement/handoff.json',
@@ -186,7 +208,7 @@ function successfulResult({ acceptedFindings = [] } = {}) {
     correction: {
       state: needsCorrection ? 'completed' : 'not-required',
       range: needsCorrection
-        ? { base: 'b'.repeat(40), head: 'c'.repeat(40) }
+        ? { ...correctionRange }
         : null,
       scopes: correctionScopes,
       evidence: acceptedFindings.map((findingId) => ({
@@ -217,11 +239,11 @@ function successfulResult({ acceptedFindings = [] } = {}) {
         mediaType: 'text/markdown',
       },
       ...(needsCorrection ? [
-        {
+        ...acceptedFindings.map((findingId) => ({
           kind: 'correction-evidence',
-          reference: 'artifact://correction/finding-1.json',
+          reference: `artifact://correction/${findingId}.json`,
           mediaType: 'application/json',
-        },
+        })),
         {
           kind: 'targeted-re-review',
           reference: 'artifact://review/targeted.json',
@@ -238,8 +260,11 @@ function successfulResult({ acceptedFindings = [] } = {}) {
   };
 }
 
-function nonReviewedResult(phase, status = 'failed') {
-  const result = successfulResult({ acceptedFindings: ['finding-1'] });
+function nonReviewedResult(phase, status = 'failed', ranges = null) {
+  const result = successfulResult({
+    acceptedFindings: ['finding-1'],
+    ranges,
+  });
   const phaseIndex = PHASES.indexOf(phase);
   result.status = status;
   result.failure = {
@@ -387,6 +412,27 @@ test('canonical package discovers Take Ticket without test fixtures', (t) => {
   assert.equal(require('../suite/testing').createCodeReviewAdapter, undefined);
 });
 
+test('routing description contains only trigger, consumer, and exclusions', () => {
+  const description = takeTicketDescription();
+
+  assert.match(description, /^Use when /);
+  assert.match(description, /Used directly or by Dispatch Work\./);
+  assert.match(description, /Excludes /);
+  for (const phaseSummaryPattern of [
+    /\bthrough Implement\b/i,
+    /\bfull Code Review\b/i,
+    /\bcorrection\b/i,
+    /\btargeted re-?review\b/i,
+    /\b(?:incomplete|failed) lifecycle\b/i,
+  ]) {
+    assert.equal(
+      phaseSummaryPattern.test(description),
+      false,
+      `routing description leaked workflow summary: ${phaseSummaryPattern}`,
+    );
+  }
+});
+
 test('production fails closed on each exact Take Ticket dependency', async (t) => {
   const codeReviewClosure = [
     'agent-writing',
@@ -509,6 +555,56 @@ test('immutable ranges and retained artifact references stay cross-consistent', 
   );
 });
 
+test('correction and targeted re-review preserve authoritative finding regions', () => {
+  const changedCorrectionRegion = successfulResult({
+    acceptedFindings: ['finding-1'],
+  });
+  changedCorrectionRegion.correction.scopes[0].regions = ['region:fabricated'];
+  changedCorrectionRegion.targeted_re_review.regions[0] = 'region:fabricated';
+  changedCorrectionRegion.targeted_re_review.dispositions[0].region
+    = 'region:fabricated';
+  assert.throws(
+    () => validateTakeTicketResult(changedCorrectionRegion),
+    /corrected regions must exactly match the full Review finding regions/,
+  );
+
+  const omittedAuthoritativeRegion = successfulResult({
+    acceptedFindings: ['finding-1'],
+  });
+  omittedAuthoritativeRegion.full_review.finding_dispositions[0].regions.push(
+    'region:finding-1-secondary',
+  );
+  assert.throws(
+    () => validateTakeTicketResult(omittedAuthoritativeRegion),
+    /corrected regions must exactly match the full Review finding regions/,
+  );
+
+  for (const mutate of [
+    (result) => result.targeted_re_review.dispositions.push({
+      finding_id: 'finding-1',
+      region: 'region:fabricated',
+      outcome: 'accepted',
+    }),
+    (result) => result.targeted_re_review.dispositions.push({
+      ...result.targeted_re_review.dispositions[0],
+    }),
+    (result) => result.targeted_re_review.dispositions.push({
+      finding_id: 'finding-2',
+      region: 'region:finding-1',
+      outcome: 'accepted',
+    }),
+  ]) {
+    const result = successfulResult({
+      acceptedFindings: ['finding-1', 'finding-2'],
+    });
+    mutate(result);
+    assert.throws(
+      () => validateTakeTicketResult(result),
+      /targeted re-review dispositions must exactly match correction effects/,
+    );
+  }
+});
+
 test('failed and incomplete phases remain visible and never become reviewed', () => {
   for (const phase of PHASES) {
     const result = nonReviewedResult(
@@ -532,32 +628,119 @@ test('failed and incomplete phases remain visible and never become reviewed', ()
   );
 });
 
+test('non-reviewed results keep every completed prefix cross-consistent', () => {
+  const wrongImplementationRange = nonReviewedResult('full-review');
+  wrongImplementationRange.lifecycle[0].reference
+    = `${'a'.repeat(40)}..${'c'.repeat(40)}`;
+  assert.throws(
+    () => validateTakeTicketResult(wrongImplementationRange),
+    /completed implementation lifecycle reference is inconsistent/,
+  );
+
+  const wrongReviewBrief = nonReviewedResult('correction');
+  wrongReviewBrief.lifecycle[1].reference = 'artifact://review/other.md';
+  assert.throws(
+    () => validateTakeTicketResult(wrongReviewBrief),
+    /completed full Review lifecycle reference is inconsistent/,
+  );
+
+  const missingDescriptor = nonReviewedResult('correction');
+  missingDescriptor.artifacts = missingDescriptor.artifacts.slice(0, 1);
+  assert.throws(
+    () => validateTakeTicketResult(missingDescriptor),
+    /completed prefix artifacts are inconsistent/,
+  );
+
+  const contradictoryDescriptor = nonReviewedResult('full-review');
+  contradictoryDescriptor.artifacts[0].reference
+    = 'artifact://implement/contradictory.json';
+  assert.throws(
+    () => validateTakeTicketResult(contradictoryDescriptor),
+    /completed prefix artifacts are inconsistent/,
+  );
+
+  const impossibleFutureArtifact = nonReviewedResult('full-review');
+  impossibleFutureArtifact.artifacts.push({
+    kind: 'full-review-brief',
+    reference: 'artifact://review/uncompleted.md',
+    mediaType: 'text/markdown',
+  });
+  assert.throws(
+    () => validateTakeTicketResult(impossibleFutureArtifact),
+    /completed prefix artifacts are inconsistent/,
+  );
+});
+
+test('outcome sandbox derives immutable ranges from real changed commits', (t) => {
+  const sandbox = createOutcomeSandbox(t, { includeCorrection: true });
+  const { implementation, correction } = sandbox.repository.ranges;
+
+  fixtureGit(sandbox.repository.root, [
+    'merge-base',
+    '--is-ancestor',
+    implementation.base,
+    implementation.head,
+  ]);
+  assert.equal(correction.base, implementation.head);
+  fixtureGit(sandbox.repository.root, [
+    'merge-base',
+    '--is-ancestor',
+    correction.base,
+    correction.head,
+  ]);
+  for (const range of [implementation, correction]) {
+    const changedPaths = fixtureGit(sandbox.repository.root, [
+      'diff',
+      '--name-only',
+      `${range.base}..${range.head}`,
+    ]).split('\n');
+    assert.deepEqual(changedPaths, ['src/ticket-change.js']);
+  }
+  assert.equal(sandbox.repository.head, correction.head);
+});
+
 test('test-only dependency Adapters drive clean, correction, and failure outcomes', async (t) => {
   const packageRoot = createPackageRoot(t, REQUIRED_SKILLS);
   const scenarios = [
-    { name: 'clean', result: successfulResult(), reviewCalls: 1 },
+    {
+      name: 'clean',
+      acceptedFindings: [],
+    },
     {
       name: 'correction',
-      result: successfulResult({ acceptedFindings: ['finding-1'] }),
-      reviewCalls: 2,
+      acceptedFindings: ['finding-1'],
+      includeCorrection: true,
     },
     {
       name: 'failure',
-      result: nonReviewedResult('full-review'),
-      reviewCalls: 1,
+      failedPhase: 'full-review',
     },
   ];
 
   for (const scenario of scenarios) {
-    const sandbox = createOutcomeSandbox(t);
-    const artifact = createArtifact(t, scenario.result);
+    const includeCorrection = scenario.includeCorrection === true;
+    const reviewCalls = includeCorrection ? 2 : 1;
+    const sandbox = createOutcomeSandbox(t, {
+      includeCorrection,
+    });
+    const scenarioResult = scenario.failedPhase
+      ? nonReviewedResult(
+        scenario.failedPhase,
+        'failed',
+        sandbox.repository.ranges,
+      )
+      : successfulResult({
+        acceptedFindings: scenario.acceptedFindings,
+        ranges: sandbox.repository.ranges,
+      });
+    const artifact = createArtifact(t, scenarioResult);
     const implement = createImplementAdapter(async (input) => {
       assert.equal(input.repository.root, sandbox.repository.root);
       await sandbox.tracker.readTicket('43');
       await sandbox.ci.validate('node --test');
       return {
         activity: input.activity,
-        implementation: scenario.result.implementation,
+        implementation: scenarioResult.implementation,
       };
     });
     const codeReview = createCodeReviewAdapter(async (input) => {
@@ -565,8 +748,8 @@ test('test-only dependency Adapters drive clean, correction, and failure outcome
       return {
         mode: input.mode,
         review: input.mode === 'full'
-          ? scenario.result.full_review
-          : scenario.result.targeted_re_review,
+          ? scenarioResult.full_review
+          : scenarioResult.targeted_re_review,
       };
     });
     const adapter = defineTestAdapter({
@@ -574,11 +757,11 @@ test('test-only dependency Adapters drive clean, correction, and failure outcome
       async execute(invocationValue, context) {
         const implementation = await implement.execute({
           activity: 'implementation',
-          requirements: scenario.result.requirements,
+          requirements: scenarioResult.requirements,
           repository: sandbox.repository,
         });
         const ticketOutcome = {
-          requirements: scenario.result.requirements,
+          requirements: scenarioResult.requirements,
           implementation_range: implementation.implementation?.range || null,
           implementation_handoff: implementation.implementation?.handoff || null,
           validation_evidence: implementation.implementation?.validation || [],
@@ -588,16 +771,16 @@ test('test-only dependency Adapters drive clean, correction, and failure outcome
           ticket_outcome: ticketOutcome,
           repository: sandbox.repository,
         });
-        if (scenario.reviewCalls === 2) {
+        if (includeCorrection) {
           await implement.execute({
             activity: 'correction',
-            accepted_scope: scenario.result.correction.scopes,
+            accepted_scope: scenarioResult.correction.scopes,
             repository: sandbox.repository,
           });
           await codeReview.execute({
             mode: 'targeted',
             ticket_outcome: ticketOutcome,
-            correction: scenario.result.correction,
+            correction: scenarioResult.correction,
             repository: sandbox.repository,
           });
         }
@@ -605,7 +788,7 @@ test('test-only dependency Adapters drive clean, correction, and failure outcome
           invocationValue,
           context,
           artifact,
-          scenario.result,
+          scenarioResult,
         );
       },
     });
@@ -620,21 +803,33 @@ test('test-only dependency Adapters drive clean, correction, and failure outcome
     assert.equal(grade.passed, true, scenario.name);
     assert.match(sandbox.repository.head, /^[a-f0-9]{40}$/);
     assert.equal(fs.existsSync(path.join(sandbox.repository.root, '.git')), true);
-    assert.equal(implement.calls.length, scenario.reviewCalls, scenario.name);
-    assert.equal(codeReview.calls.length, scenario.reviewCalls, scenario.name);
+    assert.equal(implement.calls.length, reviewCalls, scenario.name);
+    assert.equal(codeReview.calls.length, reviewCalls, scenario.name);
     assert.equal(sandbox.pr.calls.length, 0, scenario.name);
-    assert.equal(sandbox.tracker.calls.length, scenario.reviewCalls, scenario.name);
-    assert.equal(sandbox.ci.calls.length, scenario.reviewCalls, scenario.name);
+    assert.equal(sandbox.tracker.calls.length, reviewCalls, scenario.name);
+    assert.equal(sandbox.ci.calls.length, reviewCalls, scenario.name);
     assert.deepEqual(
       codeReview.calls[0].ticket_outcome,
       {
-        requirements: scenario.result.requirements,
-        implementation_range: scenario.result.implementation?.range || null,
-        implementation_handoff: scenario.result.implementation?.handoff || null,
-        validation_evidence: scenario.result.implementation?.validation || [],
+        requirements: scenarioResult.requirements,
+        implementation_range: scenarioResult.implementation?.range || null,
+        implementation_handoff: scenarioResult.implementation?.handoff || null,
+        validation_evidence: scenarioResult.implementation?.validation || [],
       },
       scenario.name,
     );
+    assert.deepEqual(
+      scenarioResult.implementation?.range,
+      sandbox.repository.ranges.implementation,
+      scenario.name,
+    );
+    if (includeCorrection) {
+      assert.deepEqual(
+        scenarioResult.correction.range,
+        sandbox.repository.ranges.correction,
+        scenario.name,
+      );
+    }
   }
 });
 

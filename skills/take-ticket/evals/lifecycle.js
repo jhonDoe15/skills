@@ -180,6 +180,14 @@ function acceptedFindingIds(fullReview) {
     .map(({ id }) => id);
 }
 
+function acceptedFindingRegions(fullReview) {
+  return new Map(
+    fullReview.finding_dispositions
+      .filter(({ disposition }) => disposition === 'accepted')
+      .map(({ id, regions }) => [id, regions]),
+  );
+}
+
 function validateCorrection(value, fullReview, implementation) {
   requireExactFields(
     value,
@@ -213,6 +221,7 @@ function validateCorrection(value, fullReview, implementation) {
     );
   }
   const scopedFindings = [];
+  const authoritativeRegions = acceptedFindingRegions(fullReview);
   value.scopes.forEach((scope, index) => {
     const field = `result.correction.scopes[${index}]`;
     requireExactFields(
@@ -227,6 +236,14 @@ function validateCorrection(value, fullReview, implementation) {
       `${field}.materially_affected_regions`,
       true,
     );
+    if (!haveExactUniqueMembers(
+      scope.regions,
+      authoritativeRegions.get(scope.finding_id) || [],
+    )) {
+      throw new TakeTicketEvaluationError(
+        'corrected regions must exactly match the full Review finding regions',
+      );
+    }
     scopedFindings.push(scope.finding_id);
   });
   if (!haveExactUniqueMembers(scopedFindings, accepted)) {
@@ -316,7 +333,7 @@ function validateTargetedReview(value, correction, fullReview) {
     );
   }
   validateDescriptor(value.artifact, 'result.targeted_re_review.artifact');
-  const dispositionKeys = new Set();
+  const dispositionIdentities = [];
   value.dispositions.forEach((disposition, index) => {
     const field = `result.targeted_re_review.dispositions[${index}]`;
     requireExactFields(disposition, ['finding_id', 'region', 'outcome'], field);
@@ -327,16 +344,21 @@ function validateTargetedReview(value, correction, fullReview) {
         'reviewed result requires accepted targeted dispositions',
       );
     }
-    dispositionKeys.add(`${disposition.finding_id}\0${disposition.region}`);
+    dispositionIdentities.push(
+      `${disposition.finding_id}\0${disposition.region}`,
+    );
   });
-  for (const scope of correction.scopes) {
-    for (const region of [...scope.regions, ...scope.materially_affected_regions]) {
-      if (!dispositionKeys.has(`${scope.finding_id}\0${region}`)) {
-        throw new TakeTicketEvaluationError(
-          'targeted re-review dispositions are incomplete',
-        );
-      }
-    }
+  const expectedDispositionIdentities = correction.scopes.flatMap((scope) => (
+    [...scope.regions, ...scope.materially_affected_regions]
+      .map((region) => `${scope.finding_id}\0${region}`)
+  ));
+  if (!haveExactUniqueMembers(
+    dispositionIdentities,
+    expectedDispositionIdentities,
+  )) {
+    throw new TakeTicketEvaluationError(
+      'targeted re-review dispositions must exactly match correction effects',
+    );
   }
 }
 
@@ -525,6 +547,62 @@ function validateNonReviewedPhaseData(result, phaseIndex) {
   }
 }
 
+function artifactIdentity({ kind, reference, mediaType }) {
+  return `${kind}\0${reference}\0${mediaType}`;
+}
+
+function validateCompletedPrefixReferences(result, phaseIndex) {
+  const expected = [
+    result.implementation
+      ? `${result.implementation.range.base}..${result.implementation.range.head}`
+      : null,
+    result.full_review?.brief.reference || null,
+    result.correction?.range
+      ? `${result.correction.range.base}..${result.correction.range.head}`
+      : null,
+  ];
+  const labels = ['implementation', 'full Review', 'correction'];
+  for (let index = 0; index < phaseIndex; index += 1) {
+    if (result.lifecycle[index].reference !== expected[index]) {
+      throw new TakeTicketEvaluationError(
+        `completed ${labels[index]} lifecycle reference is inconsistent`,
+      );
+    }
+  }
+}
+
+function validateCompletedPrefixArtifacts(result, phaseIndex) {
+  const expected = [];
+  if (phaseIndex > 0) {
+    expected.push({
+      kind: 'implementation-handoff',
+      reference: result.implementation.handoff.reference,
+      mediaType: result.implementation.handoff.mediaType,
+    });
+  }
+  if (phaseIndex > 1) {
+    expected.push({
+      kind: 'full-review-brief',
+      reference: result.full_review.brief.reference,
+      mediaType: result.full_review.brief.mediaType,
+    });
+  }
+  if (phaseIndex > 2) {
+    expected.push(...result.correction.evidence.map((evidence) => ({
+      kind: 'correction-evidence',
+      reference: evidence.reference,
+      mediaType: evidence.mediaType,
+    })));
+  }
+  const actualIdentities = result.artifacts.map(artifactIdentity);
+  const expectedIdentities = expected.map(artifactIdentity);
+  if (!haveExactUniqueMembers(actualIdentities, expectedIdentities)) {
+    throw new TakeTicketEvaluationError(
+      'completed prefix artifacts are inconsistent',
+    );
+  }
+}
+
 function expectedNonReviewedStatus(index, failedPhaseIndex, failureStatus) {
   if (index < failedPhaseIndex) {
     return 'completed';
@@ -599,6 +677,8 @@ function validateNonReviewedResult(result) {
   }
   validateNonReviewedPhaseData(result, phaseIndex);
   validatePartialArtifacts(result.artifacts);
+  validateCompletedPrefixReferences(result, phaseIndex);
+  validateCompletedPrefixArtifacts(result, phaseIndex);
 }
 
 function validateTakeTicketResult(result) {
