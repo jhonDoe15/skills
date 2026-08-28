@@ -1,0 +1,208 @@
+{
+  "skill_name": "implement",
+  "version": 1,
+  "hosts": ["claude-code", "cursor"],
+  "evaluation_policy": {
+    "fresh_sessions": true,
+    "matched_no_skill": true,
+    "trigger_separate": true,
+    "semantic_grade": "blind-model-with-output-evidence",
+    "human_review": "every-failure-and-predeclared-passing-sample",
+    "generated_artifacts": "uncommitted"
+  },
+  "config": {
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "implement-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every assertion and dimension, the blind judge must quote or reference specific patch, handoff, validation, or lifecycle evidence. Labels and unsupported conclusions are not evidence.",
+    "dimensions": [
+      {
+        "id": "requirement_fidelity",
+        "description": "The patch satisfies the originating requirements without unrelated behavior or hidden scope growth."
+      },
+      {
+        "id": "guidance_use",
+        "description": "The worker resolves canonical Engineering Guidance before mutation and applies complete, source-cited concern coverage without copying fallback behavior."
+      },
+      {
+        "id": "tdd_and_validation",
+        "description": "The implementation provides credible red-green-refactor and proportionate validation evidence tied to the changed behavior."
+      },
+      {
+        "id": "handoff_quality",
+        "description": "The handoff exposes an immutable range, changed behavior and files, risks, failure state, and a correction-ready next action."
+      },
+      {
+        "id": "lifecycle_boundary",
+        "description": "The outcome remains implementation-only and does not perform full Code Review or mutate ticket and PR topology."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "guided-bounded-role",
+      "name": "guided bounded patch role",
+      "layer": "role",
+      "prompt": "In a clean isolated checkout at a supplied base SHA, implement one settled validation rule and its tests. Repository authority is available. Return the implementation handoff, but do not perform full Code Review or alter tracker or PR state.",
+      "expected_output": "The worker resolves complete canonical Engineering Guidance before mutation, uses the external TDD prerequisite, keeps one bounded patch, validates it, pins an immutable range, and returns a correction-ready handoff.",
+      "files": [],
+      "required_skill_loads": ["implement", "engineering-guidance"],
+      "expectations": [
+        "The treatment verifies the isolated base and resolves engineering-guidance before any attempted mutation.",
+        "The patch records ordered lifecycle evidence in which completed guidance precedes the first mutation.",
+        "The patch records red, a successful mutation, then green for the same focused behavior and command, and reports only canonical passing validation evidence on completion.",
+        "The handoff identifies the originating requirements, immutable implementation range, guidance coverage, changed behavior and files, tests, validation, unresolved risks, and correction-ready state.",
+        "The retained execution observes tool use, attempted mutations, artifacts, failure state, duration, cost, and model identity.",
+        "No full Code Review or ticket and PR topology mutation occurs."
+      ],
+      "covers": [
+        "settled-inputs",
+        "isolated-worker",
+        "guidance-before-mutation",
+        "external-tdd",
+        "scoped-patch",
+        "validation",
+        "implementation-handoff",
+        "review-exclusion"
+      ]
+    },
+    {
+      "id": "guidance-failure-role",
+      "name": "incomplete guidance fails before mutation",
+      "layer": "role",
+      "prompt": "Implement the bounded patch, but the available Engineering Guidance result omits one concern disposition. Return the observable outcome.",
+      "expected_output": "Execution stops before mutation, names the missing canonical dependency exactly, and returns a guidance failure artifact without claiming a complete patch.",
+      "files": [],
+      "required_skill_loads": ["implement", "engineering-guidance"],
+      "expectations": [
+        "Incomplete guidance fails closed with the exact name engineering-guidance.",
+        "Attempted mutations remain empty.",
+        "The failure artifact uses kind guidance and does not present the patch as complete."
+      ],
+      "covers": ["incomplete-guidance", "failure-artifact", "pre-mutation-gate"]
+    },
+    {
+      "id": "failure-classification-role",
+      "name": "phase failures remain distinct",
+      "layer": "role",
+      "prompt": "Exercise four isolated attempts in which guidance resolution, the focused test cycle, broader validation, and implementation each fail separately. Preserve each attempt's evidence.",
+      "expected_output": "Each failed attempt is non-complete and uses exactly one applicable failure kind: guidance, test, validation, or implementation.",
+      "files": [],
+      "required_skill_loads": ["implement", "engineering-guidance"],
+      "expectations": [
+        "Guidance, test, validation, and implementation failures remain mechanically distinguishable, with matching lifecycle failure evidence and stage.",
+        "No failed attempt contains a completed status or correction-ready immutable range.",
+        "Each artifact preserves observed commands, mutations, and the first recovery action that applies."
+      ],
+      "covers": ["failure-taxonomy", "non-complete-failure"]
+    },
+    {
+      "id": "engineering-guidance-ablation",
+      "name": "canonical Engineering Guidance component",
+      "layer": "component",
+      "prompt": "Implement one bounded patch after resolving repository authority and every Engineering Guidance concern before mutation.",
+      "expected_output": "The complete consumer uses canonical Engineering Guidance and produces the guided patch handoff. The component arm removes only that dependency through the test boundary and cannot substitute copied guidance.",
+      "files": [],
+      "expectations": [
+        "The treatment loads engineering-guidance by canonical name before mutation.",
+        "The component control ablates only implement to engineering-guidance through the test Adapter boundary.",
+        "The Adapter provides instrumented fixture results only and contains no production guidance behavior.",
+        "The ablated arm stops before mutation rather than using fallback guidance."
+      ],
+      "covers": ["engineering-guidance-edge", "test-only-adapter"],
+      "ablated_dependency": "engineering-guidance"
+    },
+    {
+      "id": "complete-implementation-outcome",
+      "name": "complete scoped implementation with matched control",
+      "layer": "outcome",
+      "prompt": "Implement issue 41 as one scoped patch from the supplied immutable base in a fresh isolated checkout. Use repository authority, Engineering Guidance, TDD, and proportionate validation. Commit only the patch and return the implementation handoff without review.",
+      "expected_output": "The treatment yields one pinned scoped patch and complete inspectable handoff. The matched fresh-session No-Skill arm receives the same repository, requirements, model, host, tools, and budget without Implement or Engineering Guidance.",
+      "files": [],
+      "required_skill_loads": ["implement", "engineering-guidance"],
+      "expectations": [
+        "Treatment and No-Skill runs are matched fresh sessions that differ only in Skill provisioning.",
+        "The treatment produces one immutable scoped patch with source-cited guidance, TDD, validation, and correction-ready handoff evidence.",
+        "Mechanical checks establish artifact shape, exact dependency and failure literals, immutable revisions, cross-field lifecycle consistency for tests, validation, changed-file mutations, and the pinned range, file existence, and a closed mutation allowlist.",
+        "Semantic patch quality and requirement fidelity are decided by blind evidence-bearing model judgment and sampled human review.",
+        "Generated runs, judge payloads, reports, and workspaces remain uncommitted."
+      ],
+      "covers": [
+        "matched-no-skill-control",
+        "immutable-range",
+        "mechanical-semantic-separation",
+        "artifact-retention"
+      ]
+    },
+    {
+      "id": "bounded-implementation-trigger",
+      "name": "bounded implementation request",
+      "layer": "trigger",
+      "prompt": "Implement this settled issue as one scoped patch in an isolated worktree and return the implementation handoff.",
+      "expected_output": "Implement is selected for the requested patch outcome.",
+      "files": [],
+      "expectations": [
+        "The exact implement Skill load is observed independently from output quality."
+      ],
+      "covers": ["positive-routing"],
+      "should_trigger": true
+    },
+    {
+      "id": "canonical-implement-trigger",
+      "name": "canonical direct invocation",
+      "layer": "trigger",
+      "prompt": "/implement\n\nApply this settled bounded ticket in the supplied worktree.",
+      "expected_output": "Canonical direct invocation selects Implement.",
+      "files": [],
+      "expectations": [
+        "The canonical request and successful exact implement load are observed."
+      ],
+      "covers": ["canonical-routing"],
+      "should_trigger": true,
+      "canonical_invocation": true
+    },
+    {
+      "id": "unsettled-design-exclusion",
+      "name": "unsettled design request exclusion",
+      "layer": "trigger",
+      "prompt": "Help me choose whether this new subsystem should use queues or synchronous calls.",
+      "expected_output": "Implement remains inactive because the request requires a design decision rather than a settled patch.",
+      "files": [],
+      "expectations": [
+        "No implement selection or load is attempted."
+      ],
+      "covers": ["unsettled-requirements-exclusion"],
+      "should_trigger": false
+    },
+    {
+      "id": "full-ticket-lifecycle-exclusion",
+      "name": "reviewed ticket lifecycle exclusion",
+      "layer": "trigger",
+      "prompt": "Take this ticket through implementation, full independent review, correction, targeted re-review, and a reviewed-ticket result.",
+      "expected_output": "Take Ticket owns the requested lifecycle and Implement is not selected as the public outcome.",
+      "files": [],
+      "expectations": [
+        "Implement does not replace the Take Ticket outcome."
+      ],
+      "covers": ["take-ticket-boundary"],
+      "should_trigger": false
+    },
+    {
+      "id": "code-review-exclusion",
+      "name": "code review request exclusion",
+      "layer": "trigger",
+      "prompt": "Review the immutable ticket outcome and return evidence-backed findings without changing code.",
+      "expected_output": "Code Review owns the request and Implement remains inactive.",
+      "files": [],
+      "expectations": [
+        "A review-only request does not activate implement."
+      ],
+      "covers": ["code-review-boundary"],
+      "should_trigger": false
+    }
+  ]
+}
