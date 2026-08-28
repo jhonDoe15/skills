@@ -1,0 +1,80 @@
+{
+  "skill_name": "code-review",
+  "version": 1,
+  "evaluation": {
+    "scope": "code-review-outcome",
+    "layer": "outcome",
+    "skill": "code-review",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "code-review-outcome-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "Quote or reference specific worker findings, concern coverage, coordination records, completeness checks, and brief content for every score.",
+    "dimensions": [
+      {
+        "id": "finding-validity",
+        "description": "Findings are supported by whole-ticket evidence and include complete confidence, impact, scope, fix-direction, Context-limit, and acceptance-evidence records."
+      },
+      {
+        "id": "review-coverage",
+        "description": "Both lenses independently resolve guidance and account for coherent regions in the required Review level order."
+      },
+      {
+        "id": "coordination-fidelity",
+        "description": "Structural aggregation preserves conclusions, compatible grouping, disagreements, ordering, and coverage without second-review judgment."
+      },
+      {
+        "id": "artifact-and-safety",
+        "description": "The complete brief is inspectable, local, and read-only."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "nontrivial-ticket-outcome",
+      "name": "complete ordinary Code Review outcome",
+      "prompt": "Review a nontrivial implementation with seeded domain and design defects. The complete Ticket outcome and immutable range are supplied. Return the local read-only Review brief and retained artifacts.",
+      "expected_output": "The treatment finds supported defects through independent lenses, retains clean negative regions, and returns a structurally complete Review brief. The matched fresh No-Skill arm receives the same scenario and run configuration.",
+      "files": [],
+      "required_skill_loads": [
+        "code-review",
+        "review-worker",
+        "review-coordinator",
+        "engineering-guidance",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "Treatment and No-Skill runs use fresh matched sessions and differ only in Skill provisioning.",
+        "Every critical seeded finding is backed by cited whole-ticket evidence and every clean region remains covered.",
+        "Concern coverage stays separate from findings and can preserve disagreement between workers.",
+        "The coordinator records every source finding disposition without changing worker conclusions.",
+        "Mechanical checks validate exact artifact structure, immutable identities, required fields, package closure, and forbidden mutations only.",
+        "Blind evidence-bearing model judgment and sampled human review decide semantic finding validity and coverage.",
+        "Generated review runs, judge payloads, reports, and viewer output remain uncommitted."
+      ],
+      "covers": [
+        "cr-complete-outcome",
+        "cr-findings",
+        "cr-guidance-independence",
+        "cr-region-order",
+        "cr-coordination",
+        "cr-artifact-replay",
+        "cr-read-only"
+      ]
+    }
+  ]
+}

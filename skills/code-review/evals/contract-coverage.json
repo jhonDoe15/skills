@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "scope": "issue-42-code-review",
+  "clauses": [
+    {
+      "id": "cr-complete-ticket-input",
+      "owner": "code-review",
+      "cases": ["ordinary-whole-ticket-review", "nontrivial-ticket-outcome"]
+    },
+    {
+      "id": "cr-two-fresh-lenses",
+      "owner": "code-review",
+      "cases": ["ordinary-whole-ticket-review", "nontrivial-ticket-outcome"]
+    },
+    {
+      "id": "cr-retained-artifacts",
+      "owner": "code-review",
+      "cases": ["ordinary-whole-ticket-review", "nontrivial-ticket-outcome"]
+    },
+    {
+      "id": "cr-read-only",
+      "owner": "code-review",
+      "cases": ["ordinary-whole-ticket-review", "nontrivial-ticket-outcome"]
+    },
+    {
+      "id": "cr-review-worker-edge",
+      "owner": "code-review",
+      "cases": ["code-review-to-review-worker"]
+    },
+    {
+      "id": "cr-review-coordinator-edge",
+      "owner": "code-review",
+      "cases": ["code-review-to-review-coordinator"]
+    },
+    {
+      "id": "cr-take-it-offline-edge",
+      "owner": "code-review",
+      "cases": ["code-review-to-take-it-offline"]
+    },
+    {
+      "id": "cr-activation",
+      "owner": "code-review",
+      "cases": [
+        "canonical-code-review",
+        "ambient-code-review",
+        "implementation-request",
+        "reviewed-ticket-request"
+      ]
+    },
+    {
+      "id": "rw-complete-input",
+      "owner": "review-worker",
+      "cases": ["whole-ticket-worker-analysis"]
+    },
+    {
+      "id": "rw-independent-guidance",
+      "owner": "review-worker",
+      "cases": [
+        "whole-ticket-worker-analysis",
+        "review-worker-to-engineering-guidance"
+      ]
+    },
+    {
+      "id": "rw-region-order",
+      "owner": "review-worker",
+      "cases": ["whole-ticket-worker-analysis"]
+    },
+    {
+      "id": "rw-findings",
+      "owner": "review-worker",
+      "cases": ["whole-ticket-worker-analysis"]
+    },
+    {
+      "id": "rw-take-it-offline-edge",
+      "owner": "review-worker",
+      "cases": ["review-worker-to-take-it-offline"]
+    },
+    {
+      "id": "rc-structural-aggregation",
+      "owner": "review-coordinator",
+      "cases": ["structural-review-coordination"]
+    },
+    {
+      "id": "rc-conclusion-preservation",
+      "owner": "review-coordinator",
+      "cases": ["structural-review-coordination"]
+    },
+    {
+      "id": "rc-no-second-review",
+      "owner": "review-coordinator",
+      "cases": ["structural-review-coordination"]
+    },
+    {
+      "id": "rc-take-it-offline-edge",
+      "owner": "review-coordinator",
+      "cases": ["review-coordinator-to-take-it-offline"]
+    }
+  ]
+}

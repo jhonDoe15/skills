@@ -1,0 +1,72 @@
+{
+  "skill_name": "code-review",
+  "version": 1,
+  "evaluation": {
+    "scope": "code-review-role",
+    "layer": "role",
+    "skill": "code-review",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "code-review-role-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "Quote or reference the retained run, worker, coverage, coordination, completeness, or brief evidence for every semantic conclusion.",
+    "dimensions": [
+      {
+        "id": "whole-ticket-dispatch",
+        "description": "Both fresh lenses receive the complete Ticket outcome and preserve independent provenance."
+      },
+      {
+        "id": "artifact-completeness",
+        "description": "The run retains inspectable artifacts and cannot present a partial lens result as complete."
+      },
+      {
+        "id": "review-boundary",
+        "description": "The review stays read-only and does not take implementation, remediation, tracker, pull-request, or reviewed-ticket ownership."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "ordinary-whole-ticket-review",
+      "name": "ordinary whole-ticket multi-lens review",
+      "prompt": "Review the supplied nontrivial Ticket outcome. It includes originating requirements, immutable implementation range, implementation handoff, validation evidence, and repository authority. Return a read-only Review brief with inspectable retained artifacts.",
+      "expected_output": "Separate fresh Domain and Engineering/Design workers inspect the complete Ticket outcome, then structural coordination produces a complete local Review brief without mutation.",
+      "files": [],
+      "required_skill_loads": [
+        "code-review",
+        "review-worker",
+        "review-coordinator",
+        "engineering-guidance",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "Each worker receives the same complete Ticket outcome and immutable range while retaining distinct identity and lens provenance.",
+        "Each worker resolves Engineering Guidance independently rather than inheriting implementation conclusions.",
+        "The retained run exposes its manifest, diff package, worker streams and coverage, coordination, completeness, and Markdown brief.",
+        "A one-lens or structurally invalid result remains incomplete.",
+        "The run performs no source, tracker, pull-request, dependency, or release mutation.",
+        "Blind model judgment and sampled human review assess semantic review quality from cited evidence."
+      ],
+      "covers": [
+        "cr-complete-ticket-input",
+        "cr-two-fresh-lenses",
+        "cr-retained-artifacts",
+        "cr-read-only"
+      ]
+    }
+  ]
+}

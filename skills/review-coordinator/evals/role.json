@@ -1,0 +1,71 @@
+{
+  "skill_name": "review-coordinator",
+  "version": 1,
+  "evaluation": {
+    "scope": "review-coordinator-role",
+    "layer": "role",
+    "skill": "review-coordinator",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "review-coordinator-role-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "Quote or reference worker records and coordination dispositions for every conclusion about aggregation.",
+    "dimensions": [
+      {
+        "id": "structural-validation",
+        "description": "The coordinator rejects incomplete lenses, malformed findings, mismatched inputs, and incomplete artifacts."
+      },
+      {
+        "id": "conclusion-preservation",
+        "description": "Compatible duplicates, sorting, supersession, and coverage union retain worker conclusions and disagreements."
+      },
+      {
+        "id": "coordination-boundary",
+        "description": "The coordinator performs no second review, new finding, mutation, or remediation planning."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "structural-review-coordination",
+      "name": "structural aggregation of independent findings",
+      "prompt": "Coordinate complete Domain and Engineering/Design worker records for the same Ticket outcome. Validate structure, group compatible duplicates, sort, union coverage, and return the Review brief.",
+      "expected_output": "Every source finding receives a recorded disposition, compatible duplicates remain traceable, disagreements remain separate, and incomplete input cannot become a complete brief.",
+      "files": [],
+      "required_skill_loads": [
+        "review-coordinator",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "The coordinator validates two distinct lens identities, matching whole-ticket inputs, complete concern coverage, ordered regions, finding fields, and artifact references.",
+        "Compatible duplicate grouping keeps every source identity and conclusion.",
+        "Sorting follows Review level, severity, and stable identity; coverage union loses no worker, lens, region, level, or concern.",
+        "Only worker-declared supersession is applied and disagreements remain visible.",
+        "The coordinator does not inspect for new issues, change conclusions, plan fixes, or mutate reviewed state.",
+        "Blind model judgment and sampled human review assess semantic grouping and preservation."
+      ],
+      "covers": [
+        "rc-validation",
+        "rc-grouping",
+        "rc-sorting",
+        "rc-coverage-union",
+        "rc-conclusion-preservation",
+        "rc-no-second-review"
+      ]
+    }
+  ]
+}

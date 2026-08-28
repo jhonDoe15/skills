@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "scope": "review-worker-package-closure",
+  "owner": "review-worker",
+  "cases": [
+    {
+      "id": "missing-engineering-guidance",
+      "consumer": "review-worker",
+      "missing_dependency": "engineering-guidance",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"engineering-guidance\"",
+        "missingSkill": "engineering-guidance"
+      },
+      "covered_clauses": ["rw-engineering-guidance-closure"]
+    },
+    {
+      "id": "missing-take-it-offline",
+      "consumer": "review-worker",
+      "missing_dependency": "take-it-offline",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"take-it-offline\"",
+        "missingSkill": "take-it-offline"
+      },
+      "covered_clauses": ["rw-take-it-offline-closure"]
+    }
+  ]
+}

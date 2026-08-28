@@ -1,0 +1,48 @@
+{
+  "skill_name": "review-coordinator",
+  "version": 1,
+  "evaluation": {
+    "scope": "review-coordinator-components",
+    "layer": "component",
+    "skill": "review-coordinator",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment", "component-ablation"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "review-coordinator-components-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "Quote or reference complete and ablated artifact-handoff evidence.",
+    "dimensions": [
+      {
+        "id": "dependency-contribution",
+        "description": "The complete coordinator uses Take It Offline for the final artifact handoff and the ablated arm does not copy it."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "review-coordinator-to-take-it-offline",
+      "name": "coordinated brief handoff component",
+      "prompt": "Return the final Markdown Review brief, completeness state, and retained review artifact references to a fresh managing context.",
+      "expected_output": "The complete coordinator uses Take It Offline for the verified temporary handoff. The ablated coordinator does not emulate it.",
+      "files": [],
+      "ablated_dependency": "take-it-offline",
+      "expectations": [
+        "Matched arms differ only in the take-it-offline invocation.",
+        "The complete arm returns the verified Review brief and artifact references.",
+        "The ablated arm does not copy dependency behavior or use package failure as control."
+      ],
+      "covers": ["rc-take-it-offline-edge"]
+    }
+  ]
+}
