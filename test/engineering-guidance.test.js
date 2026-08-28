@@ -196,6 +196,20 @@ test('complete concern index progressively discloses only applicable fallback gu
   assert.match(skill, /Do not imitate the specialist discipline/);
 });
 
+test('declared callers reuse their existing context without a subagent layer', () => {
+  const skill = fs.readFileSync(path.join(skillRoot, 'SKILL.md'), 'utf8');
+
+  assert.match(
+    skill,
+    /declared caller[\s\S]{0,240}(?:same|existing) context/i,
+  );
+  assert.match(skill, /without\s+adding (?:a )?subagent layer/i);
+  assert.match(
+    skill,
+    /caller keeps ownership of design,\s+implementation, review, validation, artifacts, and handoffs/i,
+  );
+});
+
 test('owner-local evaluations cover role, outcome, and routing contracts', () => {
   const evaluationRoot = path.join(skillRoot, 'evals');
   const definitions = evaluationLayers.map((layer) => (
@@ -258,6 +272,77 @@ test('owner-local evaluations cover role, outcome, and routing contracts', () =>
   assert.equal(trigger.evals.some(({ canonical_invocation: direct }) => direct), true);
   assert.equal(trigger.evals.some(({ should_trigger: selected }) => selected), true);
   assert.equal(trigger.evals.some(({ should_trigger: selected }) => !selected), true);
+});
+
+test('role cases preserve each omitted required input as an unresolved gap', () => {
+  const role = readJson(path.join(skillRoot, 'evals', 'role.json'));
+  const requiredInputs = [
+    'change-intent',
+    'bounded-scope',
+    'current-artifact',
+    'ordered-authority',
+    'current-activity',
+  ];
+  const missingInputCases = role.evals.filter(
+    ({ case_family: family }) => family === 'missing-required-input',
+  );
+
+  assert.deepEqual(
+    missingInputCases.map(({ missing_required_input: input }) => input).sort(),
+    [...requiredInputs].sort(),
+  );
+  for (const caseDefinition of missingInputCases) {
+    const { missing_required_input: missingInput, provided_context: context } =
+      caseDefinition;
+    assert.deepEqual(
+      Object.keys(context).sort(),
+      requiredInputs.filter((input) => input !== missingInput).sort(),
+      caseDefinition.id,
+    );
+    assert.equal(Object.hasOwn(context, missingInput), false, caseDefinition.id);
+    assert.equal(
+      caseDefinition.expectations.some((expectation) => (
+        expectation.includes(missingInput)
+          && /unresolved gap/i.test(expectation)
+      )),
+      true,
+      `${caseDefinition.id} must preserve its named gap`,
+    );
+    assert.equal(
+      caseDefinition.expectations.some((expectation) => /invent/i.test(expectation)),
+      true,
+      `${caseDefinition.id} must prohibit invented context`,
+    );
+    assert.deepEqual(caseDefinition.required_concerns, engineeringConcerns);
+  }
+});
+
+test('nested authority fixture contains a real precedence conflict and residual effect', () => {
+  const role = readJson(path.join(skillRoot, 'evals', 'role.json'));
+  const caseDefinition = role.evals.find(
+    ({ id }) => id === 'nested-conflict-architecture',
+  );
+
+  assert.deepEqual(caseDefinition.authority_conflict, {
+    higher: {
+      source: 'organization policy',
+      rule: 'Payment retries must not proceed without an idempotency key.',
+    },
+    lower: {
+      source: 'ticket INV-17',
+      rule: 'Retry every transient payment failure, including legacy events without an idempotency key.',
+    },
+    resolution: 'Organization policy controls retry safety; recovery for legacy events without keys remains unresolved.',
+  });
+  const expectations = caseDefinition.expectations.join(' ');
+  assert.match(expectations, /organization policy.*ticket INV-17/i);
+  assert.match(expectations, /higher.*organization policy/i);
+  assert.match(expectations, /legacy events without keys.*unresolved/i);
+  assert.match(expectations, /nearby.*descriptive evidence/i);
+  assert.doesNotMatch(
+    caseDefinition.expected_output,
+    /nearby.*(?:authority conflict|conflicting authority)/i,
+  );
 });
 
 test('evaluation gates use boundary observations without grading exact prose', () => {

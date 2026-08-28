@@ -10,6 +10,9 @@ Assess an existing artifact and return compact Engineering concern coverage.
 Advice is the only owned outcome. The caller keeps ownership of design,
 implementation, review, validation, artifacts, and handoffs.
 
+A declared caller runs Engineering Guidance in its existing context without
+adding a subagent layer.
+
 ## Required context
 
 Accept:
