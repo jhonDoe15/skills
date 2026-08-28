@@ -683,8 +683,7 @@ function validateFixtureReviewedTicket(reviewedTicket, lifecycle) {
 
 function validateTakeTicketToolUses(toolUses, selectedTickets) {
   const takeTicketTools = toolUses.filter(({ name }) => (
-    name.startsWith('take-ticket.invoke')
-    || name.startsWith('take-ticket.complete')
+    /^take-ticket(?:[.:]|$)/.test(name)
   ));
   const expectedNames = new Set(selectedTickets.flatMap((ticket) => [
     `take-ticket.invoke:${ticket}`,

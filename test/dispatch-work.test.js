@@ -191,6 +191,8 @@ test('fixture Adapters normalize observed dispatch and reviewed-ticket evidence'
     { name: 'take-ticket.complete:A', outcome: 'incomplete' },
     { name: 'take-ticket.invoke:Z', outcome: 'succeeded' },
     { name: 'take-ticket.complete:', outcome: 'succeeded' },
+    { name: 'take-ticket.retry:A', outcome: 'succeeded' },
+    { name: 'take-ticket:A', outcome: 'succeeded' },
   ];
   for (const extra of contradictoryExtras) {
     const contradictory = structuredClone(takeTicketResult);
@@ -218,6 +220,16 @@ test('fixture Adapters normalize observed dispatch and reviewed-ticket evidence'
     }),
     /exact Take Ticket tool event set/,
   );
+
+  const unrelatedEvidence = structuredClone(takeTicketResult);
+  unrelatedEvidence.observations.toolUses.push({
+    name: 'unrelated.observe',
+    outcome: 'succeeded',
+  });
+  gradeDispatchResult(unrelatedEvidence, {
+    resolveArtifact: resolveCompletedDispatchArtifact,
+    artifactChecks,
+  });
 });
 
 function createPackageFixture(t, skillNames) {
