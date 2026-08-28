@@ -1,0 +1,181 @@
+{
+  "skill_name": "engineering-guidance",
+  "version": 1,
+  "evaluation": {
+    "scope": "engineering-guidance-role",
+    "layer": "role",
+    "skill": "engineering-guidance",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "engineering-guidance-role-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every expectation and dimension, quote or reference specific output evidence. A disposition label without its artifact-specific reason is not evidence.",
+    "dimensions": [
+      {
+        "id": "authority",
+        "description": "Checks quoted output evidence that authority follows host policy, requirements, scoped repository instructions, mechanical configuration, nearby practice, and labelled fallback in that order while retaining conflicts."
+      },
+      {
+        "id": "concern_coverage",
+        "description": "Checks quoted output evidence that every compact concern has exactly one artifact-specific disposition and that dispositions are not presented as defects."
+      },
+      {
+        "id": "gaps_and_routes",
+        "description": "Checks quoted output evidence that missing inputs and specialist capability remain unresolved gaps with routes instead of invented context or shallow specialist advice."
+      },
+      {
+        "id": "guidance_boundary",
+        "description": "Checks quoted output evidence that the response advises without authoring a design, mutating artifacts, executing validation, creating Review findings, or taking over caller operations."
+      },
+      {
+        "id": "compactness",
+        "description": "Checks quoted output evidence that tiny work receives compact coverage while complex or conflicted work retains enough detail to be actionable."
+      }
+    ]
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "evals": [
+    {
+      "id": "sparse-tiny-typescript",
+      "name": "tiny TypeScript change under sparse authority",
+      "prompt": "Assess this proposed change, not its prose: in src/format-id.ts, replace a local two-line lowercase helper with String.prototype.toLowerCase(). Intent: preserve current identifier output. Scope: that function only. Current artifact: a three-line TypeScript patch. Applicable authority: the user requires no behavior change; the repository has no instruction file, formatter, linter, tests, or nearby equivalent. Activity: implementation. Return Engineering concern coverage. Do not change files or run commands.",
+      "expected_output": "Compact coverage keeps missing repository evidence visible, uses fallback only where needed, disposes every concern once, and identifies proof conditions without running them.",
+      "files": [],
+      "required_skill_loads": ["engineering-guidance"],
+      "required_concerns": [
+        "intent-and-scope",
+        "responsibilities-and-seams",
+        "dependencies-and-contracts",
+        "state-and-invariants",
+        "failure-and-boundaries",
+        "simplicity-and-reuse",
+        "compatibility-and-change",
+        "maintainer-legibility",
+        "evidence-and-validation"
+      ],
+      "expectations": [
+        "Every concern has exactly one applicable-now, applicable-later, or justified not-applicable disposition tied to this tiny patch.",
+        "Absent repository authority remains a gap rather than invented local policy.",
+        "Fallback guidance is labelled and limited to uncovered applicable-now concerns.",
+        "The response identifies behavior-preservation evidence without running validation.",
+        "The amount of guidance is proportionate to a tiny change and prompt cost is considered.",
+        "Sampled human review checks that semantic advice remains useful under alternate wording."
+      ],
+      "covers": [
+        "sparse-authority",
+        "tiny-change",
+        "language-diverse-change",
+        "prompt-cost"
+      ]
+    },
+    {
+      "id": "nested-conflict-architecture",
+      "name": "architectural proposal with nested conflicting authority",
+      "prompt": "Assess an existing service-boundary proposal. Intent: move invoice retry ownership from the API process to the queue worker. Scope: services/api/retry and services/worker/invoice only. Current artifact: proposal revision r17. Authority, high to low: organization policy requires retries to avoid duplicate charges; the ticket requires worker ownership; root AGENTS.md says all external effects use adapters; services/worker/AGENTS.md requires queue handlers to be idempotent; compiler config enforces strict null checks; a nearby old worker performs charges directly and retries without an idempotency key. Activity: design. Keep all conflicts visible. Do not write a replacement design.",
+      "expected_output": "Coverage applies nested authority by scope and precedence, treats the old pattern as descriptive and conflicting, and advises on the proposal without choosing or writing the design.",
+      "files": [],
+      "required_skill_loads": ["engineering-guidance"],
+      "required_concerns": [
+        "intent-and-scope",
+        "responsibilities-and-seams",
+        "dependencies-and-contracts",
+        "state-and-invariants",
+        "failure-and-boundaries",
+        "simplicity-and-reuse",
+        "compatibility-and-change",
+        "maintainer-legibility",
+        "evidence-and-validation"
+      ],
+      "expectations": [
+        "Authority resolution preserves organization policy, requirement intent, root and nested repository scope, mechanical configuration, and nearby practice in order.",
+        "The direct-charge retry pattern remains visible as pre-existing bad practice and does not override stronger authority.",
+        "Every concern has exactly one current disposition with an artifact-specific reason.",
+        "Advice identifies relevant ownership, contracts, state, failure, compatibility, and evidence questions without authoring a replacement architecture.",
+        "Conflicts and unresolved effects remain explicit.",
+        "Sampled human review checks semantic correctness and useful restraint."
+      ],
+      "covers": [
+        "strong-authority",
+        "conflicting-authority",
+        "nested-authority",
+        "architectural-change",
+        "pre-existing-bad-pattern"
+      ]
+    },
+    {
+      "id": "weak-ci-specialist-route",
+      "name": "non-code CI change with weak authority and specialist gap",
+      "prompt": "Assess a proposed YAML-only CI change that adds a performance budget before deployment. Intent: detect a p95 regression. Scope: .github/workflows/deploy.yml. Current artifact: draft workflow revision ci-4. Authority: the ticket says deployments must stop on material regression; nearby jobs use inconsistent thresholds; no performance owner, approved threshold, workload model, or specialist Skill is available. Activity: design. Do not invent a threshold, edit YAML, or run the workflow.",
+      "expected_output": "Coverage treats the technical non-code artifact as assessable, preserves weak authority and missing performance expertise, and routes the caller instead of inventing specialist criteria.",
+      "files": [],
+      "required_skill_loads": ["engineering-guidance"],
+      "required_concerns": [
+        "intent-and-scope",
+        "responsibilities-and-seams",
+        "dependencies-and-contracts",
+        "state-and-invariants",
+        "failure-and-boundaries",
+        "simplicity-and-reuse",
+        "compatibility-and-change",
+        "maintainer-legibility",
+        "evidence-and-validation"
+      ],
+      "expectations": [
+        "The YAML workflow is treated as a technical non-code artifact, not excluded as generic non-code work.",
+        "Inconsistent nearby thresholds remain weak descriptive evidence.",
+        "Missing threshold authority, workload model, and performance capability remain unresolved gaps.",
+        "The response gives a performance specialist route without imitating performance expertise.",
+        "Every concern has one justified current disposition and no validation is run.",
+        "Sampled human review checks that the route and gaps are actionable."
+      ],
+      "covers": [
+        "weak-authority",
+        "non-code-change",
+        "specialist-routing"
+      ]
+    },
+    {
+      "id": "independent-review-disagreement",
+      "name": "review activity preserves independent disagreement",
+      "prompt": "Assess immutable range a1b2..c3d4 during review. Intent: cache product permissions without changing authorization results. Scope: packages/auth/cache.js and its tests. Current artifact: the immutable diff. Authority: organization policy requires deny-by-default; the ticket permits caching; repository tests require cache invalidation after role changes. The implementation handoff claims state-and-invariants is not applicable, while the fresh reviewer says invalidation state is applicable now. Activity: review. Provide concern coverage, not Review findings or severity.",
+      "expected_output": "Fresh coverage resolves authority from the immutable review artifact, keeps the implementation claim and reviewer disagreement visible, and does not convert concern dispositions into findings.",
+      "files": [],
+      "required_skill_loads": ["engineering-guidance"],
+      "required_concerns": [
+        "intent-and-scope",
+        "responsibilities-and-seams",
+        "dependencies-and-contracts",
+        "state-and-invariants",
+        "failure-and-boundaries",
+        "simplicity-and-reuse",
+        "compatibility-and-change",
+        "maintainer-legibility",
+        "evidence-and-validation"
+      ],
+      "expectations": [
+        "Review resolves fresh concern coverage from the immutable range rather than inheriting the handoff conclusion.",
+        "The state-and-invariants disagreement remains visible with its authority basis.",
+        "Every concern has one disposition and dispositions are not defects or Review findings.",
+        "The response avoids severity, finding confidence, fix direction, and review coordination.",
+        "Deny-by-default remains higher authority than the ticket and implementation claim.",
+        "Sampled human review checks independence and semantic authority handling."
+      ],
+      "covers": [
+        "independent-review-disagreement",
+        "conflicting-authority",
+        "strong-authority"
+      ]
+    }
+  ]
+}

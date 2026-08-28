@@ -1,0 +1,85 @@
+{
+  "skill_name": "engineering-guidance",
+  "version": 1,
+  "evaluation": {
+    "scope": "engineering-guidance-outcome",
+    "layer": "outcome",
+    "skill": "engineering-guidance",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "engineering-guidance-outcome-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every expectation and dimension, quote or reference specific output evidence. Judge semantic coverage and authority handling without requiring exact prose, headings, worker topology, or host event names.",
+    "dimensions": [
+      {
+        "id": "complete_coverage",
+        "description": "Checks quoted output evidence for exactly one reasoned disposition per compact concern plus bounded scope, artifact revision, intent, and activity."
+      },
+      {
+        "id": "authority_fidelity",
+        "description": "Checks quoted output evidence that precedence, fallback labels, conflicts, and unresolved authority effects match the supplied sources."
+      },
+      {
+        "id": "progressive_guidance",
+        "description": "Checks quoted output evidence that deeper fallback is used only for applicable uncovered concerns and specialist gaps are routed."
+      },
+      {
+        "id": "caller_ownership",
+        "description": "Checks quoted output evidence that guidance remains advisory and does not perform or claim design, mutation, validation, findings, artifacts, or operational ownership."
+      }
+    ]
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "evals": [
+    {
+      "id": "complete-guidance-only-result",
+      "name": "complete guidance-only assessment",
+      "prompt": "Assess proposal p-12 for changing a Go event consumer from at-most-once to at-least-once delivery. Intent: prevent silent event loss without duplicate customer notifications. Scope: consumer/dispatch.go and consumer/state.go. Activity: design. Authority in descending precedence: organization policy forbids duplicate customer notifications; ticket R-8 requires retry after transient broker failure; repository AGENTS.md requires explicit effect adapters; gofmt and go test are mechanically enforced; nearby consumer code acknowledges before the notification effect. The proposed design adds retry but has no settled idempotency key, migration plan, or concurrency specialist available. Return compact Engineering concern coverage only. Do not author a design, change files, run validation, create Review findings, or write an artifact.",
+      "expected_output": "A complete guidance-only result cites supplied authority, retains the conflict and missing decisions, disposes all concerns once, uses fallback progressively, routes missing concurrency expertise, and reports no owned artifacts or attempted mutations.",
+      "files": [],
+      "required_skill_loads": ["engineering-guidance"],
+      "required_concerns": [
+        "intent-and-scope",
+        "responsibilities-and-seams",
+        "dependencies-and-contracts",
+        "state-and-invariants",
+        "failure-and-boundaries",
+        "simplicity-and-reuse",
+        "compatibility-and-change",
+        "maintainer-legibility",
+        "evidence-and-validation"
+      ],
+      "expectations": [
+        "The result names proposal p-12, the bounded files, design activity, and the supplied intent.",
+        "Every compact concern has exactly one applicable-now, applicable-later, or justified not-applicable disposition.",
+        "Organization policy, ticket R-8, repository instructions, mechanical configuration, and nearby practice retain the supplied precedence.",
+        "The acknowledge-before-effect pattern remains descriptive evidence and its conflict with retry safety remains visible.",
+        "Missing idempotency, migration, and concurrency decisions remain unresolved gaps.",
+        "Missing concurrency capability produces a specialist route, not shallow concurrency advice.",
+        "Fallback sources are labelled and tied only to uncovered applicable concerns.",
+        "The response identifies evidence that a caller could run without running it.",
+        "The outcome owns no design, mutation, validation, Review finding, handoff, repository operation, or artifact.",
+        "Sampled human review checks usefulness, compactness, and semantic fidelity."
+      ],
+      "covers": [
+        "matched-no-skill-control",
+        "strong-authority",
+        "conflicting-authority",
+        "architectural-change",
+        "language-diverse-change",
+        "specialist-routing"
+      ]
+    }
+  ]
+}
