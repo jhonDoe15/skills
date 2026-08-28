@@ -1,0 +1,14 @@
+{
+  "schema": "validation-evidence/v1",
+  "range": {
+    "base": "1111111111111111111111111111111111111111",
+    "head": "2222222222222222222222222222222222222222"
+  },
+  "checks": [
+    {
+      "command": "node --test repository/test/discount.test.js",
+      "result": "passed",
+      "tests": 1
+    }
+  ]
+}

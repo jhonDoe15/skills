@@ -1,0 +1,107 @@
+{
+  "skill_name": "code-review",
+  "version": 1,
+  "evaluation": {
+    "scope": "code-review-trigger",
+    "layer": "trigger",
+    "skill": "code-review",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 5,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0,
+    "randomization_seed": "code-review-trigger-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "Use exact observed Skill lifecycle evidence for activation. Judge output quality separately.",
+    "dimensions": [
+      {
+        "id": "activation",
+        "description": "Code Review activates for direct review outcomes and stays inactive when implementation or the reviewed-ticket lifecycle owns the request."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "canonical-code-review",
+      "name": "canonical Code Review invocation",
+      "prompt": "/code-review\n\nReview this complete Ticket outcome and return the local Review brief.",
+      "expected_output": "The exact Code Review lifecycle and canonical dependency closure load.",
+      "files": [],
+      "should_trigger": true,
+      "canonical_invocation": true,
+      "required_skill_loads": [
+        "review-worker",
+        "review-coordinator",
+        "engineering-guidance",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "Exact successful Code Review and dependency loads are observed."
+      ],
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-canonical-activation"}
+      ]
+    },
+    {
+      "id": "ambient-code-review",
+      "name": "ambient complete review request",
+      "prompt": "Review the complete immutable Ticket outcome and return evidence-backed findings without changing code.",
+      "expected_output": "Code Review owns the requested read-only review outcome.",
+      "files": [],
+      "should_trigger": true,
+      "required_skill_loads": [
+        "review-worker",
+        "review-coordinator",
+        "engineering-guidance",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "Code Review activates independently from semantic output quality."
+      ],
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-positive-activation"}
+      ]
+    },
+    {
+      "id": "implementation-request",
+      "name": "implementation exclusion",
+      "prompt": "Implement this settled ticket with TDD and return its implementation handoff.",
+      "expected_output": "Implement owns the patch and Code Review stays inactive.",
+      "files": [],
+      "should_trigger": false,
+      "expectations": [
+        "No Code Review selection or load is observed."
+      ],
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-implement-exclusion"}
+      ]
+    },
+    {
+      "id": "reviewed-ticket-request",
+      "name": "Take Ticket exclusion",
+      "prompt": "Take this ticket through implementation, independent review, correction, and targeted re-review.",
+      "expected_output": "Take Ticket owns the complete lifecycle and Code Review is not selected as another public outcome.",
+      "files": [],
+      "should_trigger": false,
+      "expectations": [
+        "No independent Code Review public-outcome activation is observed."
+      ],
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-take-ticket-exclusion"}
+      ]
+    }
+  ]
+}

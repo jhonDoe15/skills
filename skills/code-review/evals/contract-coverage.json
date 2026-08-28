@@ -1,0 +1,266 @@
+{
+  "version": 1,
+  "scope": "issue-42-code-review",
+  "clauses": [
+    {
+      "id": "cr-complete-ticket-input",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-role", "id": "ordinary-whole-ticket-review"}
+      ]
+    },
+    {
+      "id": "cr-two-fresh-lenses",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-role", "id": "ordinary-whole-ticket-review"}
+      ]
+    },
+    {
+      "id": "cr-retained-artifacts",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-role", "id": "ordinary-whole-ticket-review"}
+      ]
+    },
+    {
+      "id": "cr-read-only",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-role", "id": "ordinary-whole-ticket-review"},
+        {"scope": "code-review-outcome", "id": "nontrivial-ticket-outcome"}
+      ]
+    },
+    {
+      "id": "cr-review-worker-edge",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-components", "id": "code-review-to-review-worker"}
+      ]
+    },
+    {
+      "id": "cr-review-coordinator-edge",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-components", "id": "code-review-to-review-coordinator"}
+      ]
+    },
+    {
+      "id": "cr-take-it-offline-edge",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-components", "id": "code-review-to-take-it-offline"}
+      ]
+    },
+    {
+      "id": "cr-complete-outcome",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-outcome", "id": "nontrivial-ticket-outcome"}
+      ]
+    },
+    {
+      "id": "cr-findings",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-outcome", "id": "nontrivial-ticket-outcome"}
+      ]
+    },
+    {
+      "id": "cr-guidance-independence",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-outcome", "id": "nontrivial-ticket-outcome"}
+      ]
+    },
+    {
+      "id": "cr-region-order",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-outcome", "id": "nontrivial-ticket-outcome"}
+      ]
+    },
+    {
+      "id": "cr-coordination",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-outcome", "id": "nontrivial-ticket-outcome"}
+      ]
+    },
+    {
+      "id": "cr-artifact-replay",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-outcome", "id": "nontrivial-ticket-outcome"}
+      ]
+    },
+    {
+      "id": "cr-canonical-activation",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-trigger", "id": "canonical-code-review"}
+      ]
+    },
+    {
+      "id": "cr-positive-activation",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-trigger", "id": "ambient-code-review"}
+      ]
+    },
+    {
+      "id": "cr-implement-exclusion",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-trigger", "id": "implementation-request"}
+      ]
+    },
+    {
+      "id": "cr-take-ticket-exclusion",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-trigger", "id": "reviewed-ticket-request"}
+      ]
+    },
+    {
+      "id": "cr-review-worker-closure",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-package-closure", "id": "missing-review-worker"}
+      ]
+    },
+    {
+      "id": "cr-review-coordinator-closure",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-package-closure", "id": "missing-review-coordinator"}
+      ]
+    },
+    {
+      "id": "cr-take-it-offline-closure",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-package-closure", "id": "missing-take-it-offline"}
+      ]
+    },
+    {
+      "id": "rw-complete-input",
+      "owner": "review-worker",
+      "cases": [
+        {"scope": "review-worker-role", "id": "whole-ticket-worker-analysis"}
+      ]
+    },
+    {
+      "id": "rw-independent-guidance",
+      "owner": "review-worker",
+      "cases": [
+        {"scope": "review-worker-role", "id": "whole-ticket-worker-analysis"}
+      ]
+    },
+    {
+      "id": "rw-region-order",
+      "owner": "review-worker",
+      "cases": [
+        {"scope": "review-worker-role", "id": "whole-ticket-worker-analysis"}
+      ]
+    },
+    {
+      "id": "rw-findings",
+      "owner": "review-worker",
+      "cases": [
+        {"scope": "review-worker-role", "id": "whole-ticket-worker-analysis"}
+      ]
+    },
+    {
+      "id": "rw-read-only",
+      "owner": "review-worker",
+      "cases": [
+        {"scope": "review-worker-role", "id": "whole-ticket-worker-analysis"}
+      ]
+    },
+    {
+      "id": "rw-engineering-guidance-edge",
+      "owner": "review-worker",
+      "cases": [
+        {"scope": "review-worker-components", "id": "review-worker-to-engineering-guidance"}
+      ]
+    },
+    {
+      "id": "rw-take-it-offline-edge",
+      "owner": "review-worker",
+      "cases": [
+        {"scope": "review-worker-components", "id": "review-worker-to-take-it-offline"}
+      ]
+    },
+    {
+      "id": "rw-engineering-guidance-closure",
+      "owner": "review-worker",
+      "cases": [
+        {"scope": "review-worker-package-closure", "id": "missing-engineering-guidance"}
+      ]
+    },
+    {
+      "id": "rw-take-it-offline-closure",
+      "owner": "review-worker",
+      "cases": [
+        {"scope": "review-worker-package-closure", "id": "missing-take-it-offline"}
+      ]
+    },
+    {
+      "id": "rc-validation",
+      "owner": "review-coordinator",
+      "cases": [
+        {"scope": "review-coordinator-role", "id": "structural-review-coordination"}
+      ]
+    },
+    {
+      "id": "rc-grouping",
+      "owner": "review-coordinator",
+      "cases": [
+        {"scope": "review-coordinator-role", "id": "structural-review-coordination"}
+      ]
+    },
+    {
+      "id": "rc-sorting",
+      "owner": "review-coordinator",
+      "cases": [
+        {"scope": "review-coordinator-role", "id": "structural-review-coordination"}
+      ]
+    },
+    {
+      "id": "rc-coverage-union",
+      "owner": "review-coordinator",
+      "cases": [
+        {"scope": "review-coordinator-role", "id": "structural-review-coordination"}
+      ]
+    },
+    {
+      "id": "rc-conclusion-preservation",
+      "owner": "review-coordinator",
+      "cases": [
+        {"scope": "review-coordinator-role", "id": "structural-review-coordination"}
+      ]
+    },
+    {
+      "id": "rc-no-second-review",
+      "owner": "review-coordinator",
+      "cases": [
+        {"scope": "review-coordinator-role", "id": "structural-review-coordination"}
+      ]
+    },
+    {
+      "id": "rc-take-it-offline-edge",
+      "owner": "review-coordinator",
+      "cases": [
+        {"scope": "review-coordinator-components", "id": "review-coordinator-to-take-it-offline"}
+      ]
+    },
+    {
+      "id": "rc-take-it-offline-closure",
+      "owner": "review-coordinator",
+      "cases": [
+        {"scope": "review-coordinator-package-closure", "id": "missing-take-it-offline"}
+      ]
+    }
+  ]
+}
