@@ -34,7 +34,7 @@ function isolatedGitEnvironment(root, environment) {
   return isolated;
 }
 
-function runGit(root, arguments_, environment = process.env) {
+function runFixtureGit(root, arguments_, environment = process.env) {
   const result = spawnSync('git', arguments_, {
     cwd: root,
     env: isolatedGitEnvironment(root, environment),
@@ -53,9 +53,9 @@ function commitTicketState(root, state, message, environment) {
     sourcePath,
     `'use strict';\n\nmodule.exports = { state: '${state}' };\n`,
   );
-  runGit(root, ['add', 'src/ticket-change.js']);
-  runGit(root, ['commit', '--quiet', '-m', message], environment);
-  return runGit(root, ['rev-parse', 'HEAD']);
+  runFixtureGit(root, ['add', 'src/ticket-change.js']);
+  runFixtureGit(root, ['commit', '--quiet', '-m', message], environment);
+  return runFixtureGit(root, ['rev-parse', 'HEAD']);
 }
 
 function createBoundary(methods) {
@@ -73,7 +73,7 @@ function createBoundary(methods) {
 function createOutcomeSandbox(t, { includeCorrection = false } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'take-ticket-outcome-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  runGit(root, ['init', '--quiet']);
+  runFixtureGit(root, ['init', '--quiet']);
   const identity = {
     ...process.env,
     GIT_AUTHOR_NAME: 'Take Ticket Fixture',
@@ -110,7 +110,7 @@ function createOutcomeSandbox(t, { includeCorrection = false } = {}) {
   return {
     repository: Object.freeze({
       root,
-      head: runGit(root, ['rev-parse', 'HEAD']),
+      head: runFixtureGit(root, ['rev-parse', 'HEAD']),
       ranges,
     }),
     tracker: createBoundary({
@@ -125,4 +125,4 @@ function createOutcomeSandbox(t, { includeCorrection = false } = {}) {
   };
 }
 
-module.exports = { createOutcomeSandbox };
+module.exports = { createOutcomeSandbox, runFixtureGit };

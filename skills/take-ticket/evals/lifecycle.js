@@ -87,6 +87,10 @@ function isUniqueSubset(values, allowedValues) {
     && values.every((value) => allowed.has(value));
 }
 
+function tupleIdentity(...values) {
+  return JSON.stringify(values);
+}
+
 function validateDescriptor(value, field, fields = ['reference', 'mediaType']) {
   requireExactFields(value, fields, field);
   requireString(value.reference, `${field}.reference`);
@@ -306,7 +310,7 @@ function requiredTargetRegions(correction) {
 function requiredDispositionIdentities(correction) {
   return correction.scopes.flatMap((scope) => (
     requiredRegionsForScope(scope)
-      .map((region) => `${scope.finding_id}\0${region}`)
+      .map((region) => tupleIdentity(scope.finding_id, region))
   ));
 }
 
@@ -350,7 +354,7 @@ function validateTargetedDispositions(dispositions, correction, allowSubset = fa
       throw new TakeTicketEvaluationError(message);
     }
     dispositionIdentities.push(
-      `${disposition.finding_id}\0${disposition.region}`,
+      tupleIdentity(disposition.finding_id, disposition.region),
     );
   });
   const expectedIdentities = requiredDispositionIdentities(correction);
@@ -461,7 +465,7 @@ function validateLifecycle(value, correctionRequired, result) {
 function validateArtifacts(value, result) {
   validatePartialArtifacts(value);
   const descriptors = new Set(
-    value.map(({ kind, reference }) => `${kind}\0${reference}`),
+    value.map(({ kind, reference }) => tupleIdentity(kind, reference)),
   );
   const required = [
     ['implementation-handoff', result.implementation.handoff.reference],
@@ -476,7 +480,9 @@ function validateArtifacts(value, result) {
       result.targeted_re_review.artifact.reference,
     ]);
   }
-  if (!required.every(([kind, reference]) => descriptors.has(`${kind}\0${reference}`))) {
+  if (!required.every(
+    ([kind, reference]) => descriptors.has(tupleIdentity(kind, reference)),
+  )) {
     throw new TakeTicketEvaluationError('result.artifacts is incomplete');
   }
 }
@@ -603,7 +609,7 @@ function validateNonReviewedPhaseData(result, phaseIndex) {
 }
 
 function artifactIdentity({ kind, reference, mediaType }) {
-  return `${kind}\0${reference}\0${mediaType}`;
+  return tupleIdentity(kind, reference, mediaType);
 }
 
 function validateCompletedPrefixReferences(result, phaseIndex) {

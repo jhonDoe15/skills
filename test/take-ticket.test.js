@@ -4,7 +4,6 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 const { pathToFileURL } = require('node:url');
 
@@ -28,6 +27,7 @@ const {
 } = require('./fixtures/take-ticket/dependency-adapters');
 const {
   createOutcomeSandbox,
+  runFixtureGit,
 } = require('./fixtures/take-ticket/outcome-sandbox');
 
 const repositoryRoot = path.resolve(__dirname, '..');
@@ -94,15 +94,6 @@ function invocation() {
 function takeTicketDescription() {
   const source = fs.readFileSync(path.join(skillRoot, 'SKILL.md'), 'utf8');
   return source.match(/^description:\s*(.+)$/m)?.[1] || '';
-}
-
-function fixtureGit(root, arguments_) {
-  const result = spawnSync('git', arguments_, {
-    cwd: root,
-    encoding: 'utf8',
-  });
-  assert.equal(result.status, 0, result.stderr);
-  return result.stdout.trim();
 }
 
 function regionsForScope(scope) {
@@ -691,6 +682,26 @@ test('overlapping correction effects require one disposition per finding-region'
   }
 });
 
+test('targeted dispositions distinguish NUL-containing finding-region tuples', () => {
+  const result = successfulResult({
+    acceptedFindings: ['finding\0region'],
+  });
+  result.full_review.finding_dispositions[0].regions = ['tail'];
+  result.correction.scopes[0].regions = ['tail'];
+  result.correction.scopes[0].materially_affected_regions = [];
+  result.targeted_re_review.regions = ['tail'];
+  result.targeted_re_review.dispositions = [{
+    finding_id: 'finding',
+    region: 'region\0tail',
+    outcome: 'accepted',
+  }];
+
+  assert.throws(
+    () => validateTakeTicketResult(result),
+    /targeted re-review dispositions must exactly match correction effects/,
+  );
+});
+
 test('failed and incomplete phases remain visible and never become reviewed', () => {
   for (const phase of PHASES) {
     const result = nonReviewedResult(
@@ -836,25 +847,40 @@ test('non-reviewed results keep every completed prefix cross-consistent', () => 
   );
 });
 
+test('retained artifacts distinguish NUL-containing descriptor tuples', () => {
+  const result = nonReviewedResult('full-review');
+  result.implementation.handoff.reference = 'left\0right';
+  result.artifacts[0] = {
+    kind: 'implementation-handoff\0left',
+    reference: 'right',
+    mediaType: result.implementation.handoff.mediaType,
+  };
+
+  assert.throws(
+    () => validateTakeTicketResult(result),
+    /completed prefix artifacts are inconsistent/,
+  );
+});
+
 test('outcome sandbox derives immutable ranges from real changed commits', (t) => {
   const sandbox = createOutcomeSandbox(t, { includeCorrection: true });
   const { implementation, correction } = sandbox.repository.ranges;
 
-  fixtureGit(sandbox.repository.root, [
+  runFixtureGit(sandbox.repository.root, [
     'merge-base',
     '--is-ancestor',
     implementation.base,
     implementation.head,
   ]);
   assert.equal(correction.base, implementation.head);
-  fixtureGit(sandbox.repository.root, [
+  runFixtureGit(sandbox.repository.root, [
     'merge-base',
     '--is-ancestor',
     correction.base,
     correction.head,
   ]);
   for (const range of [implementation, correction]) {
-    const changedPaths = fixtureGit(sandbox.repository.root, [
+    const changedPaths = runFixtureGit(sandbox.repository.root, [
       'diff',
       '--name-only',
       `${range.base}..${range.head}`,
@@ -885,7 +911,7 @@ test('full-review failure retains no synthetic future correction evidence', (t) 
   assert.equal(result.targeted_re_review, null);
   assert.deepEqual(Object.keys(sandbox.repository.ranges), ['implementation']);
   assert.equal(
-    fixtureGit(sandbox.repository.root, ['rev-list', '--count', 'HEAD']),
+    runFixtureGit(sandbox.repository.root, ['rev-list', '--count', 'HEAD']),
     '2',
   );
   assert.deepEqual(
@@ -908,12 +934,14 @@ test('outcome sandbox ignores hostile inherited Git configuration', (t) => {
   const hooksRoot = path.join(hostileRoot, 'hooks');
   const templateRoot = path.join(hostileRoot, 'template');
   const hookMarker = path.join(hostileRoot, 'hook-ran');
+  const inspectionMarker = path.join(hostileRoot, 'inspection-ran');
   const signingMarker = path.join(hostileRoot, 'signing-ran');
   fs.mkdirSync(hooksRoot, { recursive: true });
   fs.mkdirSync(path.join(templateRoot, 'hooks'), { recursive: true });
   for (const [filePath, marker] of [
     [path.join(hooksRoot, 'pre-commit'), hookMarker],
     [path.join(templateRoot, 'hooks', 'pre-commit'), hookMarker],
+    [path.join(hostileRoot, 'inspection-program'), inspectionMarker],
     [path.join(hostileRoot, 'signing-program'), signingMarker],
   ]) {
     fs.writeFileSync(
@@ -945,6 +973,7 @@ test('outcome sandbox ignores hostile inherited Git configuration', (t) => {
     GIT_CONFIG_PARAMETERS: [
       `'core.hooksPath=${hooksRoot}'`,
       "'commit.gpgSign=true'",
+      `'diff.external=${path.join(hostileRoot, 'inspection-program')}'`,
       `'gpg.program=${path.join(hostileRoot, 'signing-program')}'`,
     ].join(' '),
     GIT_CONFIG_SYSTEM: globalConfig,
@@ -955,8 +984,14 @@ test('outcome sandbox ignores hostile inherited Git configuration', (t) => {
   );
   Object.assign(process.env, inheritedKeys);
   let sandbox;
+  let inspectionDiff;
   try {
     sandbox = createOutcomeSandbox(t, { includeCorrection: true });
+    const { implementation } = sandbox.repository.ranges;
+    inspectionDiff = runFixtureGit(sandbox.repository.root, [
+      'diff',
+      `${implementation.base}..${implementation.head}`,
+    ]);
   } finally {
     for (const [key, value] of previousValues) {
       if (value === undefined) delete process.env[key];
@@ -965,9 +1000,11 @@ test('outcome sandbox ignores hostile inherited Git configuration', (t) => {
   }
 
   assert.equal(fs.existsSync(hookMarker), false);
+  assert.equal(fs.existsSync(inspectionMarker), false);
   assert.equal(fs.existsSync(signingMarker), false);
+  assert.match(inspectionDiff, /state: 'implemented'/);
   assert.equal(
-    fixtureGit(sandbox.repository.root, ['rev-list', '--count', 'HEAD']),
+    runFixtureGit(sandbox.repository.root, ['rev-list', '--count', 'HEAD']),
     '3',
   );
 });
