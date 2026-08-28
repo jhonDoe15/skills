@@ -13,8 +13,10 @@
     "minimum_treatment_win_rate": 0.6,
     "randomization_seed": "dispatch-work-take-ticket-v1"
   },
-  "signals": {},
-  "global_required_signals": [],
+  "signals": {
+    "dispatch_artifact": ["^dispatch-artifact: fixture://dispatch/completed$"]
+  },
+  "global_required_signals": ["dispatch_artifact"],
   "global_order": [],
   "forbidden_patterns": [],
   "judge": {
@@ -39,7 +41,14 @@
       "expected_output": "The treatment invokes canonical Take Ticket for each eligible ticket; the test-only ablation exposes the missing lifecycle contribution without providing copied ticket behavior.",
       "files": [
         "test/fixtures/dispatch-work/completed-dispatch.json",
-        "test/fixtures/dispatch-work/take-ticket-adapter.js"
+        "test/fixtures/dispatch-work/take-ticket-adapter.js",
+        "test/fixtures/dispatch-work/reviewed-ticket-B.json"
+      ],
+      "artifact_checks": [
+        "reviewed-lifecycle",
+        "observed-skill-loads",
+        "observed-tools",
+        "observed-mutations"
       ],
       "expectations": [
         "The treatment loads take-ticket by canonical name and retains authoritative reviewed-ticket completions.",

@@ -39,10 +39,11 @@ The repository layout supports both installers: each skill lives under
 `skills/<name>/SKILL.md`, while `.claude-plugin/` exposes the tree as one
 Claude Code marketplace plugin.
 
-The workflow skills reference companion skills when their branches are used:
-`/to-tickets`, `/to-spec`, `/wayfinder`, `/implement`, `/code-review`,
-`/handoff`, and `/autopilot`. Install those separately in the host that runs
-the workflows.
+The workflow skills reference companion skills when their branches are used.
+Dispatch Work requires the canonical Take Ticket (`take-ticket`) and Take It
+Offline (`take-it-offline`) skills. Other workflows may also require
+`/to-tickets`, `/to-spec`, `/wayfinder`, `/implement`, `/code-review`, or
+`/autopilot`; install those separately in the host that runs the workflows.
 
 ### Upgrading from hook/card releases
 

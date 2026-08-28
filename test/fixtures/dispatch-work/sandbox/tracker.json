@@ -1,5 +1,11 @@
 {
-  "sandboxed": true,
-  "tickets": ["A", "B", "C", "D"],
-  "writes_allowed": false
+  "boundary": "tracker",
+  "observations": {
+    "toolUses": [
+      { "name": "tracker.read", "outcome": "succeeded" }
+    ],
+    "attemptedMutations": [
+      { "operation": "update", "target": "fixture-tracker:B", "outcome": "blocked-by-sandbox" }
+    ]
+  }
 }

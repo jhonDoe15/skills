@@ -16,6 +16,10 @@ const {
   validateEvaluationDefinition,
 } = require('../suite/evaluation');
 const {
+  executeTest,
+} = require('../suite/testing');
+const {
+  gradeDispatchResult,
   validateDispatchArtifact,
 } = require('../skills/dispatch-work/evals/grader');
 
@@ -27,6 +31,18 @@ const EVALUATION_ROOT = path.join(
   'dispatch-work',
   'evals',
 );
+const COMPLETE_DISPATCH_CLOSURE = [
+  'dispatch-work',
+  'take-ticket',
+  'take-it-offline',
+  'code-review',
+  'implement',
+  'review-coordinator',
+  'review-worker',
+  'engineering-guidance',
+  'agent-writing',
+  'writing-foundation',
+];
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -84,7 +100,7 @@ test('dispatch requires a published ready DAG rather than a plan artifact', () =
   }
 });
 
-test('staggered completions expose a moving frontier without a fixed barrier', async () => {
+test('fixture Adapters normalize observed dispatch and reviewed-ticket evidence', async (t) => {
   const artifact = readJson(
     path.join(DISPATCH_FIXTURE_ROOT, 'completed-dispatch.json'),
   );
@@ -94,42 +110,59 @@ test('staggered completions expose a moving frontier without a fixed barrier', a
   const {
     createTakeTicketAdapter,
   } = require('./fixtures/dispatch-work/take-ticket-adapter');
-  const dagAdapter = createPublishedDagAdapter(artifact.source_dag);
-  const takeTicketAdapter = createTakeTicketAdapter();
-
-  const sourceDag = await dagAdapter.read();
-  const ticketA = takeTicketAdapter.start('A');
-  const ticketC = takeTicketAdapter.start('C');
-  takeTicketAdapter.complete('A', artifact.ticket_lifecycles[0].result);
-  await ticketA;
-  const ticketB = takeTicketAdapter.start('B');
-
-  assert.deepEqual(sourceDag, artifact.source_dag);
-  assert.deepEqual(takeTicketAdapter.started(), ['A', 'C', 'B']);
-  assert.deepEqual(takeTicketAdapter.active(), ['C', 'B']);
-
-  takeTicketAdapter.complete('C', artifact.ticket_lifecycles[2].result);
-  takeTicketAdapter.complete('B', artifact.ticket_lifecycles[1].result);
-  await Promise.all([ticketB, ticketC]);
-
-  assert.strictEqual(validateDispatchArtifact(artifact), artifact);
-});
-
-test('production contract requires canonical dependencies and event-driven advancement', () => {
-  const skill = fs.readFileSync(
-    path.join(REPOSITORY_ROOT, 'skills', 'dispatch-work', 'SKILL.md'),
-    'utf8',
+  const repository = fs.mkdtempSync(path.join(os.tmpdir(), 'dispatch-repository-'));
+  t.after(() => fs.rmSync(repository, { recursive: true, force: true }));
+  fs.copyFileSync(
+    path.join(DISPATCH_FIXTURE_ROOT, 'repository', 'app.txt'),
+    path.join(repository, 'app.txt'),
   );
+  assert.equal(
+    spawnSync('git', ['init', '--quiet'], { cwd: repository }).status,
+    0,
+  );
+  const packageRoot = createPackageFixture(t, COMPLETE_DISPATCH_CLOSURE);
+  const invocation = {
+    requestId: 'dispatch-fixture',
+    skill: 'dispatch-work',
+    prompt: 'Dispatch the authorized published ready fixture DAG.',
+    model: 'fixture-model',
+  };
+  const publishedDagResult = await executeTest({
+    repositoryRoot: packageRoot,
+    adapter: createPublishedDagAdapter(),
+    invocation,
+  });
+  const takeTicketResult = await executeTest({
+    repositoryRoot: packageRoot,
+    adapter: createTakeTicketAdapter({ repository }),
+    invocation,
+  });
+  const artifactFiles = {
+    'fixture://dispatch/completed': 'completed-dispatch.json',
+    'fixture://reviewed-ticket/B': 'reviewed-ticket-B.json',
+  };
+  function resolveArtifact(reference) {
+    return readJson(path.join(DISPATCH_FIXTURE_ROOT, artifactFiles[reference]));
+  }
+  const graded = gradeDispatchResult(takeTicketResult, { resolveArtifact });
 
-  assert.match(skill, /explicit dispatch authorization/i);
-  assert.match(skill, /published ready DAG/i);
-  assert.match(skill, /Missing internal dependency "take-ticket"/);
-  assert.match(skill, /Missing internal dependency "take-it-offline"/);
-  assert.match(skill, /without waiting for unrelated active tickets/i);
-  assert.match(skill, /authoritative\s+reviewed-ticket result/i);
-  assert.match(skill, /implementation handoffs and Review briefs/i);
-  assert.match(skill, /does not repeat per-ticket Code Review/i);
-  assert.match(skill, /source DAG identity/i);
+  assert.deepEqual(
+    publishedDagResult.observations.toolUses,
+    [{ name: 'published-dag.read', outcome: 'succeeded' }],
+  );
+  assert.strictEqual(graded.artifact.schema, 'dispatch-work-artifact/v1');
+  assert.equal(graded.reviewedTicket.ticket, 'B');
+  assert.deepEqual(
+    takeTicketResult.observations.attemptedMutations
+      .filter(({ target }) => target.startsWith('fixture-repository:'))
+      .map(({ target }) => target),
+    [
+      'fixture-repository:A',
+      'fixture-repository:C',
+      'fixture-repository:B',
+      'fixture-repository:D',
+    ],
+  );
 });
 
 function createPackageFixture(t, skillNames) {
@@ -222,17 +255,19 @@ test('evaluation catalog separates role, both components, outcome, and routing',
   );
   assert.deepEqual(
     definitions[3].evals[0].required_skill_loads,
+    COMPLETE_DISPATCH_CLOSURE,
+  );
+  for (const definition of definitions) {
+    assert.notEqual(Object.keys(definition.signals).length, 0);
+  }
+  assert.deepEqual(
+    definitions[0].evals[0].artifact_checks,
     [
-      'dispatch-work',
-      'take-ticket',
-      'take-it-offline',
-      'code-review',
-      'implement',
-      'review-coordinator',
-      'review-worker',
-      'engineering-guidance',
-      'agent-writing',
-      'writing-foundation',
+      'authorization',
+      'frontier-causality',
+      'reviewed-lifecycle',
+      'synthesis-timing',
+      'replay-state',
     ],
   );
 });
@@ -249,32 +284,87 @@ test('only complete authoritative reviewed-ticket results advance the DAG', () =
   );
 });
 
-test('outcome fixture uses a real repository and sandboxed effect boundaries', (t) => {
-  const repository = fs.mkdtempSync(path.join(os.tmpdir(), 'dispatch-repository-'));
-  t.after(() => fs.rmSync(repository, { recursive: true, force: true }));
-  fs.copyFileSync(
-    path.join(DISPATCH_FIXTURE_ROOT, 'repository', 'app.txt'),
-    path.join(repository, 'app.txt'),
+test('replay retains pre-satisfied state and non-complete terminal recovery', () => {
+  const artifact = readJson(
+    path.join(DISPATCH_FIXTURE_ROOT, 'held-dispatch.json'),
   );
-  const initialized = spawnSync('git', ['init', '--quiet'], {
-    cwd: repository,
-    encoding: 'utf8',
-  });
-  assert.equal(initialized.status, 0, initialized.stderr);
-  const inspected = spawnSync(
-    'git',
-    ['rev-parse', '--is-inside-work-tree'],
-    { cwd: repository, encoding: 'utf8' },
-  );
-  assert.equal(inspected.stdout.trim(), 'true');
 
-  for (const boundary of ['tracker', 'pr', 'ci']) {
-    const fixture = readJson(
-      path.join(DISPATCH_FIXTURE_ROOT, 'sandbox', `${boundary}.json`),
-    );
-    assert.equal(fixture.sandboxed, true, boundary);
-    assert.equal(fixture.writes_allowed, false, boundary);
-  }
+  assert.strictEqual(validateDispatchArtifact(artifact), artifact);
+  assert.deepEqual(artifact.final_state.completed_tickets, ['A']);
+  assert.deepEqual(artifact.final_state.held_tickets, ['B']);
+  assert.deepEqual(artifact.final_state.blocked_tickets, ['C']);
+  assert.deepEqual(artifact.final_state.failed_tickets, ['D']);
+  assert.equal(
+    artifact.final_state.first_recovery_action,
+    'Resolve the human decision recorded by ticket B, then resume B.',
+  );
+
+  const misclassified = readJson(
+    path.join(DISPATCH_FIXTURE_ROOT, 'held-dispatch.json'),
+  );
+  misclassified.final_state.open_tickets = ['C'];
+  misclassified.final_state.blocked_tickets = [];
+  assert.throws(
+    () => validateDispatchArtifact(misclassified),
+    /final (?:open|blocked)_tickets/,
+  );
+});
+
+test('dispatch rejects cyclic DAGs and starts without one selecting calculation', () => {
+  const withoutSelection = readJson(
+    path.join(DISPATCH_FIXTURE_ROOT, 'completed-dispatch.json'),
+  );
+  delete withoutSelection.ticket_lifecycles[0].frontier_calculation;
+  assert.throws(
+    () => validateDispatchArtifact(withoutSelection),
+    /frontier calculation/,
+  );
+
+  const cyclic = readJson(
+    path.join(DISPATCH_FIXTURE_ROOT, 'completed-dispatch.json'),
+  );
+  cyclic.source_dag.tickets[0].dependencies.push('D');
+  cyclic.source_dag.dependencies.push({
+    ticket: 'A',
+    depends_on: 'D',
+    initial_state: 'open',
+  });
+  assert.throws(
+    () => validateDispatchArtifact(cyclic),
+    /cycle/,
+  );
+});
+
+test('frontier synthesis binds exact selections after their completion events', () => {
+  const premature = readJson(
+    path.join(DISPATCH_FIXTURE_ROOT, 'completed-dispatch.json'),
+  );
+  premature.synthesis[0].sequence = 7;
+  assert.throws(
+    () => validateDispatchArtifact(premature),
+    /after.*completion events/,
+  );
+
+  const duplicateFrontier = readJson(
+    path.join(DISPATCH_FIXTURE_ROOT, 'completed-dispatch.json'),
+  );
+  duplicateFrontier.synthesis[1].frontier_id = 'frontier-1';
+  assert.throws(
+    () => validateDispatchArtifact(duplicateFrontier),
+    /unique frontier calculation/,
+  );
+});
+
+test('completed fixture does not retain an unmodeled gate before ticket D', () => {
+  const artifact = readJson(
+    path.join(DISPATCH_FIXTURE_ROOT, 'completed-dispatch.json'),
+  );
+
+  assert.deepEqual(
+    artifact.synthesis[0].recommendations,
+    ['accept A', 'accept C'],
+  );
+  assert.strictEqual(validateDispatchArtifact(artifact), artifact);
 });
 
 test('test-only dispatch Adapters remain outside production package surfaces', (t) => {
@@ -301,18 +391,4 @@ test('test-only dispatch Adapters remain outside production package surfaces', (
     require('../suite/testing').createPublishedDagAdapter,
     undefined,
   );
-});
-
-test('documented Dispatch Work outcome matches the moving frontier contract', () => {
-  const readme = fs.readFileSync(path.join(REPOSITORY_ROOT, 'README.md'), 'utf8');
-  const dispatchSection = readme.match(
-    /## `\/dispatch-work`[\s\S]*?(?=\n## |\n# |$)/,
-  )?.[0] || '';
-  const normalizedSection = dispatchSection.replace(/\s+/g, ' ');
-
-  assert.match(normalizedSection, /published ready ticket DAG/i);
-  assert.match(normalizedSection, /Take Ticket/i);
-  assert.match(normalizedSection, /completion event/i);
-  assert.match(normalizedSection, /without waiting for unrelated work/i);
-  assert.doesNotMatch(normalizedSection, /babysat through PR approval/i);
 });

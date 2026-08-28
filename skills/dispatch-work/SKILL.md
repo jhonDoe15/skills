@@ -23,7 +23,7 @@ Require all of:
 A plan, ready-plan artifact, issue list, or publication request does not grant
 dispatch authority. If authorization is absent or ambiguous, stop before any
 ticket lifecycle starts. If the DAG is unpublished, not ready, internally
-inconsistent, or lacks a stable identity, stop before execution.
+inconsistent, cyclic, or lacks a stable identity, stop before execution.
 
 Load `take-ticket` and `take-it-offline` by their exact canonical Skill names
 before dispatch. If either is absent or unavailable, stop before ticket work
@@ -37,8 +37,9 @@ Code Review path in production.
 
 ## Establish dispatch state
 
-Retain the source DAG identity, explicit authorization source, and the initial
-state of every ticket and direct dependency. A ticket is:
+Retain the source DAG identity, explicit authorization source, and initial
+state of every ticket and direct dependency, including dependency edges
+already satisfied before this run. A ticket is:
 
 - `blocked` while any direct dependency remains open;
 - `eligible` when it is open, inactive, and every direct dependency is
@@ -46,8 +47,9 @@ state of every ticket and direct dependency. A ticket is:
 - `active` only after its Take Ticket lifecycle starts;
 - `completed` only after Take Ticket returns a complete authoritative
   reviewed-ticket result; or
-- `held` when its lifecycle fails, returns incomplete authority, or reaches a
-  user-owned decision.
+- `held` when its lifecycle returns incomplete authority or reaches a
+  user-owned decision; or
+- `failed` when its lifecycle terminates unsuccessfully.
 
 Ordinary success, an implementation handoff alone, a passing check, a commit,
 or a Review brief alone is not completion. Never bypass Implement, full Code
@@ -58,8 +60,10 @@ owned by Take Ticket.
 
 1. Calculate the current DAG frontier from retained ticket and direct
    dependency state.
-2. Start every independent eligible ticket concurrently through one canonical
-   Take Ticket lifecycle per ticket.
+2. Give each calculation a retained identity. Start every independent eligible
+   ticket concurrently through one canonical Take Ticket lifecycle per ticket.
+   Every start references exactly that one prior calculation and its explicit
+   selection.
 3. Observe each lifecycle independently. Process a completion as soon as it
    arrives, without waiting for unrelated active tickets.
 4. Verify that the returned reviewed-ticket result is complete and
@@ -68,7 +72,8 @@ owned by Take Ticket.
    that ticket, and record the completion and dependency transitions.
 6. Recalculate the frontier immediately. Start every newly unblocked eligible
    ticket without waiting for unrelated active tickets.
-7. Continue until every ticket is completed or no ticket can advance.
+7. Continue until every ticket reaches a terminal state or no ticket can
+   advance.
 
 Do not use frontier-wide joins, fixed waves, fixed batches, or completion
 barriers. Concurrency is limited only by explicit invocation limits and
@@ -76,14 +81,17 @@ published collision or shared-state constraints. Such a constraint can delay a
 ticket's eligibility, but it does not turn the DAG into stages.
 
 When a lifecycle fails or returns an incomplete or non-authoritative result,
-retain the observed state and hold that ticket. Do not satisfy its outgoing
-dependencies. If the remaining graph has no eligible or active ticket, return a
-blocked final state naming the first recovery or human decision.
+retain the observed failed or held state. Do not satisfy its outgoing
+dependencies. If the remaining graph has no eligible or active ticket, retain
+which tickets are open, blocked, held, or failed and name the first recovery or
+human decision.
 
 ## Synthesize completed frontiers
 
-Synthesis is aggregate-only. As the tickets selected by a frontier calculation
-complete, consume their compact implementation handoffs and Review briefs.
+Synthesis is aggregate-only. Bind each synthesis to one unique frontier
+calculation. After every ticket selected by that calculation has a retained
+completion event, consume exactly those tickets' compact implementation
+handoffs and Review briefs. Retain the synthesis sequence after those events.
 Record cross-ticket or systematic concerns and recommend one or more of:
 
 - acceptance;
@@ -107,13 +115,16 @@ Retain enough structured state for deterministic inspection and offline replay:
 - source DAG identity and published-ready state;
 - explicit authorization and its source;
 - every frontier calculation, including eligible, selected, and active tickets;
-- every ticket lifecycle state and canonical Take Ticket invocation;
+- every ticket lifecycle state, its selecting frontier calculation, and its
+  canonical Take Ticket invocation;
 - completion events and complete authoritative reviewed-ticket identities;
 - dependency transitions tied to the completion that authorized each one;
 - synthesis inputs, including implementation handoffs and Review briefs;
 - aggregate concerns and acceptance, fix, split, or human-decision
   recommendations; and
-- final open, active, completed, and held ticket state.
+- initial and pre-satisfied ticket and edge state; and
+- final open, active, completed, held, blocked, and failed ticket state plus
+  the first recovery action when the dispatch is incomplete.
 
 Keep event ordering explicit. Preserve artifact references rather than copying
 their full contents. Do not include credentials, secrets, unrelated sensitive
@@ -131,14 +142,23 @@ advancement, aggregate synthesis, and retained dispatch state. It does not own:
 - migration or persistence decisions; or
 - a new shared Interface.
 
+Deterministic evaluation Adapters run only through the canonical test Adapter
+and test execution boundaries. They return normalized artifact references and
+observed Skill, tool, and attempted-mutation evidence. A fixture-local reviewed
+ticket artifact may prove the complete implementation, full-review, required
+correction, and targeted re-review phases with their ranges and artifacts; it
+does not define a shared Take Ticket schema or a production fallback.
+
 Stop for a shared-interface, security-sensitive, migration, persistence,
 release, or cross-ticket ownership decision. Do not start an unrelated ticket
 or mutate tracker or PR topology as a side effect of dispatch.
 
 ## Completion
 
-Complete only when every published ticket has a complete authoritative
-reviewed-ticket result, every direct dependency transition is backed by such a
-completion, all completed frontiers have compact synthesis, and the retained
-artifact exposes the final dispatch state. Otherwise return the held or blocked
-state and its first recovery action without claiming completion.
+Claim a completed dispatch only when every published ticket has a complete
+authoritative reviewed-ticket result, every in-run direct dependency transition
+is backed by such a completion, all completed frontiers have compact synthesis,
+and the retained artifact exposes the final dispatch state. A partial replay is
+still valid when it faithfully retains pre-satisfied edges and completed, open,
+held, blocked, or failed ticket states. Return its first recovery action without
+claiming dispatch completion.

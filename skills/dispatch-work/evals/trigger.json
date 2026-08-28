@@ -13,7 +13,9 @@
     "minimum_treatment_win_rate": 1,
     "randomization_seed": "dispatch-work-trigger-v1"
   },
-  "signals": {},
+  "signals": {
+    "routing_record": ["^routing-record: dispatch-work (?:selected|rejected-before-execution)$"]
+  },
   "global_required_signals": [],
   "global_order": [],
   "forbidden_patterns": [],
@@ -34,6 +36,7 @@
       "prompt": "/dispatch-work\n\nDispatch this explicitly authorized published ready ticket DAG.",
       "expected_output": "The host records the exact Dispatch Work selection.",
       "files": [],
+      "artifact_checks": ["routing-authority"],
       "expectations": [
         "Dispatch Work activates through exact canonical invocation."
       ],
@@ -46,6 +49,7 @@
       "prompt": "Start all ready tickets in this plan.",
       "expected_output": "Dispatch Work remains inactive because exact canonical invocation and explicit authorization are absent.",
       "files": [],
+      "artifact_checks": ["routing-authority"],
       "expectations": [
         "No Dispatch Work selection or load is attempted."
       ],
@@ -57,6 +61,7 @@
       "prompt": "/dispatch-work\n\nHere is a ready plan artifact. No dispatch authorization or published DAG is available.",
       "expected_output": "Dispatch Work loads, rejects the missing execution authority before ticket work, and retains no completion claim.",
       "files": [],
+      "artifact_checks": ["routing-authority", "authorization-rejection"],
       "expectations": [
         "Canonical routing is observed independently from the required authorization gate."
       ],

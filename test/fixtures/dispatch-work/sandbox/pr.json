@@ -1,5 +1,11 @@
 {
-  "sandboxed": true,
-  "reviewed_results": ["A", "B", "C", "D"],
-  "writes_allowed": false
+  "boundary": "pr",
+  "observations": {
+    "toolUses": [
+      { "name": "pull-request.read", "outcome": "succeeded" }
+    ],
+    "attemptedMutations": [
+      { "operation": "update", "target": "fixture-pr:B", "outcome": "blocked-by-sandbox" }
+    ]
+  }
 }

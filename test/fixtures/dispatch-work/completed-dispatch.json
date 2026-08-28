@@ -5,15 +5,15 @@
     "published": true,
     "ready": true,
     "tickets": [
-      { "id": "A", "dependencies": [] },
-      { "id": "B", "dependencies": ["A"] },
-      { "id": "C", "dependencies": [] },
-      { "id": "D", "dependencies": ["B", "C"] }
+      { "id": "A", "dependencies": [], "initial_state": "open" },
+      { "id": "B", "dependencies": ["A"], "initial_state": "open" },
+      { "id": "C", "dependencies": [], "initial_state": "open" },
+      { "id": "D", "dependencies": ["B", "C"], "initial_state": "open" }
     ],
     "dependencies": [
-      { "ticket": "B", "depends_on": "A" },
-      { "ticket": "D", "depends_on": "B" },
-      { "ticket": "D", "depends_on": "C" }
+      { "ticket": "B", "depends_on": "A", "initial_state": "open" },
+      { "ticket": "D", "depends_on": "B", "initial_state": "open" },
+      { "ticket": "D", "depends_on": "C", "initial_state": "open" }
     ]
   },
   "authorization": {
@@ -23,24 +23,28 @@
   },
   "frontier_calculations": [
     {
+      "id": "frontier-1",
       "sequence": 1,
       "eligible": ["A", "C"],
       "selected": ["A", "C"],
       "active": []
     },
     {
+      "id": "frontier-2",
       "sequence": 6,
       "eligible": ["B"],
       "selected": ["B"],
       "active": ["C"]
     },
     {
+      "id": "frontier-3",
       "sequence": 12,
       "eligible": ["D"],
       "selected": ["D"],
       "active": []
     },
     {
+      "id": "frontier-4",
       "sequence": 15,
       "eligible": [],
       "selected": [],
@@ -51,6 +55,7 @@
     {
       "ticket": "A",
       "state": "completed",
+      "frontier_calculation": "frontier-1",
       "started_sequence": 2,
       "completed_sequence": 4,
       "result": {
@@ -63,6 +68,7 @@
     {
       "ticket": "B",
       "state": "completed",
+      "frontier_calculation": "frontier-2",
       "started_sequence": 7,
       "completed_sequence": 10,
       "result": {
@@ -75,6 +81,7 @@
     {
       "ticket": "C",
       "state": "completed",
+      "frontier_calculation": "frontier-1",
       "started_sequence": 3,
       "completed_sequence": 8,
       "result": {
@@ -87,6 +94,7 @@
     {
       "ticket": "D",
       "state": "completed",
+      "frontier_calculation": "frontier-3",
       "started_sequence": 13,
       "completed_sequence": 14,
       "result": {
@@ -152,6 +160,7 @@
   "synthesis": [
     {
       "frontier_id": "frontier-1",
+      "sequence": 9,
       "tickets": ["A", "C"],
       "inputs": {
         "implementation_handoffs": [
@@ -168,12 +177,12 @@
       ],
       "recommendations": [
         "accept A",
-        "accept C",
-        "human decision: verify the shared follow-up surface before D"
+        "accept C"
       ]
     },
     {
       "frontier_id": "frontier-2",
+      "sequence": 11,
       "tickets": ["B"],
       "inputs": {
         "implementation_handoffs": ["artifact://implement/B.json"],
@@ -184,6 +193,7 @@
     },
     {
       "frontier_id": "frontier-3",
+      "sequence": 15,
       "tickets": ["D"],
       "inputs": {
         "implementation_handoffs": ["artifact://implement/D.json"],
@@ -197,6 +207,10 @@
     "status": "completed",
     "open_tickets": [],
     "active_tickets": [],
-    "completed_tickets": ["A", "B", "C", "D"]
+    "completed_tickets": ["A", "B", "C", "D"],
+    "held_tickets": [],
+    "blocked_tickets": [],
+    "failed_tickets": [],
+    "first_recovery_action": null
   }
 }
