@@ -1,0 +1,688 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const test = require('node:test');
+const { pathToFileURL } = require('node:url');
+
+const {
+  defineProductionAdapter,
+  discoverCanonicalPackage,
+  executeProduction,
+} = require('../suite');
+const {
+  gradeTakeTicketResult,
+  loadDefinitions,
+  validateTakeTicketResult,
+} = require('../skills/take-ticket/evals');
+const {
+  defineTestAdapter,
+  executeTest,
+} = require('../suite/testing');
+const {
+  createCodeReviewAdapter,
+  createImplementAdapter,
+} = require('./fixtures/take-ticket/dependency-adapters');
+const {
+  createOutcomeSandbox,
+} = require('./fixtures/take-ticket/outcome-sandbox');
+
+const repositoryRoot = path.resolve(__dirname, '..');
+const skillRoot = path.join(repositoryRoot, 'skills', 'take-ticket');
+const artifactAllowlist = new Map();
+const PHASES = [
+  'implementation',
+  'full-review',
+  'correction',
+  'targeted-re-review',
+];
+const REQUIRED_SKILLS = [
+  'agent-writing',
+  'code-review',
+  'engineering-guidance',
+  'implement',
+  'review-coordinator',
+  'review-worker',
+  'take-it-offline',
+  'take-ticket',
+  'writing-foundation',
+];
+
+function writeSkill(root, name, source = null) {
+  const destination = path.join(root, 'skills', name, 'SKILL.md');
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  if (source) {
+    fs.copyFileSync(source, destination);
+  } else {
+    fs.writeFileSync(
+      destination,
+      `---\nname: ${name}\ndescription: Test fixture.\n---\n`,
+    );
+  }
+}
+
+function createPackageRoot(t, skillNames) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'take-ticket-package-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, 'suite'), { recursive: true });
+  fs.copyFileSync(
+    path.join(repositoryRoot, 'suite', 'canonical-suite.json'),
+    path.join(root, 'suite', 'canonical-suite.json'),
+  );
+  for (const name of skillNames) {
+    writeSkill(
+      root,
+      name,
+      name === 'take-ticket' ? path.join(skillRoot, 'SKILL.md') : null,
+    );
+  }
+  return root;
+}
+
+function invocation() {
+  return {
+    requestId: 'take-ticket-issue-43',
+    skill: 'take-ticket',
+    prompt: 'Carry issue 43 through the complete reviewed-ticket lifecycle.',
+    model: 'test-model',
+  };
+}
+
+function regionsForScope(scope) {
+  return [...scope.regions, ...scope.materially_affected_regions];
+}
+
+function successfulResult({ acceptedFindings = [] } = {}) {
+  const needsCorrection = acceptedFindings.length > 0;
+  const findingDispositions = acceptedFindings.map((id) => ({
+    id,
+    disposition: 'accepted',
+    regions: [`region:${id}`],
+  }));
+  const correctionScopes = acceptedFindings.map((id) => ({
+    finding_id: id,
+    regions: [`region:${id}`],
+    materially_affected_regions: [`material:${id}`],
+  }));
+  const targetedRegions = correctionScopes.flatMap(regionsForScope);
+  const targetedDispositions = correctionScopes.flatMap((scope) => (
+    regionsForScope(scope).map((region) => ({
+      finding_id: scope.finding_id,
+      region,
+      outcome: 'accepted',
+    }))
+  ));
+  const lifecycle = [
+    {
+      sequence: 1,
+      phase: 'implementation',
+      status: 'completed',
+      reference: `${'a'.repeat(40)}..${'b'.repeat(40)}`,
+    },
+    {
+      sequence: 2,
+      phase: 'full-review',
+      status: 'completed',
+      reference: 'artifact://review/full.md',
+    },
+    {
+      sequence: 3,
+      phase: 'correction',
+      status: needsCorrection ? 'completed' : 'not-required',
+      reference: needsCorrection
+        ? `${'b'.repeat(40)}..${'c'.repeat(40)}`
+        : 'clean-review',
+    },
+    {
+      sequence: 4,
+      phase: 'targeted-re-review',
+      status: needsCorrection ? 'completed' : 'not-required',
+      reference: needsCorrection
+        ? 'artifact://review/targeted.json'
+        : 'clean-review',
+    },
+  ];
+  const completedPhases = PHASES.slice(0, needsCorrection ? PHASES.length : 2);
+
+  return {
+    schema: 'take-ticket-result/v1',
+    status: 'reviewed',
+    requirements: {
+      references: ['issue://43'],
+      summary: 'Carry one settled ticket through independent review.',
+    },
+    implementation: {
+      range: {
+        base: 'a'.repeat(40),
+        head: 'b'.repeat(40),
+      },
+      handoff: {
+        reference: 'artifact://implement/handoff.json',
+        mediaType: 'application/json',
+        schema: 'implement-handoff/v2',
+      },
+      validation: [{
+        command: 'node --test',
+        outcome: 'passed',
+        evidence: 'All focused implementation checks passed.',
+      }],
+    },
+    full_review: {
+      authority: {
+        source: 'fresh-code-review',
+        inherited: false,
+        references: ['issue://43', 'artifact://implement/handoff.json'],
+      },
+      kind: 'full',
+      outcome: needsCorrection ? 'findings' : 'clean',
+      brief: {
+        reference: 'artifact://review/full.md',
+        mediaType: 'text/markdown',
+      },
+      finding_dispositions: findingDispositions,
+    },
+    correction: {
+      state: needsCorrection ? 'completed' : 'not-required',
+      range: needsCorrection
+        ? { base: 'b'.repeat(40), head: 'c'.repeat(40) }
+        : null,
+      scopes: correctionScopes,
+      evidence: acceptedFindings.map((findingId) => ({
+        finding_id: findingId,
+        reference: `artifact://correction/${findingId}.json`,
+        mediaType: 'application/json',
+      })),
+    },
+    targeted_re_review: {
+      state: needsCorrection ? 'completed' : 'not-required',
+      regions: targetedRegions,
+      dispositions: targetedDispositions,
+      artifact: needsCorrection ? {
+        reference: 'artifact://review/targeted.json',
+        mediaType: 'application/json',
+      } : null,
+    },
+    lifecycle,
+    artifacts: [
+      {
+        kind: 'implementation-handoff',
+        reference: 'artifact://implement/handoff.json',
+        mediaType: 'application/json',
+      },
+      {
+        kind: 'full-review-brief',
+        reference: 'artifact://review/full.md',
+        mediaType: 'text/markdown',
+      },
+      ...(needsCorrection ? [
+        {
+          kind: 'correction-evidence',
+          reference: 'artifact://correction/finding-1.json',
+          mediaType: 'application/json',
+        },
+        {
+          kind: 'targeted-re-review',
+          reference: 'artifact://review/targeted.json',
+          mediaType: 'application/json',
+        },
+      ] : []),
+    ],
+    completeness: {
+      required_phases: [...completedPhases],
+      completed_phases: [...completedPhases],
+      reviewed: true,
+    },
+    failure: null,
+  };
+}
+
+function nonReviewedResult(phase, status = 'failed') {
+  const result = successfulResult({ acceptedFindings: ['finding-1'] });
+  const phaseIndex = PHASES.indexOf(phase);
+  result.status = status;
+  result.failure = {
+    phase,
+    status,
+    message: `${phase} did not complete.`,
+    recovery: `Resume the ${phase} phase from retained evidence.`,
+  };
+  result.lifecycle.forEach((event, index) => {
+    if (index === phaseIndex) event.status = status;
+    if (index > phaseIndex) event.status = 'incomplete';
+  });
+  result.completeness.completed_phases
+    = result.completeness.required_phases.slice(0, phaseIndex);
+  result.completeness.reviewed = false;
+
+  if (phaseIndex === 0) {
+    result.implementation = null;
+    result.full_review = null;
+    result.correction = null;
+    result.targeted_re_review = null;
+    result.artifacts = [];
+  } else if (phaseIndex === 1) {
+    result.full_review = null;
+    result.correction = null;
+    result.targeted_re_review = null;
+    result.artifacts = result.artifacts.slice(0, 1);
+  } else if (phaseIndex === 2) {
+    result.correction = {
+      state: status,
+      range: null,
+      scopes: result.correction.scopes,
+      evidence: [],
+    };
+    result.targeted_re_review = null;
+    result.artifacts = result.artifacts.slice(0, 2);
+  } else {
+    result.targeted_re_review = {
+      state: status,
+      regions: result.targeted_re_review.regions,
+      dispositions: [],
+      artifact: null,
+    };
+    result.artifacts = result.artifacts.slice(0, 3);
+  }
+  return result;
+}
+
+function createArtifact(t, value) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'take-ticket-artifact-'));
+  const filePath = path.join(root, 'result.json');
+  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+  const reference = pathToFileURL(filePath).href;
+  artifactAllowlist.set(reference, filePath);
+  t.after(() => {
+    artifactAllowlist.delete(reference);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+  return {
+    descriptor: { reference, mediaType: 'application/json' },
+    reference,
+  };
+}
+
+function resolveArtifact(reference) {
+  const filePath = artifactAllowlist.get(reference);
+  return filePath ? fs.readFileSync(filePath, 'utf8') : null;
+}
+
+function normalizedResult(invocationValue, context, artifact, value) {
+  const succeeded = value.status === 'reviewed';
+  return {
+    status: succeeded ? 'succeeded' : 'failed',
+    observations: {
+      packageSkills: context.packageSkills,
+      hostAvailableSkills: null,
+      preExecutionInventory: {
+        skillDefinitions: context.packageSkills.map((name) => ({
+          name,
+          path: `.fixture/skills/${name}/SKILL.md`,
+          digest: '0'.repeat(64),
+        })),
+        plugins: [],
+        ruleSources: [],
+        packageDigest: '1'.repeat(64),
+        truncated: false,
+      },
+      skillEvents: context.resolvedSkills.map((name, index) => ({
+        name,
+        operation: 'load',
+        status: 'succeeded',
+        trigger: name === 'take-ticket' ? 'model' : 'host',
+        callId: `take-ticket-fixture-${index}`,
+        provenance: {
+          host: 'fixture',
+          mechanism: 'test-only-take-ticket-adapter',
+          eventType: 'fixture.skill-load',
+          observerVersion: '1',
+          statusSource: 'observed',
+        },
+      })),
+      routing: {
+        requestedSkill: invocationValue.skill,
+        resolvedSkills: context.resolvedSkills,
+      },
+      responses: [{ text: `Take Ticket result: ${artifact.reference}` }],
+      artifacts: [artifact.descriptor],
+      toolUses: [
+        { name: 'implement', outcome: 'succeeded' },
+        {
+          name: 'code-review',
+          outcome: succeeded ? 'succeeded' : 'failed',
+        },
+      ],
+      attemptedMutations: succeeded ? [{
+        operation: 'edit',
+        target: 'src/ticket-change.js',
+        outcome: 'succeeded',
+      }] : [],
+    },
+    failure: succeeded ? null : {
+      stage: 'execution',
+      code: `${value.failure.phase}-failure`,
+      message: value.failure.message,
+    },
+    durationMs: 3,
+    costUsd: 0,
+    model: {
+      requested: invocationValue.model,
+      resolved: 'resolved-test-model',
+    },
+  };
+}
+
+test('canonical package discovers Take Ticket without test fixtures', (t) => {
+  const packageRoot = createPackageRoot(t, ['take-ticket']);
+
+  assert.deepEqual(
+    discoverCanonicalPackage(packageRoot).skills.map(({ name }) => name),
+    ['take-ticket'],
+  );
+  assert.equal(require('../suite').createImplementAdapter, undefined);
+  assert.equal(require('../suite').createCodeReviewAdapter, undefined);
+  assert.equal(require('../suite/testing').createImplementAdapter, undefined);
+  assert.equal(require('../suite/testing').createCodeReviewAdapter, undefined);
+});
+
+test('production fails closed on each exact Take Ticket dependency', async (t) => {
+  const codeReviewClosure = [
+    'agent-writing',
+    'code-review',
+    'engineering-guidance',
+    'review-coordinator',
+    'review-worker',
+    'take-it-offline',
+    'take-ticket',
+    'writing-foundation',
+  ];
+  const cases = [
+    {
+      skills: ['take-ticket'],
+      missing: 'code-review',
+    },
+    {
+      skills: codeReviewClosure,
+      missing: 'implement',
+    },
+  ];
+
+  for (const { skills, missing } of cases) {
+    const packageRoot = createPackageRoot(t, skills);
+    let executions = 0;
+    const adapter = defineProductionAdapter({
+      name: `missing-${missing}`,
+      async execute() {
+        executions += 1;
+        throw new Error('must not execute');
+      },
+    });
+
+    const result = await executeProduction({
+      repositoryRoot: packageRoot,
+      adapter,
+      invocation: invocation(),
+    });
+
+    assert.equal(executions, 0);
+    assert.deepEqual(result.failure, {
+      stage: 'dependency-resolution',
+      code: 'missing-internal-dependency',
+      message: `Missing internal dependency "${missing}"`,
+      missingSkill: missing,
+    });
+    assert.deepEqual(result.observations.attemptedMutations, []);
+    assert.deepEqual(result.observations.artifacts, []);
+  }
+});
+
+test('clean and corrected lifecycles produce reviewed-ticket results', () => {
+  const clean = successfulResult();
+  const corrected = successfulResult({ acceptedFindings: ['finding-1'] });
+
+  assert.strictEqual(validateTakeTicketResult(clean), clean);
+  assert.strictEqual(validateTakeTicketResult(corrected), corrected);
+});
+
+test('review authority, full-review count, and targeted regions are invariant', () => {
+  const inherited = successfulResult();
+  inherited.full_review.authority.inherited = true;
+  assert.throws(
+    () => validateTakeTicketResult(inherited),
+    /full Review authority must be resolved independently/,
+  );
+
+  const repeatedFullReview = successfulResult();
+  repeatedFullReview.lifecycle.push({
+    sequence: 5,
+    phase: 'full-review',
+    status: 'completed',
+    reference: 'artifact://review/second-full.md',
+  });
+  assert.throws(
+    () => validateTakeTicketResult(repeatedFullReview),
+    /exactly one full authoritative Review/,
+  );
+
+  for (const missingRegion of ['region:finding-1', 'material:finding-1']) {
+    const incomplete = successfulResult({ acceptedFindings: ['finding-1'] });
+    incomplete.targeted_re_review.regions
+      = incomplete.targeted_re_review.regions.filter((region) => region !== missingRegion);
+    assert.throws(
+      () => validateTakeTicketResult(incomplete),
+      /targeted re-review must cover every corrected and materially affected region/,
+      missingRegion,
+    );
+  }
+});
+
+test('immutable ranges and retained artifact references stay cross-consistent', () => {
+  const wrongImplementationRange = successfulResult();
+  wrongImplementationRange.lifecycle[0].reference
+    = `${'a'.repeat(40)}..${'c'.repeat(40)}`;
+  assert.throws(
+    () => validateTakeTicketResult(wrongImplementationRange),
+    /implementation lifecycle range must match the retained range/,
+  );
+
+  const wrongCorrectionBase = successfulResult({ acceptedFindings: ['finding-1'] });
+  wrongCorrectionBase.correction.range.base = 'd'.repeat(40);
+  assert.throws(
+    () => validateTakeTicketResult(wrongCorrectionBase),
+    /correction range must start at the implementation head/,
+  );
+
+  const wrongEvidence = successfulResult({ acceptedFindings: ['finding-1'] });
+  wrongEvidence.correction.evidence[0].finding_id = 'unrelated-finding';
+  assert.throws(
+    () => validateTakeTicketResult(wrongEvidence),
+    /correction evidence must cover every accepted finding/,
+  );
+
+  const unrelatedTarget = successfulResult({ acceptedFindings: ['finding-1'] });
+  unrelatedTarget.targeted_re_review.regions.push('region:unrelated');
+  assert.throws(
+    () => validateTakeTicketResult(unrelatedTarget),
+    /targeted re-review regions must exactly match correction effects/,
+  );
+});
+
+test('failed and incomplete phases remain visible and never become reviewed', () => {
+  for (const phase of PHASES) {
+    const result = nonReviewedResult(
+      phase,
+      phase === 'targeted-re-review' ? 'incomplete' : 'failed',
+    );
+    assert.strictEqual(validateTakeTicketResult(result), result, phase);
+    assert.equal(result.completeness.reviewed, false, phase);
+    assert.equal(
+      result.lifecycle.find((event) => event.phase === phase).status,
+      result.failure.status,
+      phase,
+    );
+  }
+
+  const falseSuccess = nonReviewedResult('correction');
+  falseSuccess.completeness.reviewed = true;
+  assert.throws(
+    () => validateTakeTicketResult(falseSuccess),
+    /non-reviewed result cannot claim reviewed completeness/,
+  );
+});
+
+test('test-only dependency Adapters drive clean, correction, and failure outcomes', async (t) => {
+  const packageRoot = createPackageRoot(t, REQUIRED_SKILLS);
+  const scenarios = [
+    { name: 'clean', result: successfulResult(), reviewCalls: 1 },
+    {
+      name: 'correction',
+      result: successfulResult({ acceptedFindings: ['finding-1'] }),
+      reviewCalls: 2,
+    },
+    {
+      name: 'failure',
+      result: nonReviewedResult('full-review'),
+      reviewCalls: 1,
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    const sandbox = createOutcomeSandbox(t);
+    const artifact = createArtifact(t, scenario.result);
+    const implement = createImplementAdapter(async (input) => {
+      assert.equal(input.repository.root, sandbox.repository.root);
+      await sandbox.tracker.readTicket('43');
+      await sandbox.ci.validate('node --test');
+      return {
+        activity: input.activity,
+        implementation: scenario.result.implementation,
+      };
+    });
+    const codeReview = createCodeReviewAdapter(async (input) => {
+      assert.equal(input.repository.root, sandbox.repository.root);
+      return {
+        mode: input.mode,
+        review: input.mode === 'full'
+          ? scenario.result.full_review
+          : scenario.result.targeted_re_review,
+      };
+    });
+    const adapter = defineTestAdapter({
+      name: `take-ticket-${scenario.name}`,
+      async execute(invocationValue, context) {
+        const implementation = await implement.execute({
+          activity: 'implementation',
+          requirements: scenario.result.requirements,
+          repository: sandbox.repository,
+        });
+        const ticketOutcome = {
+          requirements: scenario.result.requirements,
+          implementation_range: implementation.implementation?.range || null,
+          implementation_handoff: implementation.implementation?.handoff || null,
+          validation_evidence: implementation.implementation?.validation || [],
+        };
+        await codeReview.execute({
+          mode: 'full',
+          ticket_outcome: ticketOutcome,
+          repository: sandbox.repository,
+        });
+        if (scenario.reviewCalls === 2) {
+          await implement.execute({
+            activity: 'correction',
+            accepted_scope: scenario.result.correction.scopes,
+            repository: sandbox.repository,
+          });
+          await codeReview.execute({
+            mode: 'targeted',
+            ticket_outcome: ticketOutcome,
+            correction: scenario.result.correction,
+            repository: sandbox.repository,
+          });
+        }
+        return normalizedResult(
+          invocationValue,
+          context,
+          artifact,
+          scenario.result,
+        );
+      },
+    });
+
+    const result = await executeTest({
+      repositoryRoot: packageRoot,
+      adapter,
+      invocation: invocation(),
+    });
+    const grade = gradeTakeTicketResult({ result, resolveArtifact });
+
+    assert.equal(grade.passed, true, scenario.name);
+    assert.match(sandbox.repository.head, /^[a-f0-9]{40}$/);
+    assert.equal(fs.existsSync(path.join(sandbox.repository.root, '.git')), true);
+    assert.equal(implement.calls.length, scenario.reviewCalls, scenario.name);
+    assert.equal(codeReview.calls.length, scenario.reviewCalls, scenario.name);
+    assert.equal(sandbox.pr.calls.length, 0, scenario.name);
+    assert.equal(sandbox.tracker.calls.length, scenario.reviewCalls, scenario.name);
+    assert.equal(sandbox.ci.calls.length, scenario.reviewCalls, scenario.name);
+    assert.deepEqual(
+      codeReview.calls[0].ticket_outcome,
+      {
+        requirements: scenario.result.requirements,
+        implementation_range: scenario.result.implementation?.range || null,
+        implementation_handoff: scenario.result.implementation?.handoff || null,
+        validation_evidence: scenario.result.implementation?.validation || [],
+      },
+      scenario.name,
+    );
+  }
+});
+
+test('evaluation catalog covers role, both components, outcome, and activation', () => {
+  const definitions = loadDefinitions(repositoryRoot);
+  assert.deepEqual(
+    definitions.map(({ evaluation }) => evaluation.layer),
+    ['role', 'component', 'outcome', 'trigger'],
+  );
+  assert.deepEqual(
+    definitions.find(({ evaluation }) => evaluation.layer === 'component')
+      .evals.map(({ ablated_dependency: dependency }) => dependency),
+    ['implement', 'code-review'],
+  );
+  for (const layer of ['role', 'outcome']) {
+    const definition = definitions.find(
+      ({ evaluation }) => evaluation.layer === layer,
+    );
+    assert.deepEqual(
+      new Set(definition.evals[0].required_skill_loads),
+      new Set(REQUIRED_SKILLS),
+      layer,
+    );
+  }
+  assert.equal(
+    definitions.flatMap(({ evals }) => evals)
+      .every(({ expectations }) => expectations.length > 0),
+    true,
+  );
+});
+
+test('package-closure cases name both direct dependencies exactly', () => {
+  const closure = JSON.parse(fs.readFileSync(
+    path.join(skillRoot, 'evals', 'package-closure.json'),
+    'utf8',
+  ));
+  assert.deepEqual(
+    closure.cases.map(({ missing_dependency: dependency }) => dependency),
+    ['implement', 'code-review'],
+  );
+  for (const { missing_dependency: dependency, expected_failure: failure } of (
+    closure.cases
+  )) {
+    assert.deepEqual(failure, {
+      stage: 'dependency-resolution',
+      code: 'missing-internal-dependency',
+      message: `Missing internal dependency "${dependency}"`,
+      missingSkill: dependency,
+    });
+  }
+});
