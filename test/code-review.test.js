@@ -14,6 +14,9 @@ const { executeTest } = require('../suite/testing');
 const { gradeCodeReviewResult } = require('../skills/code-review/evals/grader');
 const {
   coordinateReview,
+  retainReview,
+  sha256,
+  validateRetainedArtifacts,
   validateReviewRun,
 } = require('../skills/code-review/evals/review-artifact');
 
@@ -132,6 +135,8 @@ function worker(id, lens) {
   return {
     id,
     lens,
+    status: 'completed',
+    failure: null,
     lens_provenance: `issue-42:${lens}`,
     immutable_range: immutableRange(),
     input_artifact_references: [
@@ -577,17 +582,27 @@ test('outcome grader accepts complete artifacts and rejects unsafe or malformed 
   const outcome = require('../skills/code-review/evals')
     .loadDefinitions(repositoryRoot)[2];
   const caseDefinition = outcome.evals[0];
-  const run = coordinateReview(reviewInput());
+  const retained = retainReview(coordinateReview(reviewInput()));
+  const { run } = retained;
   const result = reviewResult(run, caseDefinition.required_skill_loads);
+  const resolvedReferences = [];
   const grade = gradeCodeReviewResult({
     definition: outcome,
     caseDefinition,
     result,
-    resolveReviewRun(reference) {
-      return reference === run.artifacts.run_manifest ? run : null;
+    resolveArtifact(reference) {
+      resolvedReferences.push(reference);
+      return retained.bodies.get(reference);
     },
   });
   assert.equal(grade.passed, true);
+  assert.deepEqual(
+    new Set(resolvedReferences),
+    new Set([
+      run.artifacts.run_manifest,
+      ...run.retained_artifacts.map(({ reference }) => reference),
+    ]),
+  );
 
   const withMutation = structuredClone(result);
   withMutation.observations.attemptedMutations.push({
@@ -599,7 +614,19 @@ test('outcome grader accepts complete artifacts and rejects unsafe or malformed 
     definition: outcome,
     caseDefinition,
     result: withMutation,
-    resolveReviewRun: () => run,
+    resolveArtifact: (reference) => retained.bodies.get(reference),
+  }).passed, false);
+
+  const staleBodies = new Map(retained.bodies);
+  staleBodies.set(
+    run.artifacts.completeness_state,
+    `${staleBodies.get(run.artifacts.completeness_state)}\n`,
+  );
+  assert.equal(gradeCodeReviewResult({
+    definition: outcome,
+    caseDefinition,
+    result,
+    resolveArtifact: (reference) => staleBodies.get(reference),
   }).passed, false);
 
   const missingConcern = reviewInput();
@@ -645,4 +672,280 @@ test('coordination records only worker-declared region supersession', () => {
     ],
     reason: 'The requirement mismatch makes lower-level review irrelevant.',
   }]);
+});
+
+test('contract coverage uses reciprocal scoped clause and case references', () => {
+  const {
+    loadContractModel,
+    validateContractCoverage,
+  } = require('../skills/code-review/evals/contract-coverage');
+  const model = loadContractModel(repositoryRoot);
+  const result = validateContractCoverage(model);
+
+  assert.equal(result.clauses, model.coverage.clauses.length);
+  assert.equal(result.cases, 20);
+  for (const clause of model.coverage.clauses) {
+    assert.equal(
+      clause.cases.every(({ scope, id }) => (
+        typeof scope === 'string' && typeof id === 'string'
+      )),
+      true,
+    );
+  }
+  for (const definition of model.definitions) {
+    for (const caseDefinition of definition.cases) {
+      assert.equal(
+        caseDefinition.covered_clauses.every(({ scope, id }) => (
+          typeof scope === 'string' && typeof id === 'string'
+        )),
+        true,
+      );
+    }
+  }
+
+  const missingBackReference = structuredClone(model);
+  missingBackReference.definitions[0].cases[0].covered_clauses.pop();
+  assert.throws(
+    () => validateContractCoverage(missingBackReference),
+    /missing reciprocal clause back-reference/,
+  );
+  const wrongOwner = structuredClone(model);
+  wrongOwner.definitions[0].owner = 'review-worker';
+  assert.throws(
+    () => validateContractCoverage(wrongOwner),
+    /definition owner does not match case scope/,
+  );
+});
+
+test('retained artifacts are resolved, content-validated, and manifest-bound', () => {
+  const retained = retainReview(coordinateReview(reviewInput()));
+  const resolveArtifact = (reference) => retained.bodies.get(reference);
+
+  assert.strictEqual(
+    validateRetainedArtifacts(retained.run, resolveArtifact),
+    retained.run,
+  );
+  assert.equal(retained.run.retained_artifacts.length, 8);
+  for (const descriptor of retained.run.retained_artifacts) {
+    assert.equal(descriptor.run_id, retained.run.run_id);
+    assert.deepEqual(
+      descriptor.immutable_range,
+      retained.run.ticket_outcome.immutable_range,
+    );
+    assert.match(descriptor.ticket_outcome_fingerprint, /^[a-f0-9]{64}$/);
+    assert.match(descriptor.sha256, /^[a-f0-9]{64}$/);
+  }
+
+  const missingReference = retained.run.artifacts.completeness_state;
+  assert.throws(
+    () => validateRetainedArtifacts(
+      retained.run,
+      (reference) => (
+        reference === missingReference ? null : resolveArtifact(reference)
+      ),
+    ),
+    /retained artifact body is missing/,
+  );
+
+  const staleBodies = new Map(retained.bodies);
+  const staleReference = retained.run.artifacts.coordination_dispositions;
+  staleBodies.set(staleReference, `${staleBodies.get(staleReference)}\n`);
+  assert.throws(
+    () => validateRetainedArtifacts(
+      retained.run,
+      (reference) => staleBodies.get(reference),
+    ),
+    /retained artifact digest mismatch/,
+  );
+
+  const swappedBodies = new Map(retained.bodies);
+  const [domainStream, engineeringStream] =
+    retained.run.artifacts.worker_candidate_streams;
+  swappedBodies.set(domainStream, retained.bodies.get(engineeringStream));
+  swappedBodies.set(engineeringStream, retained.bodies.get(domainStream));
+  assert.throws(
+    () => validateRetainedArtifacts(
+      retained.run,
+      (reference) => swappedBodies.get(reference),
+    ),
+    /retained artifact digest mismatch/,
+  );
+
+  const inconsistentRun = structuredClone(retained.run);
+  const inconsistentBodies = new Map(retained.bodies);
+  const diffReference = inconsistentRun.artifacts.immutable_diff_package;
+  const diffBody = JSON.parse(inconsistentBodies.get(diffReference));
+  diffBody.run_id = 'different-run';
+  const serialized = JSON.stringify(diffBody);
+  inconsistentBodies.set(diffReference, serialized);
+  inconsistentRun.retained_artifacts.find(
+    ({ reference }) => reference === diffReference,
+  ).sha256 = sha256(serialized);
+  assert.throws(
+    () => validateRetainedArtifacts(
+      inconsistentRun,
+      (reference) => inconsistentBodies.get(reference),
+    ),
+    /retained diff body does not match its run binding/,
+  );
+});
+
+test('partial worker failure retains evidence but cannot produce a final brief', () => {
+  const input = reviewInput();
+  const failedWorker = input.workers[1];
+  failedWorker.status = 'failed';
+  failedWorker.failure = {
+    stage: 'region-analysis',
+    code: 'worker-interrupted',
+    message: 'Engineering/Design worker stopped after the first region.',
+    evidence: ['artifact://engineering/partial-worker.json'],
+  };
+  failedWorker.guidance_coverage = failedWorker.guidance_coverage.slice(0, 3);
+  failedWorker.findings = [];
+  input.artifacts.markdown_brief = null;
+
+  const run = coordinateReview(input);
+  assert.equal(run.status, 'incomplete');
+  assert.equal(run.completeness.state, 'incomplete');
+  assert.deepEqual(
+    run.completeness.checks.map(({ id }) => id),
+    [
+      'complete-ticket-outcome',
+      'two-independent-lenses',
+      'independent-guidance-coverage',
+      'ordered-region-analysis',
+      'complete-finding-records',
+      'inspectable-artifacts',
+    ],
+  );
+  assert.equal(
+    run.completeness.checks.find(
+      ({ id }) => id === 'two-independent-lenses',
+    ).state,
+    'failed',
+  );
+  assert.deepEqual(run.failures, [{
+    worker_id: 'engineering-worker',
+    lens: 'Engineering/Design',
+    ...failedWorker.failure,
+  }]);
+  assert.equal(run.artifacts.markdown_brief, null);
+  assert.equal(run.workers[1].guidance_coverage.length, 3);
+
+  const retained = retainReview(run);
+  assert.strictEqual(validateReviewRun(retained.run), retained.run);
+  assert.strictEqual(
+    validateRetainedArtifacts(
+      retained.run,
+      (reference) => retained.bodies.get(reference),
+    ),
+    retained.run,
+  );
+  assert.equal(
+    retained.run.retained_artifacts.some(
+      ({ kind }) => kind === 'markdown-brief',
+    ),
+    false,
+  );
+  assert.equal(retained.run.retained_artifacts.length, 7);
+
+  const arbitraryCheck = structuredClone(run);
+  arbitraryCheck.completeness.checks[0].id = 'some-check-ran';
+  assert.throws(
+    () => validateReviewRun(arbitraryCheck),
+    /exact required members/,
+  );
+  const incompleteWithBrief = structuredClone(run);
+  incompleteWithBrief.artifacts.markdown_brief = 'artifact://unsafe-brief.md';
+  assert.throws(
+    () => validateReviewRun(incompleteWithBrief),
+    /must not declare a Markdown brief/,
+  );
+
+  const failedBeforeAnalysis = reviewInput();
+  const earlyWorker = failedBeforeAnalysis.workers[0];
+  earlyWorker.status = 'failed';
+  earlyWorker.failure = {
+    stage: 'guidance',
+    code: 'guidance-unavailable',
+    message: 'Domain worker could not complete Engineering Guidance.',
+    evidence: ['artifact://domain/guidance-failure.json'],
+  };
+  earlyWorker.guidance_coverage = [];
+  earlyWorker.regions = [];
+  earlyWorker.findings = [];
+  failedBeforeAnalysis.artifacts.markdown_brief = null;
+  const earlyRun = coordinateReview(failedBeforeAnalysis);
+  assert.equal(earlyRun.status, 'incomplete');
+  assert.equal(earlyRun.workers[0].regions.length, 0);
+  assert.equal(earlyRun.failures[0].stage, 'guidance');
+});
+
+test('supersession source is an examined higher-level finding in the same region', () => {
+  const crossRegion = reviewInput();
+  const crossRegionWorker = crossRegion.workers[0];
+  crossRegionWorker.regions.push({
+    id: 'second-region',
+    affected_scope: ['skills/review-worker'],
+    analysis: levels.map((level, index) => ({
+      level,
+      status: index === 0 ? 'examined' : 'superseded',
+      evidence: ['diff://base..head/second-region'],
+    })),
+    supersession: {
+      source_finding_id: crossRegionWorker.findings[0].id,
+      reason: 'A different region cannot supply this supersession.',
+    },
+  });
+  crossRegionWorker.findings[0].review_level = 'Requirements & Expectations';
+  assert.throws(
+    () => coordinateReview(crossRegion),
+    /supersession source must belong to the same Review region/,
+  );
+
+  const invalidLevel = reviewInput();
+  const invalidLevelWorker = invalidLevel.workers[0];
+  invalidLevelWorker.regions[0].analysis[1].status = 'superseded';
+  invalidLevelWorker.regions[0].analysis[2].status = 'superseded';
+  invalidLevelWorker.regions[0].supersession = {
+    source_finding_id: invalidLevelWorker.findings[0].id,
+    reason: 'The source finding is not at a preceding higher level.',
+  };
+  invalidLevelWorker.findings[0].review_level = 'Code Quality';
+  assert.throws(
+    () => coordinateReview(invalidLevel),
+    /supersession source must be an examined higher Review level/,
+  );
+});
+
+test('role and outcome cases reference one committed nontrivial review scenario', () => {
+  const caseFiles = [
+    readJson('skills/code-review/evals/role.json').evals[0].files,
+    readJson('skills/code-review/evals/outcome.json').evals[0].files,
+    readJson('skills/review-worker/evals/role.json').evals[0].files,
+    readJson('skills/review-coordinator/evals/role.json').evals[0].files,
+  ];
+  for (const files of caseFiles) {
+    assert.equal(files.length >= 6, true);
+    for (const relativePath of files) {
+      assert.equal(
+        fs.existsSync(path.join(repositoryRoot, relativePath)),
+        true,
+        relativePath,
+      );
+    }
+  }
+
+  const scenarioRoot = 'test/fixtures/code-review/scenario';
+  const ticket = readJson(`${scenarioRoot}/ticket-outcome.json`);
+  const defects = readJson(`${scenarioRoot}/seeded-defects.json`);
+  const diff = fs.readFileSync(
+    path.join(repositoryRoot, scenarioRoot, 'diff.patch'),
+    'utf8',
+  );
+  assert.deepEqual(ticket.requirements, ['requirements.md']);
+  assert.deepEqual(ticket.validation_evidence, ['validation.json']);
+  assert.equal(defects.defects.length, 2);
+  assert.match(diff, /calculateDiscount/);
+  assert.match(diff, /subtotal >= 100/);
 });

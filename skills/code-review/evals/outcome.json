@@ -47,7 +47,16 @@
       "name": "complete ordinary Code Review outcome",
       "prompt": "Review a nontrivial implementation with seeded domain and design defects. The complete Ticket outcome and immutable range are supplied. Return the local read-only Review brief and retained artifacts.",
       "expected_output": "The treatment finds supported defects through independent lenses, retains clean negative regions, and returns a structurally complete Review brief. The matched fresh No-Skill arm receives the same scenario and run configuration.",
-      "files": [],
+      "files": [
+        "test/fixtures/code-review/scenario/requirements.md",
+        "test/fixtures/code-review/scenario/ticket-outcome.json",
+        "test/fixtures/code-review/scenario/implementation-handoff.json",
+        "test/fixtures/code-review/scenario/validation.json",
+        "test/fixtures/code-review/scenario/diff.patch",
+        "test/fixtures/code-review/scenario/seeded-defects.json",
+        "test/fixtures/code-review/scenario/repository/src/discount.js",
+        "test/fixtures/code-review/scenario/repository/test/discount.test.js"
+      ],
       "required_skill_loads": [
         "code-review",
         "review-worker",
@@ -66,14 +75,14 @@
         "Blind evidence-bearing model judgment and sampled human review decide semantic finding validity and coverage.",
         "Generated review runs, judge payloads, reports, and viewer output remain uncommitted."
       ],
-      "covers": [
-        "cr-complete-outcome",
-        "cr-findings",
-        "cr-guidance-independence",
-        "cr-region-order",
-        "cr-coordination",
-        "cr-artifact-replay",
-        "cr-read-only"
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-complete-outcome"},
+        {"scope": "issue-42-code-review", "id": "cr-findings"},
+        {"scope": "issue-42-code-review", "id": "cr-guidance-independence"},
+        {"scope": "issue-42-code-review", "id": "cr-region-order"},
+        {"scope": "issue-42-code-review", "id": "cr-coordination"},
+        {"scope": "issue-42-code-review", "id": "cr-artifact-replay"},
+        {"scope": "issue-42-code-review", "id": "cr-read-only"}
       ]
     }
   ]

@@ -34,13 +34,15 @@ Before aggregation, validate:
 - complete and matching Ticket outcome references and immutable range identity;
 - all nine Engineering Guidance concern dispositions from each worker, stored
   separately from findings;
-- ordered Review-region coverage and explicit worker-declared supersession;
+- ordered Review-region coverage and explicit worker-declared supersession whose
+  source is an examined higher-level finding from the same worker and region;
 - every required finding field, confidence range, evidence reference, and
   acceptance-evidence statement; and
 - every required retained artifact reference.
 
-Any structural failure makes the run incomplete. Preserve valid partial
-evidence and the failure, but do not produce a complete Review brief.
+Any structural failure makes the run incomplete. Preserve valid partial worker
+artifacts and structured failure evidence, record every required completeness
+check by its canonical identity, and do not produce a Markdown Review brief.
 
 ## Group compatible duplicates
 

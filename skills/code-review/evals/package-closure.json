@@ -13,7 +13,9 @@
         "message": "Missing internal dependency \"review-worker\"",
         "missingSkill": "review-worker"
       },
-      "covered_clauses": ["cr-review-worker-closure"]
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-review-worker-closure"}
+      ]
     },
     {
       "id": "missing-review-coordinator",
@@ -25,7 +27,9 @@
         "message": "Missing internal dependency \"review-coordinator\"",
         "missingSkill": "review-coordinator"
       },
-      "covered_clauses": ["cr-review-coordinator-closure"]
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-review-coordinator-closure"}
+      ]
     },
     {
       "id": "missing-take-it-offline",
@@ -37,7 +41,9 @@
         "message": "Missing internal dependency \"take-it-offline\"",
         "missingSkill": "take-it-offline"
       },
-      "covered_clauses": ["cr-take-it-offline-closure"]
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-take-it-offline-closure"}
+      ]
     }
   ]
 }

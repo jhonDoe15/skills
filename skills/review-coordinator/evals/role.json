@@ -43,7 +43,16 @@
       "name": "structural aggregation of independent findings",
       "prompt": "Coordinate complete Domain and Engineering/Design worker records for the same Ticket outcome. Validate structure, group compatible duplicates, sort, union coverage, and return the Review brief.",
       "expected_output": "Every source finding receives a recorded disposition, compatible duplicates remain traceable, disagreements remain separate, and incomplete input cannot become a complete brief.",
-      "files": [],
+      "files": [
+        "test/fixtures/code-review/scenario/requirements.md",
+        "test/fixtures/code-review/scenario/ticket-outcome.json",
+        "test/fixtures/code-review/scenario/implementation-handoff.json",
+        "test/fixtures/code-review/scenario/validation.json",
+        "test/fixtures/code-review/scenario/diff.patch",
+        "test/fixtures/code-review/scenario/seeded-defects.json",
+        "test/fixtures/code-review/scenario/repository/src/discount.js",
+        "test/fixtures/code-review/scenario/repository/test/discount.test.js"
+      ],
       "required_skill_loads": [
         "review-coordinator",
         "take-it-offline",
@@ -58,13 +67,13 @@
         "The coordinator does not inspect for new issues, change conclusions, plan fixes, or mutate reviewed state.",
         "Blind model judgment and sampled human review assess semantic grouping and preservation."
       ],
-      "covers": [
-        "rc-validation",
-        "rc-grouping",
-        "rc-sorting",
-        "rc-coverage-union",
-        "rc-conclusion-preservation",
-        "rc-no-second-review"
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "rc-validation"},
+        {"scope": "issue-42-code-review", "id": "rc-grouping"},
+        {"scope": "issue-42-code-review", "id": "rc-sorting"},
+        {"scope": "issue-42-code-review", "id": "rc-coverage-union"},
+        {"scope": "issue-42-code-review", "id": "rc-conclusion-preservation"},
+        {"scope": "issue-42-code-review", "id": "rc-no-second-review"}
       ]
     }
   ]

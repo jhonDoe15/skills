@@ -49,7 +49,9 @@
       "expectations": [
         "Exact successful Code Review and dependency loads are observed."
       ],
-      "covers": ["cr-canonical-activation"]
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-canonical-activation"}
+      ]
     },
     {
       "id": "ambient-code-review",
@@ -69,7 +71,9 @@
       "expectations": [
         "Code Review activates independently from semantic output quality."
       ],
-      "covers": ["cr-positive-activation"]
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-positive-activation"}
+      ]
     },
     {
       "id": "implementation-request",
@@ -81,7 +85,9 @@
       "expectations": [
         "No Code Review selection or load is observed."
       ],
-      "covers": ["cr-implement-exclusion"]
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-implement-exclusion"}
+      ]
     },
     {
       "id": "reviewed-ticket-request",
@@ -93,7 +99,9 @@
       "expectations": [
         "No independent Code Review public-outcome activation is observed."
       ],
-      "covers": ["cr-take-ticket-exclusion"]
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-take-ticket-exclusion"}
+      ]
     }
   ]
 }

@@ -43,7 +43,9 @@
         "The test-only Adapter records success and ablation without entering production package or runtime paths.",
         "The ablated arm does not inherit implementation coverage or use package failure as control."
       ],
-      "covers": ["rw-engineering-guidance-edge"]
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "rw-engineering-guidance-edge"}
+      ]
     },
     {
       "id": "review-worker-to-take-it-offline",
@@ -57,7 +59,9 @@
         "The complete arm returns inspectable worker artifact references.",
         "The ablated arm does not emulate the dependency."
       ],
-      "covers": ["rw-take-it-offline-edge"]
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "rw-take-it-offline-edge"}
+      ]
     }
   ]
 }

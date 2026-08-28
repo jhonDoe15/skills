@@ -42,7 +42,9 @@
         "The complete arm returns the verified Review brief and artifact references.",
         "The ablated arm does not copy dependency behavior or use package failure as control."
       ],
-      "covers": ["rc-take-it-offline-edge"]
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "rc-take-it-offline-edge"}
+      ]
     }
   ]
 }

@@ -56,7 +56,9 @@ structurally invalid and cannot become a complete Review brief.
 Keep generated review artifacts outside the repository. Retain:
 
 - `run-manifest.json`, with run identity, complete Ticket outcome references,
-  worker identities, lens provenance, immutable range, and artifact index;
+  worker identities, lens provenance, immutable range, Ticket outcome
+  fingerprint, and an artifact index that binds each body by media type and
+  SHA-256 digest;
 - `diff-package.json`, the immutable diff package and its base and head;
 - per-worker candidate streams containing complete finding records;
 - one per-worker concern coverage artifact, separate from findings;
@@ -68,7 +70,10 @@ Keep generated review artifacts outside the repository. Retain:
 
 Use `take-it-offline` to preserve the fresh-context handoffs and final artifact
 references. The owning Review role still defines and validates each review
-artifact contract.
+artifact contract. Resolve every indexed body before completion. Validate its
+schema or Markdown binding, content identity, run, worker, lens, immutable
+range, Ticket outcome fingerprint, and digest. A missing, stale, swapped, or
+inconsistent body makes the run incomplete.
 
 ## Coordinate structurally
 
@@ -79,7 +84,9 @@ Review brief. It performs no second review and makes no new finding.
 
 Return an incomplete result when a required worker fails, a required artifact is
 missing, a worker input identity differs, or any structural check fails. Retain
-partial evidence, but do not present it as a complete Review brief.
+partial worker records and structured failure evidence. Record the exact
+required completeness-check identities and their states, but do not create or
+present `review-brief.md` for an incomplete run.
 
 ## Read-only boundary
 

@@ -13,7 +13,9 @@
         "message": "Missing internal dependency \"engineering-guidance\"",
         "missingSkill": "engineering-guidance"
       },
-      "covered_clauses": ["rw-engineering-guidance-closure"]
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "rw-engineering-guidance-closure"}
+      ]
     },
     {
       "id": "missing-take-it-offline",
@@ -25,7 +27,9 @@
         "message": "Missing internal dependency \"take-it-offline\"",
         "missingSkill": "take-it-offline"
       },
-      "covered_clauses": ["rw-take-it-offline-closure"]
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "rw-take-it-offline-closure"}
+      ]
     }
   ]
 }

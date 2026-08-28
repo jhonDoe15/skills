@@ -1,7 +1,10 @@
 'use strict';
 
 const { validateResult } = require('../../../suite');
-const { validateReviewRun } = require('./review-artifact');
+const {
+  validateRetainedArtifacts,
+  validateReviewRun,
+} = require('./review-artifact');
 
 function check(name, passed, details) {
   return { name, passed, details };
@@ -53,7 +56,7 @@ function gradeCodeReviewResult({
   definition,
   caseDefinition,
   result,
-  resolveReviewRun = () => null,
+  resolveArtifact = () => null,
 }) {
   validateResult(result);
   if (definition.skill_name !== 'code-review'
@@ -68,11 +71,12 @@ function gradeCodeReviewResult({
   let artifactError = null;
   if (runArtifact?.mediaType === 'application/json') {
     try {
-      run = validateReviewRun(
-        parseReviewRun(resolveReviewRun(runArtifact.reference)),
-      );
+      const manifest = resolveArtifact(runArtifact.reference);
+      run = validateReviewRun(parseReviewRun(manifest));
+      validateRetainedArtifacts(run, resolveArtifact);
     } catch (error) {
       artifactError = error.message;
+      run = null;
     }
   }
   const requiredLoads = caseDefinition.required_skill_loads || [];

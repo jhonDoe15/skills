@@ -46,7 +46,9 @@
         "The complete arm has two independent worker outputs with complete inputs.",
         "The ablated arm does not copy Review Worker behavior or use a production package failure as control."
       ],
-      "covers": ["cr-review-worker-edge"]
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-review-worker-edge"}
+      ]
     },
     {
       "id": "code-review-to-review-coordinator",
@@ -60,7 +62,9 @@
         "The complete arm validates, groups compatible duplicates, sorts, unions coverage, and preserves conclusions.",
         "The ablated arm does not emulate coordination."
       ],
-      "covers": ["cr-review-coordinator-edge"]
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-review-coordinator-edge"}
+      ]
     },
     {
       "id": "code-review-to-take-it-offline",
@@ -74,7 +78,9 @@
         "The complete arm returns verified temporary artifact references.",
         "The ablated arm does not recreate Take It Offline."
       ],
-      "covers": ["cr-take-it-offline-edge"]
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-take-it-offline-edge"}
+      ]
     }
   ]
 }

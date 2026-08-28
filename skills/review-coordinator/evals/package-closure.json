@@ -13,7 +13,9 @@
         "message": "Missing internal dependency \"take-it-offline\"",
         "missingSkill": "take-it-offline"
       },
-      "covered_clauses": ["rc-take-it-offline-closure"]
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "rc-take-it-offline-closure"}
+      ]
     }
   ]
 }

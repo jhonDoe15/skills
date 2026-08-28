@@ -43,7 +43,16 @@
       "name": "ordinary whole-ticket multi-lens review",
       "prompt": "Review the supplied nontrivial Ticket outcome. It includes originating requirements, immutable implementation range, implementation handoff, validation evidence, and repository authority. Return a read-only Review brief with inspectable retained artifacts.",
       "expected_output": "Separate fresh Domain and Engineering/Design workers inspect the complete Ticket outcome, then structural coordination produces a complete local Review brief without mutation.",
-      "files": [],
+      "files": [
+        "test/fixtures/code-review/scenario/requirements.md",
+        "test/fixtures/code-review/scenario/ticket-outcome.json",
+        "test/fixtures/code-review/scenario/implementation-handoff.json",
+        "test/fixtures/code-review/scenario/validation.json",
+        "test/fixtures/code-review/scenario/diff.patch",
+        "test/fixtures/code-review/scenario/seeded-defects.json",
+        "test/fixtures/code-review/scenario/repository/src/discount.js",
+        "test/fixtures/code-review/scenario/repository/test/discount.test.js"
+      ],
       "required_skill_loads": [
         "code-review",
         "review-worker",
@@ -61,11 +70,11 @@
         "The run performs no source, tracker, pull-request, dependency, or release mutation.",
         "Blind model judgment and sampled human review assess semantic review quality from cited evidence."
       ],
-      "covers": [
-        "cr-complete-ticket-input",
-        "cr-two-fresh-lenses",
-        "cr-retained-artifacts",
-        "cr-read-only"
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-complete-ticket-input"},
+        {"scope": "issue-42-code-review", "id": "cr-two-fresh-lenses"},
+        {"scope": "issue-42-code-review", "id": "cr-retained-artifacts"},
+        {"scope": "issue-42-code-review", "id": "cr-read-only"}
       ]
     }
   ]

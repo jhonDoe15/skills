@@ -53,8 +53,10 @@ For every region, examine Review levels in this order:
 
 Record the levels examined, evidence inspected, and any worker-declared
 supersession. When a finding at a higher level supersedes lower-level analysis
-for that region, state the skipped levels and reason. Do not silently omit a
-region or level.
+for that same region, the source finding must be at an examined level preceding
+one contiguous superseded suffix. State the skipped levels and reason. Do not
+silently omit a region or level, and never use a finding from another region or
+worker as the source.
 
 Use the assigned lens to focus the work, not to narrow the input. Follow relevant
 evidence into repository history or surrounding code when needed. Route a
@@ -87,6 +89,8 @@ Retain an append-only candidate stream, separate concern coverage, and a worker
 manifest through the temporary artifact boundary. Preserve source evidence and
 conclusions verbatim for structural coordination. Use `take-it-offline` to
 return the artifact references to the caller without relying on prior context.
+If the worker fails, return its identity, lens, stage, code, message, evidence,
+and any valid partial stream or coverage instead of representing it as complete.
 
 ## Boundary
 
