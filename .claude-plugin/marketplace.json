@@ -8,7 +8,7 @@
     {
       "name": "lean",
       "source": ".",
-      "description": "Seven agent skills: model-invoked Lean, agents-file-writer, ticket-scope, and PR Carver guidance plus explicit carve, dispatch-work, and incident-investigation workflows."
+      "description": "Eight agent skills: model-invoked Lean, agents-file-writer, maintaining-agent-guidance, ticket-scope, and PR Carver guidance plus explicit carve, dispatch-work, and incident-investigation workflows."
     }
   ]
 }
