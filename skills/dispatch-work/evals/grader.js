@@ -681,20 +681,45 @@ function validateFixtureReviewedTicket(reviewedTicket, lifecycle) {
   return reviewedTicket;
 }
 
-function requireSingleSuccessfulToolUse(toolUses, name) {
-  const matchingTools = toolUses.filter(
-    (tool) => tool.name === name && tool.outcome === 'succeeded',
-  );
-  if (matchingTools.length !== 1) {
+function validateTakeTicketToolUses(toolUses, selectedTickets) {
+  const takeTicketTools = toolUses.filter(({ name }) => (
+    name.startsWith('take-ticket.invoke')
+    || name.startsWith('take-ticket.complete')
+  ));
+  const expectedNames = new Set(selectedTickets.flatMap((ticket) => [
+    `take-ticket.invoke:${ticket}`,
+    `take-ticket.complete:${ticket}`,
+  ]));
+  const actualNames = new Set(takeTicketTools.map(({ name }) => name));
+  const exactEventSet = takeTicketTools.length === expectedNames.size
+    && actualNames.size === expectedNames.size
+    && takeTicketTools.every(({ name, outcome }) => (
+      expectedNames.has(name) && outcome === 'succeeded'
+    ));
+  if (!exactEventSet) {
     throw new DispatchArtifactError(
-      `normalized result requires one observed "${name}" tool event`,
+      'normalized result requires the exact Take Ticket tool event set',
     );
   }
+  return true;
+}
+
+function runArtifactChecks(artifactChecks, checks) {
+  requireArray(artifactChecks, 'artifact checks');
+  assertUnique(artifactChecks, 'artifact checks');
+  return artifactChecks.map((id) => {
+    const check = checks[id];
+    if (!check) {
+      throw new DispatchArtifactError(`unknown artifact check "${id}"`);
+    }
+    if (!check()) {
+      throw new DispatchArtifactError(`artifact check "${id}" failed`);
+    }
+    return { id, passed: true };
+  });
 }
 
 function executeArtifactChecks(artifactChecks, evidence) {
-  requireArray(artifactChecks, 'artifact checks');
-  assertUnique(artifactChecks, 'artifact checks');
   const {
     artifact,
     dispatchReference,
@@ -737,6 +762,10 @@ function executeArtifactChecks(artifactChecks, evidence) {
     'observed-skill-loads': () => (
       observedLoads.length === result.observations.skillEvents.length
     ),
+    'exact-take-ticket-tools': () => validateTakeTicketToolUses(
+      result.observations.toolUses,
+      selectedTickets,
+    ),
     'observed-tools': () => result.observations.toolUses.length > 0,
     'observed-mutations': () => (
       result.observations.attemptedMutations.length > 0
@@ -754,16 +783,7 @@ function executeArtifactChecks(artifactChecks, evidence) {
       typeof dispatchReference === 'string' && dispatchReference.length > 0
     ),
   };
-  return artifactChecks.map((id) => {
-    const check = checks[id];
-    if (!check) {
-      throw new DispatchArtifactError(`unknown artifact check "${id}"`);
-    }
-    if (!check()) {
-      throw new DispatchArtifactError(`artifact check "${id}" failed`);
-    }
-    return { id, passed: true };
-  });
+  return runArtifactChecks(artifactChecks, checks);
 }
 
 function gradeDispatchResult(result, { resolveArtifact, artifactChecks }) {
@@ -807,6 +827,10 @@ function gradeDispatchResult(result, { resolveArtifact, artifactChecks }) {
     ({ selected }) => selected,
   );
   assertUnique(selectedTickets, 'selected ticket identities');
+  validateTakeTicketToolUses(
+    result.observations.toolUses,
+    selectedTickets,
+  );
   if (reviewedDescriptors.length !== selectedTickets.length) {
     throw new DispatchArtifactError(
       'normalized result requires one reviewed-ticket artifact per selected ticket',
@@ -822,11 +846,6 @@ function gradeDispatchResult(result, { resolveArtifact, artifactChecks }) {
     requireString(reference, 'normalized reviewed-ticket artifact reference');
     const reviewedTicket = resolveArtifact(reference);
     const lifecycle = lifecycles.get(reviewedTicket.ticket);
-    const invocationTool = `take-ticket.invoke:${reviewedTicket.ticket}`;
-    const completionTool = `take-ticket.complete:${reviewedTicket.ticket}`;
-    for (const name of [invocationTool, completionTool]) {
-      requireSingleSuccessfulToolUse(result.observations.toolUses, name);
-    }
     return validateFixtureReviewedTicket(reviewedTicket, lifecycle);
   });
   assertSameMembers(
@@ -846,6 +865,93 @@ function gradeDispatchResult(result, { resolveArtifact, artifactChecks }) {
     artifact,
     checks,
     reviewedTickets,
+  };
+}
+
+function gradeTakeItOfflineResult(result, { resolveArtifact, artifactChecks }) {
+  requireObject(result, 'normalized Take It Offline result');
+  if (result.status !== 'succeeded' || typeof resolveArtifact !== 'function') {
+    throw new DispatchArtifactError(
+      'normalized Take It Offline result and artifact resolver are required',
+    );
+  }
+  requireObject(result.observations, 'normalized Take It Offline observations');
+  const observedLoads = result.observations.skillEvents.filter((event) => (
+    event.operation === 'load'
+    && event.status === 'succeeded'
+    && event.provenance.statusSource === 'observed'
+  ));
+  if (observedLoads.length !== result.observations.skillEvents.length
+    || !observedLoads.some(({ name }) => name === 'take-it-offline')) {
+    throw new DispatchArtifactError(
+      'component requires an observed successful take-it-offline load',
+    );
+  }
+  const offlineTools = result.observations.toolUses.filter(
+    ({ name }) => name.startsWith('take-it-offline'),
+  );
+  if (offlineTools.length !== 1
+    || offlineTools[0].name !== 'take-it-offline.create'
+    || offlineTools[0].outcome !== 'succeeded') {
+    throw new DispatchArtifactError(
+      'component requires successful take-it-offline tool evidence',
+    );
+  }
+  const dispatchReference = result.observations.artifacts.find(
+    ({ mediaType }) => mediaType === 'application/vnd.dispatch-work+json',
+  )?.reference;
+  const continuationDescriptors = result.observations.artifacts.filter(
+    ({ mediaType }) => mediaType === 'application/vnd.fixture-continuation+json',
+  );
+  requireString(dispatchReference, 'normalized dispatch artifact reference');
+  if (continuationDescriptors.length !== 1) {
+    throw new DispatchArtifactError(
+      'component requires one Take It Offline continuation artifact',
+    );
+  }
+  const continuationReference = continuationDescriptors[0].reference;
+  requireString(
+    continuationReference,
+    'normalized continuation artifact reference',
+  );
+  const artifact = validateDispatchArtifact(resolveArtifact(dispatchReference));
+  const continuation = resolveArtifact(continuationReference);
+  requireObject(continuation, 'Take It Offline continuation artifact');
+  if (continuation.schema !== 'fixture-continuation/v1'
+    || continuation.owner !== 'take-it-offline'
+    || continuation.dispatch_reference !== dispatchReference) {
+    throw new DispatchArtifactError(
+      'continuation artifact must be owned by Take It Offline and reference retained dispatch state',
+    );
+  }
+  requireString(
+    continuation.state_reference,
+    'Take It Offline continuation state reference',
+  );
+
+  const checks = {
+    'retained-source-state': () => (
+      typeof artifact.source_dag.identity === 'string'
+      && artifact.source_dag.tickets.every(
+        ({ initial_state: state }) => typeof state === 'string',
+      )
+    ),
+    'retained-frontier-state': () => artifact.frontier_calculations.every(
+      ({ id, selected }) => typeof id === 'string' && Array.isArray(selected),
+    ),
+    'retained-continuation-boundary': () => (
+      continuation.dispatch_reference === dispatchReference
+      && continuation.state_reference.length > 0
+    ),
+    'observed-take-it-offline-load': () => observedLoads.some(
+      ({ name }) => name === 'take-it-offline',
+    ),
+    'observed-take-it-offline-tool': () => offlineTools.length === 1,
+  };
+  return {
+    artifact,
+    checks: runArtifactChecks(artifactChecks, checks),
+    continuation,
   };
 }
 
@@ -899,5 +1005,6 @@ function validateDispatchArtifact(artifact) {
 module.exports = {
   DispatchArtifactError,
   gradeDispatchResult,
+  gradeTakeItOfflineResult,
   validateDispatchArtifact,
 };

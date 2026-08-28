@@ -48,7 +48,7 @@
       "artifact_checks": [
         "reviewed-lifecycle",
         "observed-skill-loads",
-        "observed-tools",
+        "exact-take-ticket-tools",
         "observed-mutations"
       ],
       "expectations": [

@@ -38,12 +38,16 @@
       "prompt": "Continue an in-progress authorized dispatch in a fresh context using retained dispatch artifacts.",
       "expected_output": "The treatment invokes canonical Take It Offline for a compact continuation; the test-only ablation exposes the missing continuation contribution without replacing retained dispatch state.",
       "files": [
-        "test/fixtures/dispatch-work/completed-dispatch.json"
+        "test/fixtures/dispatch-work/completed-dispatch.json",
+        "test/fixtures/dispatch-work/continuation.json",
+        "test/fixtures/dispatch-work/take-it-offline-adapter.js"
       ],
       "artifact_checks": [
         "retained-source-state",
         "retained-frontier-state",
-        "retained-continuation-boundary"
+        "retained-continuation-boundary",
+        "observed-take-it-offline-load",
+        "observed-take-it-offline-tool"
       ],
       "expectations": [
         "The treatment loads take-it-offline by canonical name when a context boundary requires a continuation.",

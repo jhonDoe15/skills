@@ -20,6 +20,7 @@ const {
 } = require('../suite/testing');
 const {
   gradeDispatchResult,
+  gradeTakeItOfflineResult,
   validateDispatchArtifact,
 } = require('../skills/dispatch-work/evals/grader');
 
@@ -184,6 +185,39 @@ test('fixture Adapters normalize observed dispatch and reviewed-ticket evidence'
       'fixture-repository:D',
     ],
   );
+
+  const contradictoryExtras = [
+    { name: 'take-ticket.invoke:A', outcome: 'failed' },
+    { name: 'take-ticket.complete:A', outcome: 'incomplete' },
+    { name: 'take-ticket.invoke:Z', outcome: 'succeeded' },
+    { name: 'take-ticket.complete:', outcome: 'succeeded' },
+  ];
+  for (const extra of contradictoryExtras) {
+    const contradictory = structuredClone(takeTicketResult);
+    contradictory.observations.toolUses.push(extra);
+    assert.throws(
+      () => gradeDispatchResult(contradictory, {
+        resolveArtifact: resolveCompletedDispatchArtifact,
+        artifactChecks,
+      }),
+      /exact Take Ticket tool event set/,
+      extra.name,
+    );
+  }
+  const duplicateWithMissingPair = structuredClone(takeTicketResult);
+  const lastToolIndex = duplicateWithMissingPair.observations.toolUses
+    .findIndex(({ name }) => name === 'take-ticket.complete:D');
+  duplicateWithMissingPair.observations.toolUses[lastToolIndex] = {
+    name: 'take-ticket.invoke:A',
+    outcome: 'succeeded',
+  };
+  assert.throws(
+    () => gradeDispatchResult(duplicateWithMissingPair, {
+      resolveArtifact: resolveCompletedDispatchArtifact,
+      artifactChecks,
+    }),
+    /exact Take Ticket tool event set/,
+  );
 });
 
 function createPackageFixture(t, skillNames) {
@@ -323,7 +357,6 @@ test('owner artifact checks reject matching prose with invalid evidence', async 
     ...new Set([
       'role.json',
       'component-take-ticket.json',
-      'component-take-it-offline.json',
       'outcome.json',
     ].flatMap((fileName) => (
       readJson(path.join(EVALUATION_ROOT, fileName))
@@ -364,6 +397,78 @@ test('owner artifact checks reject matching prose with invalid evidence', async 
       },
     }),
     /explicit dispatch authorization is required/,
+  );
+});
+
+test('Take It Offline component grades its own continuation evidence', async (t) => {
+  const packageRoot = createPackageFixture(t, COMPLETE_DISPATCH_CLOSURE);
+  const {
+    createTakeItOfflineAdapter,
+  } = require('./fixtures/dispatch-work/take-it-offline-adapter');
+  const result = await executeTest({
+    repositoryRoot: packageRoot,
+    adapter: createTakeItOfflineAdapter(),
+    invocation: {
+      requestId: 'dispatch-continuation-evidence',
+      skill: 'dispatch-work',
+      prompt: 'Continue the retained dispatch in a fresh context.',
+      model: 'fixture-model',
+    },
+  });
+  const definition = readJson(
+    path.join(EVALUATION_ROOT, 'component-take-it-offline.json'),
+  );
+  const artifactChecks = definition.evals[0].artifact_checks;
+  const artifactFiles = {
+    'fixture://dispatch/completed': 'completed-dispatch.json',
+    'fixture://continuation/completed': 'continuation.json',
+  };
+  const resolveArtifact = (reference) => readJson(
+    path.join(DISPATCH_FIXTURE_ROOT, artifactFiles[reference]),
+  );
+  function grade(candidate, resolver = resolveArtifact) {
+    return gradeTakeItOfflineResult(candidate, {
+      resolveArtifact: resolver,
+      artifactChecks,
+    });
+  }
+  const graded = grade(result);
+
+  assert.equal(graded.continuation.owner, 'take-it-offline');
+  assert.deepEqual(
+    graded.checks.map(({ id, passed }) => ({ id, passed })),
+    artifactChecks.map((id) => ({ id, passed: true })),
+  );
+
+  const missingLoad = structuredClone(result);
+  missingLoad.observations.skillEvents = missingLoad.observations.skillEvents
+    .filter(({ name }) => name !== 'take-it-offline');
+  assert.throws(
+    () => grade(missingLoad),
+    /observed successful take-it-offline load/,
+  );
+
+  const missingTool = structuredClone(result);
+  missingTool.observations.toolUses = [];
+  assert.throws(
+    () => grade(missingTool),
+    /take-it-offline tool evidence/,
+  );
+
+  const wrongContinuation = readJson(
+    path.join(DISPATCH_FIXTURE_ROOT, 'continuation.json'),
+  );
+  wrongContinuation.owner = 'take-ticket';
+  assert.throws(
+    () => grade(
+      result,
+      function resolveWrongContinuation(reference) {
+        return reference === 'fixture://continuation/completed'
+          ? wrongContinuation
+          : resolveArtifact(reference);
+      },
+    ),
+    /owned by Take It Offline/,
   );
 });
 
