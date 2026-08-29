@@ -170,7 +170,9 @@ function reviewPlan(mode = 'separate') {
       ].map((dimension) => ({
         dimension,
         unchanged,
+        check: `compare-${dimension}`,
         references: [`artifact://consolidation/${dimension}`],
+        observation: `${dimension} was compared across the immutable range.`,
       })),
     },
     specialist_routing: [],
@@ -318,6 +320,15 @@ test('mechanical evidence permits one combined worker without weakening review s
     () => coordinateReview(changedBehavior),
     /combined worker requires unchanged consolidation evidence/,
   );
+
+  for (const field of ['check', 'observation', 'references']) {
+    const incompleteEvidence = structuredClone(input);
+    delete incompleteEvidence.review_plan.consolidation.evidence[0][field];
+    assert.throws(
+      () => coordinateReview(incompleteEvidence),
+      new RegExp(`consolidation\\.evidence.*${field}`),
+    );
+  }
 });
 
 test('change signals route available specialists and retain unavailable capability gaps', () => {
@@ -929,7 +940,10 @@ test('coordination groups exact guidance and preserves finding and authority dis
     brief,
     /Finding disagreements: requires-two-lenses \(severity\)/,
   );
+  assert.match(brief, /domain-worker-finding severity="Major"/);
+  assert.match(brief, /engineering-worker-finding severity="Minor"/);
   assert.match(brief, /Guidance disagreements: intent-and-scope/);
+  assert.match(brief, /repository:\/\/conflicting-rule/);
 });
 
 test('compatible subgroups for one problem retain distinct coordination identities', () => {
@@ -968,6 +982,31 @@ test('compatible subgroups for one problem retain distinct coordination identiti
     new Set(coordinated.coordination.ordered_finding_ids).size,
     coordinated.coordination.ordered_finding_ids.length,
   );
+});
+
+test('finding identity and compatibility preserve confidence and evidence differences', () => {
+  const input = reviewInput();
+  const engineeringFinding = input.workers[1].findings[0];
+  engineeringFinding.confidence_inputs.finding.rationale =
+    'A different authority limits the finding.';
+  engineeringFinding.evidence[0].observation =
+    'Repository authority conflicts with the requirement.';
+
+  const coordinated = coordinateReview(input);
+  assert.deepEqual(coordinated.coordination.groups, []);
+  assert.deepEqual(
+    coordinated.coordination.disagreements[0].incompatible_fields,
+    ['confidence_inputs', 'evidence'],
+  );
+
+  for (const field of ['duplicate_key', 'conclusion_key']) {
+    const missingIdentity = reviewInput();
+    delete missingIdentity.workers[0].findings[0][field];
+    assert.throws(
+      () => coordinateReview(missingIdentity),
+      new RegExp(field),
+    );
+  }
 });
 
 test('confidence records evidence quality and explicit Context-limit effects', () => {

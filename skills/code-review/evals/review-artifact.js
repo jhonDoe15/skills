@@ -219,7 +219,9 @@ function validateReviewPlan(plan) {
     if (typeof record.unchanged !== 'boolean') {
       fail(`${field}.unchanged must be a boolean`);
     }
+    requireString(record.check, `${field}.check`);
     requireUniqueStrings(record.references, `${field}.references`);
+    requireString(record.observation, `${field}.observation`);
   }
   if (plan.consolidation.mode === 'combined'
     && plan.consolidation.evidence.some(({ unchanged }) => !unchanged)) {
@@ -437,10 +439,8 @@ function validateFinding(finding, field, regionIds) {
     requireString(evidence.observation, `${field}.evidence[${index}].observation`);
   }
   validateConfidenceInputs(finding, field);
-  if (Object.hasOwn(finding, 'duplicate_key')) {
-    requireString(finding.duplicate_key, `${field}.duplicate_key`);
-    requireString(finding.conclusion_key, `${field}.conclusion_key`);
-  }
+  requireString(finding.duplicate_key, `${field}.duplicate_key`);
+  requireString(finding.conclusion_key, `${field}.conclusion_key`);
 }
 
 function validateWorker(
@@ -649,6 +649,8 @@ const FINDING_COMPATIBILITY_FIELDS = [
     'fix_direction_confidence',
     ({ fix_direction_confidence: value }) => value,
   ],
+  ['confidence_inputs', ({ confidence_inputs: value }) => value],
+  ['evidence', ({ evidence: value }) => value],
   ['context_limits', ({ context_limits: value }) => [...value].sort()],
   ['impact', ({ impact: value }) => value],
   ['affected_scope', ({ affected_scope: value }) => [...value].sort()],
@@ -663,8 +665,7 @@ const FINDING_COMPATIBILITY_FIELDS = [
 ];
 
 function findingCompatibilityKey(finding) {
-  if (!finding.duplicate_key) return null;
-  return JSON.stringify([
+  return canonicalJson([
     finding.duplicate_key,
     ...FINDING_COMPATIBILITY_FIELDS.map(([, select]) => select(finding)),
   ]);
@@ -755,7 +756,6 @@ function buildCoordination(workers) {
   const candidates = new Map();
   for (const source of activeSources) {
     const key = findingCompatibilityKey(source.finding);
-    if (!key) continue;
     if (!candidates.has(key)) candidates.set(key, []);
     candidates.get(key).push(source);
   }
@@ -773,7 +773,6 @@ function buildCoordination(workers) {
     .sort((left, right) => compareFindings(left.representative, right.representative));
   const byDuplicateKey = new Map();
   for (const source of activeSources) {
-    if (!source.finding.duplicate_key) continue;
     if (!byDuplicateKey.has(source.finding.duplicate_key)) {
       byDuplicateKey.set(source.finding.duplicate_key, []);
     }
@@ -1021,14 +1020,37 @@ function retainedArtifactEntries(run, fingerprint) {
   ));
   if (run.status === 'completed') {
     const findingIds = run.coordination.ordered_finding_ids.join(', ') || 'none';
+    const findingsById = new Map(run.workers.flatMap(({ findings }) => (
+      findings.map((finding) => [finding.id, finding])
+    )));
+    const compatibilitySelectorByField = new Map(FINDING_COMPATIBILITY_FIELDS);
     const findingDisagreements = run.coordination.disagreements
       .map(({ duplicate_key: key, incompatible_fields: fields }) => (
         `${key} (${fields.join(', ')})`
       ))
       .join('; ') || 'none';
+    const findingDisagreementDetails = run.coordination.disagreements
+      .flatMap(({ finding_ids: ids, incompatible_fields: fields }) => (
+        ids.map((id) => {
+          const finding = findingsById.get(id);
+          const values = fields.map((field) => {
+            const select = compatibilitySelectorByField.get(field);
+            return `${field}=${canonicalJson(select(finding))}`;
+          });
+          return `${id} ${values.join(' ')}`;
+        })
+      ))
+      .join('; ') || 'none';
     const guidanceDisagreements = run.coordination.guidance_disagreements
       .map(({ concern }) => concern)
       .join(', ') || 'none';
+    const guidanceDisagreementDetails = run.coordination.guidance_disagreements
+      .flatMap(({ concern, entries: disagreementEntries }) => (
+        disagreementEntries.map(({ worker_id: workerId, record }) => (
+          `${concern} ${workerId}=${canonicalJson(record)}`
+        ))
+      ))
+      .join('; ') || 'none';
     const supersessions = run.coordination.supersessions
       .map(({ worker_id: workerId, region_id: regionId }) => (
         `${workerId}:${regionId}`
@@ -1055,7 +1077,9 @@ function retainedArtifactEntries(run, fingerprint) {
         `Status: ${run.status}`,
         `Ordered findings: ${findingIds}`,
         `Finding disagreements: ${findingDisagreements}`,
+        `Finding disagreement details: ${findingDisagreementDetails}`,
         `Guidance disagreements: ${guidanceDisagreements}`,
+        `Guidance disagreement details: ${guidanceDisagreementDetails}`,
         `Supersessions: ${supersessions}`,
         `Context limits: ${[...new Set(contextLimits)].join('; ') || 'none'}`,
         '',

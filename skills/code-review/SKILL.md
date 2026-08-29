@@ -44,9 +44,9 @@ Use separate fresh Review workers by default with these change-specific lenses:
 
 One combined worker is valid only when cited mechanical evidence shows that
 behavior, contracts, state, dependencies, data, and failure handling are all
-unchanged. Record one evidence result and its references for each dimension. A
-missing, false, or unsupported result requires separate Domain and
-Engineering/Design workers.
+unchanged. Record the mechanical check, observed comparison, and references for
+each dimension. A missing, false, or unsupported result requires separate Domain
+and Engineering/Design workers.
 
 Inspect change signals before dispatch. Add a fresh technology or specialist
 Review lens when the changed language, framework, protocol, risk, or requested
