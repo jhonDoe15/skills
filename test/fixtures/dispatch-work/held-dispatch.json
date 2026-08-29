@@ -6,6 +6,37 @@
     "granted": true,
     "source": "fixture authorization"
   },
+  "resume": {
+    "requested": false,
+    "decision": "fresh"
+  },
+  "executor": {
+    "precedence": ["repository", "project", "user", "bundled-default"],
+    "candidates": {
+      "repository": {
+        "value": null,
+        "source": "fixture://config/repository"
+      },
+      "project": {
+        "value": null,
+        "source": "fixture://config/project"
+      },
+      "user": {
+        "value": null,
+        "source": "fixture://config/user"
+      },
+      "bundled-default": {
+        "value": 1,
+        "source": "fixture://config/bundled-default"
+      }
+    },
+    "selected": {
+      "scope": "bundled-default",
+      "value": 1,
+      "source": "fixture://config/bundled-default"
+    }
+  },
+  "collision_constraints": [],
   "source_dag": {
     "identity": "fixture://published-dag/partial-frontier-v1",
     "published": true,
@@ -35,7 +66,8 @@
       "sequence": 1,
       "eligible": ["B"],
       "active": [],
-      "selected": ["B"]
+      "selected": ["B"],
+      "deferred": []
     }
   ],
   "ticket_lifecycles": [
@@ -51,14 +83,33 @@
       }
     }
   ],
+  "worktrees": [
+    {
+      "ticket": "B",
+      "owner": "dispatch-held:B",
+      "path": "fixture://worktree/held/B",
+      "base": "1111111111111111111111111111111111111111",
+      "created_sequence": 2,
+      "creation_result": "created",
+      "lifecycle_state": "retained-for-diagnosis",
+      "cleanup": {
+        "decision": "retain-for-human-decision",
+        "diagnostic_artifacts": ["artifact://diagnostics/held-B.json"]
+      }
+    }
+  ],
+  "pr_maintenance": [],
   "completion_events": [],
   "dependency_transitions": [],
   "synthesis": [],
+  "unresolved_systematic_concerns": [],
   "final_state": {
     "status": "failed",
     "open_tickets": [],
     "active_tickets": [],
     "completed_tickets": ["A"],
+    "retryable_tickets": [],
+    "human_decision_tickets": [],
     "held_tickets": ["B"],
     "blocked_tickets": ["C"],
     "failed_tickets": ["D"],

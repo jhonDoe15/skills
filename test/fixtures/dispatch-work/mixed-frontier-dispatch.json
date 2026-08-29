@@ -5,6 +5,37 @@
     "granted": true,
     "source": "fixture://authorization/mixed-frontier"
   },
+  "resume": {
+    "requested": false,
+    "decision": "fresh"
+  },
+  "executor": {
+    "precedence": ["repository", "project", "user", "bundled-default"],
+    "candidates": {
+      "repository": {
+        "value": null,
+        "source": "fixture://config/repository"
+      },
+      "project": {
+        "value": null,
+        "source": "fixture://config/project"
+      },
+      "user": {
+        "value": null,
+        "source": "fixture://config/user"
+      },
+      "bundled-default": {
+        "value": 2,
+        "source": "fixture://config/bundled-default"
+      }
+    },
+    "selected": {
+      "scope": "bundled-default",
+      "value": 2,
+      "source": "fixture://config/bundled-default"
+    }
+  },
+  "collision_constraints": [],
   "source_dag": {
     "identity": "fixture://published-dag/mixed-frontier-v1",
     "published": true,
@@ -24,21 +55,24 @@
       "sequence": 1,
       "eligible": ["A", "B"],
       "active": [],
-      "selected": ["A", "B"]
+      "selected": ["A", "B"],
+      "deferred": []
     },
     {
       "id": "frontier-2",
       "sequence": 6,
       "eligible": ["C"],
       "active": ["B"],
-      "selected": ["C"]
+      "selected": ["C"],
+      "deferred": []
     },
     {
       "id": "frontier-3",
       "sequence": 11,
       "eligible": [],
       "active": [],
-      "selected": []
+      "selected": [],
+      "deferred": []
     }
   ],
   "ticket_lifecycles": [
@@ -80,6 +114,48 @@
       }
     }
   ],
+  "worktrees": [
+    {
+      "ticket": "A",
+      "owner": "dispatch-mixed:A",
+      "path": "fixture://worktree/mixed/A",
+      "base": "1111111111111111111111111111111111111111",
+      "created_sequence": 2,
+      "creation_result": "created",
+      "lifecycle_state": "removed",
+      "cleanup": {
+        "decision": "remove-after-completion",
+        "diagnostic_artifacts": []
+      }
+    },
+    {
+      "ticket": "B",
+      "owner": "dispatch-mixed:B",
+      "path": "fixture://worktree/mixed/B",
+      "base": "1111111111111111111111111111111111111111",
+      "created_sequence": 3,
+      "creation_result": "created",
+      "lifecycle_state": "retained-for-diagnosis",
+      "cleanup": {
+        "decision": "retain-for-human-decision",
+        "diagnostic_artifacts": ["artifact://diagnostics/B.json"]
+      }
+    },
+    {
+      "ticket": "C",
+      "owner": "dispatch-mixed:C",
+      "path": "fixture://worktree/mixed/C",
+      "base": "1111111111111111111111111111111111111111",
+      "created_sequence": 7,
+      "creation_result": "created",
+      "lifecycle_state": "removed",
+      "cleanup": {
+        "decision": "remove-after-completion",
+        "diagnostic_artifacts": []
+      }
+    }
+  ],
+  "pr_maintenance": [],
   "completion_events": [
     {
       "sequence": 4,
@@ -128,11 +204,14 @@
       "recommendations": ["accept C"]
     }
   ],
+  "unresolved_systematic_concerns": [],
   "final_state": {
     "status": "held",
     "open_tickets": [],
     "active_tickets": [],
     "completed_tickets": ["A", "C"],
+    "retryable_tickets": [],
+    "human_decision_tickets": [],
     "held_tickets": ["B"],
     "blocked_tickets": [],
     "failed_tickets": [],

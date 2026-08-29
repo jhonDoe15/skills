@@ -35,7 +35,7 @@
       },
       {
         "id": "replay-state",
-        "description": "The retained artifact carries all source, authorization, lifecycle, transition, synthesis, and final state needed for deterministic inspection."
+        "description": "The retained artifact carries fingerprints, scheduling, worktrees, PR actions, partial failures, synthesis dispositions, and final state for deterministic inspection."
       }
     ]
   },
@@ -47,10 +47,14 @@
       "expected_output": "A and C start concurrently, B starts immediately after A's complete reviewed-ticket result while C remains active, and D starts only after B and C complete. Retained synthesis and final state are replayable.",
       "files": [
         "test/fixtures/dispatch-work/completed-dispatch.json",
+        "test/fixtures/dispatch-work/resumed-dispatch.json",
+        "test/fixtures/dispatch-work/collision-dispatch.json",
+        "test/fixtures/dispatch-work/hardened-partial-dispatch.json",
         "test/fixtures/dispatch-work/held-dispatch.json",
         "test/fixtures/dispatch-work/mixed-frontier-dispatch.json",
         "test/fixtures/dispatch-work/published-dag-adapter.js",
         "test/fixtures/dispatch-work/take-ticket-adapter.js",
+        "test/fixtures/dispatch-work/pr-maintenance-adapter.js",
         "test/fixtures/dispatch-work/reviewed-ticket-A.json",
         "test/fixtures/dispatch-work/reviewed-ticket-B.json",
         "test/fixtures/dispatch-work/reviewed-ticket-C.json",
@@ -82,9 +86,13 @@
       "expectations": [
         "Treatment and No-Skill arms use matched fresh sessions over the same small repository and sandboxed boundaries.",
         "The treatment retains explicit authorization and published ready DAG identity.",
+        "Resume rejects stale, partial, or mismatched evidence and skips only complete authoritative lifecycle work.",
+        "Executor precedence, collision deferrals, and worktree ownership remain inspectable without changing DAG edges.",
         "A and C start concurrently; B starts after A completes and before C completes; D waits for both B and C.",
         "Every dependency transition cites a complete authoritative reviewed-ticket completion.",
-        "Synthesis uses implementation handoff and Review brief references without repeating per-ticket review.",
+        "Denied PR maintenance authorization produces no attempted mutation at the bounded test Adapter.",
+        "A failed frontier item blocks its dependents while unrelated work completes and retryable and human-decision states remain distinct.",
+        "Synthesis uses implementation handoff and Review brief references, preserves systematic concerns, and does not repeat per-ticket review.",
         "Generated campaign evidence remains uncommitted."
       ]
     }
