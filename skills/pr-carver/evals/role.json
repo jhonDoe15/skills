@@ -36,10 +36,10 @@
     {
       "id": "existing-branch-read-only-topology",
       "name": "existing branch topology assessment",
-      "prompt": "Assess the supplied account-time-zone branch for PR topology. The diff contains independently verifiable API and documentation outcomes plus one schema prerequisite. Use the supplied normal migration metadata and shared-schema collision record. Return an assessment only; no mutation is authorized.",
+      "prompt": "Assess the supplied account-time-zone branch for PR topology. It contains a compatible schema expansion, independently verifiable API and backfill outcomes, a later contraction, and a shared generated-manifest collision between the API and backfill units. Return an assessment only; no mutation is authorized.",
       "expected_output": "A bounded read-only assessment that uses Ticket Scope for each candidate, proposes mergeable PR units, records only concrete direct ordering, and keeps collision serialization separate from dependencies.",
       "files": [
-        "test/fixtures/pr-carver/normal-parallel.json"
+        "test/fixtures/pr-carver/expand-contract.json"
       ],
       "required_skill_loads": [
         "pr-carver",

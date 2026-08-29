@@ -272,6 +272,10 @@ test('evaluation cases cover migration, activation, private routing, and evidenc
   const component = readEvaluation('component.json');
   const outcome = readEvaluation('outcome.json');
   const trigger = readEvaluation('trigger.json');
+  const roleFixture = readJson(path.join(
+    REPOSITORY_ROOT,
+    role.evals[0].files[0],
+  ));
   const ticketScopeTrigger = readJson(path.join(
     REPOSITORY_ROOT,
     'skills',
@@ -310,6 +314,9 @@ test('evaluation cases cover migration, activation, private routing, and evidenc
     ).should_trigger,
     false,
   );
+  assert.strictEqual(validateTopologyAssessment(roleFixture), roleFixture);
+  assert.notEqual(roleFixture.ordering_edges.length, 0);
+  assert.notEqual(roleFixture.collisions.length, 0);
   for (const definition of [role, component, outcome]) {
     assert.equal(
       definition.judge.dimensions.every(({ description }) => (
