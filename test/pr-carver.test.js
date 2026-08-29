@@ -66,7 +66,7 @@ function createPackageFixture(t, skillNames) {
   return root;
 }
 
-test('PR Carver contract is topology-first, fail-closed, and read-only', () => {
+test('PR Carver contract fails closed without legacy size bands', () => {
   const skill = fs.readFileSync(path.join(
     REPOSITORY_ROOT,
     'skills',
@@ -77,12 +77,7 @@ test('PR Carver contract is topology-first, fail-closed, and read-only', () => {
 
   assert.match(skill, /Missing internal dependency "ticket-scope"/);
   assert.doesNotMatch(skill, /\b(?:500|1000)\b/);
-  assert.match(skill, /direct ordering edges/i);
-  assert.match(skill, /migration treatment/i);
-  assert.match(skill, /collisions require serialization/i);
-  assert.match(skill, /read-only/i);
   assert.doesNotMatch(readme, /bands at 500 and 1000/);
-  assert.match(readme, /concrete prerequisite edges/i);
 });
 
 test('PR Carver evaluation catalog covers role, component, outcome, and routing', () => {
@@ -150,16 +145,20 @@ test('topology fixtures preserve migration order and collision separation', () =
   const onePr = readFixture('one-pr.json');
   const prefactor = readFixture('prefactor.json');
   const expandContract = readFixture('expand-contract.json');
+  const migrationOrder = readFixture('migration-order.json');
   const missingPrerequisite = readFixture('missing-prerequisite.json');
   const needsDecision = readFixture('needs-decision.json');
+  const nonFitJudgments = readFixture('non-fit-judgments.json');
 
   for (const assessment of [
     normal,
     onePr,
     prefactor,
     expandContract,
+    migrationOrder,
     missingPrerequisite,
     needsDecision,
+    nonFitJudgments,
   ]) {
     assert.strictEqual(validateTopologyAssessment(assessment), assessment);
     assert.deepEqual(assessment.authorization.allowed_mutations, []);
@@ -175,6 +174,18 @@ test('topology fixtures preserve migration order and collision separation', () =
     [['prefactor-seam', 'api-behavior']],
   );
   assert.equal(expandContract.structure, 'stacked');
+  assert.deepEqual(migrationOrder.ordering_edges, [
+    {
+      prerequisite: 'schema-expansion',
+      consumer: 'data-transition',
+      migration_order: 'expand before transition',
+    },
+    {
+      prerequisite: 'data-transition',
+      consumer: 'schema-contraction',
+      migration_order: 'transition before contract',
+    },
+  ]);
   assert.equal(
     expandContract.ordering_edges.some(({ prerequisite, consumer }) => (
       (prerequisite === 'api-consumer' && consumer === 'data-backfill')
@@ -189,6 +200,10 @@ test('topology fixtures preserve migration order and collision separation', () =
   assert.equal(needsDecision.status, 'needs-decision');
   assert.equal(needsDecision.structure, 'needs-decision');
   assert.equal(missingPrerequisite.status, 'needs-decision');
+  assert.deepEqual(
+    nonFitJudgments.units.map(({ assessment }) => assessment),
+    ['split', 'combine', 'flag'],
+  );
 
   const collisionAsDependency = structuredClone(expandContract);
   collisionAsDependency.ordering_edges.push({
@@ -199,6 +214,26 @@ test('topology fixtures preserve migration order and collision separation', () =
   assert.throws(
     () => validateTopologyAssessment(collisionAsDependency),
     /collision.*ordering edge/i,
+  );
+
+  const multipleResources = structuredClone(expandContract);
+  multipleResources.collisions.push({
+    units: ['api-consumer', 'data-backfill'],
+    resource: 'shared deployment slot',
+    serialization: 'Deploy one unit before reserving the slot for the other.',
+  });
+  assert.strictEqual(
+    validateTopologyAssessment(multipleResources),
+    multipleResources,
+  );
+
+  const duplicateResource = structuredClone(expandContract);
+  duplicateResource.collisions.push(
+    structuredClone(duplicateResource.collisions[0]),
+  );
+  assert.throws(
+    () => validateTopologyAssessment(duplicateResource),
+    /collisions must contain unique values/,
   );
 });
 
@@ -267,6 +302,43 @@ test('test Adapter exposes read-only outcome evidence without entering productio
   assert.equal(require('../suite/testing').createAssessmentAdapter, undefined);
 });
 
+test('separate authorization is handed off without PR Carver mutation', async (t) => {
+  const packageRoot = createPackageFixture(t, ['pr-carver', 'ticket-scope']);
+  const artifactReference = 'fixture://pr-carver/authorized-handoff';
+  const adapter = createAssessmentAdapter({ artifactReference });
+  const result = await executeTest({
+    repositoryRoot: packageRoot,
+    adapter,
+    invocation: {
+      requestId: 'pr-carver-authorized-handoff',
+      skill: 'pr-carver',
+      prompt: 'Assess first and retain the separate branch authorization.',
+      model: 'fixture-model',
+    },
+  });
+  const fixture = readFixture('authorized-handoff.json');
+  const graded = gradePrCarverResult(result, {
+    resolveArtifact: () => fixture,
+  });
+
+  assert.deepEqual(graded.assessment.authorization, {
+    mode: 'assessment-only',
+    allowed_mutations: [],
+    handoff: {
+      operation: 'create-branch',
+      target: 'feature/account-time-zone-api',
+    },
+  });
+  assert.deepEqual(result.observations.attemptedMutations, []);
+
+  const invalidHandoff = structuredClone(fixture);
+  delete invalidHandoff.authorization.handoff.target;
+  assert.throws(
+    () => validateTopologyAssessment(invalidHandoff),
+    /authorization\.handoff\.target/,
+  );
+});
+
 test('evaluation cases cover migration, activation, private routing, and evidence', () => {
   const role = readEvaluation('role.json');
   const component = readEvaluation('component.json');
@@ -292,8 +364,10 @@ test('evaluation cases cover migration, activation, private routing, and evidenc
       'cohesive-one-pr',
       'prefactor-enables-consumer',
       'expand-contract-with-collision',
+      'migration-order-only',
       'missing-prerequisite-evidence',
       'contradictory-prerequisites',
+      'non-fit-ticket-scope-judgments',
       'separate-mutation-authorization',
     ],
   );

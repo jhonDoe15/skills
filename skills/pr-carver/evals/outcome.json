@@ -123,6 +123,27 @@
       ]
     },
     {
+      "id": "migration-order-only",
+      "name": "migration-order edge without output consumption",
+      "prompt": "Assess the supplied expand-contract branch. The expansion, transition, and contraction have independently valid landing points. Their required order comes from migration phases rather than one unit consuming another unit's named output. Recommend topology only.",
+      "expected_output": "A stacked topology records direct migration-order edges from expansion to transition and transition to contraction without inventing consumed outputs.",
+      "files": [
+        "test/fixtures/pr-carver/migration-order.json"
+      ],
+      "required_skill_loads": ["pr-carver", "ticket-scope"],
+      "expectations": [
+        "Each ordering edge identifies migration order as its basis.",
+        "No consumed output is invented to justify the phase order.",
+        "Only direct phase edges remain.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks the migration ordering."
+      ],
+      "covered_clauses": [
+        "pc-migration-order-edge",
+        "pc-expand-contract",
+        "pc-direct-edges"
+      ]
+    },
+    {
       "id": "missing-prerequisite-evidence",
       "name": "missing prerequisite decision",
       "prompt": "Assess the supplied existing branch. The API unit is described as depending on a schema result, but the branch evidence does not identify that result, its validation, or the owner who can confirm the migration order. Recommend only what the evidence supports.",
@@ -165,12 +186,34 @@
       ]
     },
     {
+      "id": "non-fit-ticket-scope-judgments",
+      "name": "non-fit candidate judgments",
+      "prompt": "Assess the supplied existing branch. Ticket Scope identifies one mixed candidate that must split, one fragment that must combine with its API consumer, and one migration candidate that requires a persistence-owner decision. Preserve those judgments without inventing ready topology or mutating the branch.",
+      "expected_output": "A bounded needs-decision assessment retains the split replacements, combine target, and flagged decision owner without presenting unresolved candidates as ready PR units.",
+      "files": [
+        "test/fixtures/pr-carver/non-fit-judgments.json"
+      ],
+      "required_skill_loads": ["pr-carver", "ticket-scope"],
+      "expectations": [
+        "The split judgment names its replacement candidates.",
+        "The combine judgment names the fragment it must join.",
+        "The flag judgment names the exact decision and owner.",
+        "No unresolved candidate becomes ready topology or causes a mutation.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks the retained Ticket Scope judgments."
+      ],
+      "covered_clauses": [
+        "pc-ticket-scope-non-fit",
+        "pc-needs-decision",
+        "pc-read-only"
+      ]
+    },
+    {
       "id": "separate-mutation-authorization",
       "name": "authorized mutation remains a separate outcome",
       "prompt": "Assess the supplied existing branch and recommend PR topology. A separate authorization permits only creating branch feature/account-time-zone-api after assessment; it names that operation and target but does not authorize any other write.",
       "expected_output": "A read-only topology assessment records the separate create-branch authorization and hands it to the mutation-owning workflow without performing the branch mutation as part of PR Carver.",
       "files": [
-        "test/fixtures/pr-carver/normal-parallel.json"
+        "test/fixtures/pr-carver/authorized-handoff.json"
       ],
       "required_skill_loads": ["pr-carver", "ticket-scope"],
       "expectations": [

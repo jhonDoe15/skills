@@ -1,0 +1,64 @@
+{
+  "schema": "pr-carver-assessment/v1",
+  "status": "needs-decision",
+  "subject": {
+    "kind": "branch",
+    "identity": "fixture/non-fit-ticket-scope-judgments",
+    "base": "fixture/main"
+  },
+  "units": [
+    {
+      "id": "mixed-api-and-docs",
+      "assessment": "split",
+      "shape": "vertical",
+      "outcome": "API behavior and operator guidance have separate landing seams.",
+      "validation": "Validate each replacement candidate independently.",
+      "replacement_candidates": ["api-behavior", "operator-guidance"],
+      "migration": {
+        "strategy": "normal",
+        "phase": "normal"
+      },
+      "consumes": []
+    },
+    {
+      "id": "schema-field",
+      "assessment": "combine",
+      "shape": "layered",
+      "outcome": "A schema field alone is not independently useful.",
+      "validation": "Validate the combined schema and API behavior.",
+      "combine_with": ["account-api-consumer"],
+      "migration": {
+        "strategy": "normal",
+        "phase": "normal"
+      },
+      "consumes": []
+    },
+    {
+      "id": "unresolved-migration",
+      "assessment": "flag",
+      "shape": "layered",
+      "outcome": "Migration order requires a persistence-owner decision.",
+      "validation": "Run compatibility checks after the owner decides the order.",
+      "decision": "Choose the safe schema and data migration order.",
+      "owner": "persistence maintainers",
+      "migration": {
+        "strategy": "expand-contract",
+        "phase": "transition"
+      },
+      "consumes": []
+    }
+  ],
+  "ordering_edges": [],
+  "collisions": [],
+  "structure": "needs-decision",
+  "flags": [
+    {
+      "decision": "Resolve the flagged migration order before producing ready topology.",
+      "owner": "persistence maintainers"
+    }
+  ],
+  "authorization": {
+    "mode": "assessment-only",
+    "allowed_mutations": []
+  }
+}

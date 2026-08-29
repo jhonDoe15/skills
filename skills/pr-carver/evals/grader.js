@@ -17,6 +17,12 @@ const MIGRATION_PHASES = [
   'transition',
   'contract',
 ];
+const MIGRATION_ORDER = new Map([
+  ['expand', 0],
+  ['transition', 1],
+  ['contract', 2],
+]);
+const UNIT_ASSESSMENTS = ['fit', 'split', 'combine', 'flag'];
 const READY_STRUCTURES = ['parallel', 'stacked', 'one-pr', 'mixed'];
 
 class PrCarverArtifactError extends Error {
@@ -42,6 +48,14 @@ function requireString(value, field) {
   if (typeof value !== 'string' || value.length === 0) {
     throw new PrCarverArtifactError(`${field} must be a non-empty string`);
   }
+}
+
+function requireNonEmptyStringArray(value, field) {
+  requireArray(value, field);
+  if (value.length === 0) {
+    throw new PrCarverArtifactError(`${field} cannot be empty`);
+  }
+  value.forEach((item, index) => requireString(item, `${field}[${index}]`));
 }
 
 function assertUnique(values, field) {
@@ -71,6 +85,17 @@ function validateAuthorization(authorization) {
   if (authorization.allowed_mutations.length !== 0) {
     throw new PrCarverArtifactError('assessment cannot authorize mutations');
   }
+  if (authorization.handoff !== undefined) {
+    requireObject(authorization.handoff, 'authorization.handoff');
+    requireString(
+      authorization.handoff.operation,
+      'authorization.handoff.operation',
+    );
+    requireString(
+      authorization.handoff.target,
+      'authorization.handoff.target',
+    );
+  }
 }
 
 function validateSubject(subject) {
@@ -90,8 +115,21 @@ function validateUnits(units) {
     requireString(unit.id, `${field}.id`);
     requireString(unit.outcome, `${field}.outcome`);
     requireString(unit.validation, `${field}.validation`);
-    if (unit.assessment !== 'fit') {
-      throw new PrCarverArtifactError(`${field}.assessment must be fit`);
+    if (!UNIT_ASSESSMENTS.includes(unit.assessment)) {
+      throw new PrCarverArtifactError(`${field}.assessment is invalid`);
+    }
+    if (unit.assessment === 'split') {
+      requireNonEmptyStringArray(
+        unit.replacement_candidates,
+        `${field}.replacement_candidates`,
+      );
+    }
+    if (unit.assessment === 'combine') {
+      requireNonEmptyStringArray(unit.combine_with, `${field}.combine_with`);
+    }
+    if (unit.assessment === 'flag') {
+      requireString(unit.decision, `${field}.decision`);
+      requireString(unit.owner, `${field}.owner`);
     }
     if (!['vertical', 'layered'].includes(unit.shape)) {
       throw new PrCarverArtifactError(`${field}.shape is invalid`);
@@ -153,27 +191,52 @@ function validateEdges(units, edges) {
     requireObject(edge, field);
     requireString(edge.prerequisite, `${field}.prerequisite`);
     requireString(edge.consumer, `${field}.consumer`);
-    requireString(edge.output, `${field}.output`);
     if (!units.has(edge.prerequisite)
       || !units.has(edge.consumer)
       || edge.prerequisite === edge.consumer) {
       throw new PrCarverArtifactError(`${field} has invalid endpoints`);
     }
-    const matchingConsumption = units.get(edge.consumer).consumes.some(
-      ({ unit, output }) => (
-        unit === edge.prerequisite && output === edge.output
-      ),
-    );
-    if (!matchingConsumption) {
+    const hasOutput = typeof edge.output === 'string' && edge.output.length > 0;
+    const hasMigrationOrder = typeof edge.migration_order === 'string'
+      && edge.migration_order.length > 0;
+    if (hasOutput === hasMigrationOrder) {
       throw new PrCarverArtifactError(
-        `${field} lacks matching consumed-output evidence`,
+        `${field} requires exactly one edge basis`,
       );
+    }
+    if (hasOutput) {
+      const matchingConsumption = units.get(edge.consumer).consumes.some(
+        ({ unit, output }) => (
+          unit === edge.prerequisite && output === edge.output
+        ),
+      );
+      if (!matchingConsumption) {
+        throw new PrCarverArtifactError(
+          `${field} lacks matching consumed-output evidence`,
+        );
+      }
+    } else {
+      const prerequisite = units.get(edge.prerequisite);
+      const consumer = units.get(edge.consumer);
+      const prerequisiteOrder = MIGRATION_ORDER.get(prerequisite.migration.phase);
+      const consumerOrder = MIGRATION_ORDER.get(consumer.migration.phase);
+      if (prerequisite.migration.strategy !== 'expand-contract'
+        || consumer.migration.strategy !== 'expand-contract'
+        || prerequisiteOrder === undefined
+        || consumerOrder === undefined
+        || prerequisiteOrder >= consumerOrder) {
+        throw new PrCarverArtifactError(
+          `${field} lacks valid migration-order evidence`,
+        );
+      }
     }
     return edgeKey(edge.prerequisite, edge.consumer);
   });
   assertUnique(keys, 'ordering edges');
 
-  const edgeOutputs = new Set(edges.map(
+  const edgeOutputs = new Set(edges.filter(
+    ({ output }) => typeof output === 'string',
+  ).map(
     ({ prerequisite, consumer, output }) => (
       edgeOutputKey(prerequisite, consumer, output)
     ),
@@ -217,12 +280,23 @@ function validateCollisions(units, edges, collisions) {
         `${field} was converted from a collision into an ordering edge`,
       );
     }
-    return JSON.stringify([...collision.units].sort());
+    return JSON.stringify([
+      [...collision.units].sort(),
+      collision.resource,
+    ]);
   });
   assertUnique(keys, 'collisions');
 }
 
 function validateMigration(units, edges) {
+  function hasMigrationEdge(prerequisite, consumer) {
+    return edges.some((edge) => (
+      edge.prerequisite === prerequisite
+      && edge.consumer === consumer
+      && typeof edge.migration_order === 'string'
+    ));
+  }
+
   const prefactors = [...units.values()].filter(
     ({ migration }) => migration.phase === 'prefactor',
   );
@@ -253,17 +327,19 @@ function validateMigration(units, edges) {
     );
   }
   for (const transition of transitions) {
-    if (!transition.consumes.some(({ unit }) => (
-      expansions.some(({ id }) => id === unit)
+    if (!expansions.some(({ id }) => (
+      transition.consumes.some(({ unit }) => unit === id)
+      || hasMigrationEdge(id, transition.id)
     ))) {
       throw new PrCarverArtifactError(
-        `transition "${transition.id}" must consume an expansion`,
+        `transition "${transition.id}" must follow an expansion`,
       );
     }
   }
   for (const contract of contracts) {
     if (!transitions.every(({ id }) => (
       contract.consumes.some(({ unit }) => unit === id)
+      || hasMigrationEdge(id, contract.id)
     ))) {
       throw new PrCarverArtifactError(
         `contract "${contract.id}" must wait for every transition`,
@@ -299,6 +375,11 @@ function validateReadyAssessment(assessment, units) {
   }
   if (units.size === 0) {
     throw new PrCarverArtifactError('ready assessment requires PR units');
+  }
+  if ([...units.values()].some(({ assessment }) => assessment !== 'fit')) {
+    throw new PrCarverArtifactError(
+      'ready assessment requires reconciled fit units',
+    );
   }
   if (assessment.structure === 'parallel'
     && (assessment.ordering_edges.length > 0 || assessment.collisions.length > 0)) {
