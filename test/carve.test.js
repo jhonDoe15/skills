@@ -30,6 +30,36 @@ const collisionPlanPath = path.join(
   'carve',
   'ready-plan-with-collisions.json',
 );
+const splitPlanPath = path.join(
+  __dirname,
+  'fixtures',
+  'carve',
+  'split-plan.json',
+);
+const combinePlanPath = path.join(
+  __dirname,
+  'fixtures',
+  'carve',
+  'combine-plan.json',
+);
+const prefactorPlanPath = path.join(
+  __dirname,
+  'fixtures',
+  'carve',
+  'prefactor-plan.json',
+);
+const expandContractPlanPath = path.join(
+  __dirname,
+  'fixtures',
+  'carve',
+  'expand-contract-plan.json',
+);
+const needsDecisionPlanPath = path.join(
+  __dirname,
+  'fixtures',
+  'carve',
+  'needs-decision-plan.json',
+);
 const validatorPath = path.join(
   repositoryRoot,
   'skills',
@@ -52,12 +82,21 @@ function readEvaluation(owner, file) {
   ));
 }
 
-function runValidator(t, plan) {
+function runValidator(t, plan, { previousPlan = null } = {}) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'slice-plan-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const planPath = path.join(directory, 'plan.json');
   fs.writeFileSync(planPath, `${JSON.stringify(plan, null, 2)}\n`);
-  return spawnSync(process.execPath, [validatorPath, planPath], {
+  const args = [validatorPath, planPath];
+  if (previousPlan) {
+    const previousPlanPath = path.join(directory, 'previous-plan.json');
+    fs.writeFileSync(
+      previousPlanPath,
+      `${JSON.stringify(previousPlan, null, 2)}\n`,
+    );
+    args.push(previousPlanPath);
+  }
+  return spawnSync(process.execPath, args, {
     cwd: repositoryRoot,
     encoding: 'utf8',
   });
@@ -110,6 +149,7 @@ function skillEvent(name, index) {
 function normalizedPlanningResult({
   artifactReference,
   attemptedMutations = [],
+  responseText = `Ready plan: ${artifactReference}`,
 }) {
   const resolvedSkills = [
     'writing-foundation',
@@ -147,7 +187,7 @@ function normalizedPlanningResult({
         requestedSkill: 'carve',
         resolvedSkills,
       },
-      responses: [{ text: `Ready plan: ${artifactReference}` }],
+      responses: [{ text: responseText }],
       artifacts: [{
         reference: artifactReference,
         mediaType: 'application/json',
@@ -244,10 +284,10 @@ test('ordinary ready plan passes deterministic graph and coverage validation', (
   const result = runValidator(t, readJson(readyPlanPath));
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Valid slice-plan\/v1 ready plan/);
+  assert.match(result.stdout, /Valid slice-plan\/v2 ready plan/);
 });
 
-test('ordinary plan schema declares the validated artifact contract', () => {
+test('plan schema declares the hardened artifact contract', () => {
   const schema = readJson(path.join(
     repositoryRoot,
     'skills',
@@ -257,14 +297,17 @@ test('ordinary plan schema declares the validated artifact contract', () => {
   ));
 
   assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema');
-  assert.equal(schema.$id, 'https://jhonDoe15.github.io/skills/schemas/slice-plan-v1.json');
+  assert.equal(schema.$id, 'https://jhonDoe15.github.io/skills/schemas/slice-plan-v2.json');
   assert.deepEqual(schema.required, [
     'schema',
     'status',
     'migration_strategy',
+    'migration',
     'requirements',
     'coverage_ledger',
     'tickets',
+    'lineage',
+    'decisions',
     'initial_frontier',
   ]);
   assert.equal(schema.additionalProperties, false);
@@ -290,15 +333,236 @@ test('plan validation rejects blockers without concrete consumed output', (t) =>
   assert.match(result.stderr, /blockers and consumes must identify the same direct tickets/);
 });
 
-test('plan validation preserves unambiguous replacement lineage', (t) => {
-  const plan = readJson(readyPlanPath);
-  plan.tickets[0].replaces = ['OLD-1'];
-  plan.tickets[1].replaces = ['OLD-1'];
+test('regeneration preserves stable identities and explicit split/combine lineage', (t) => {
+  const {
+    validatePlan,
+    validateRegeneration,
+  } = require('../skills/slice-plan/scripts/validate-plan');
+  const original = readJson(readyPlanPath);
+  const unchanged = structuredClone(original);
+  const split = readJson(splitPlanPath);
+  const combined = readJson(combinePlanPath);
 
-  const result = runValidator(t, plan);
+  assert.strictEqual(validateRegeneration(original, unchanged), unchanged);
+  assert.strictEqual(validateRegeneration(original, split), split);
+  assert.strictEqual(
+    validateRegeneration(split, structuredClone(split)).status,
+    'ready',
+  );
+  assert.strictEqual(validateRegeneration(split, combined), combined);
+  assert.strictEqual(validatePlan(split), split);
+  assert.strictEqual(validatePlan(combined), combined);
+  const result = runValidator(t, split, { previousPlan: original });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Validated regeneration lineage/);
 
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /replacement lineage contains duplicate "OLD-1"/);
+  const reused = structuredClone(original);
+  reused.tickets[1].outcome = 'Changed work under the old identity.';
+  assert.throws(
+    () => validateRegeneration(original, reused),
+    /reuses identity "T2" for changed work/,
+  );
+
+  const missingLineage = structuredClone(split);
+  missingLineage.lineage = [];
+  assert.throws(
+    () => validateRegeneration(original, missingLineage),
+    /removed ticket "T2" has no replacement lineage/,
+  );
+
+  const reusedPredecessor = structuredClone(split);
+  reusedPredecessor.lineage[0].predecessor_ids = ['T1'];
+  assert.throws(
+    () => validatePlan(reusedPredecessor),
+    /lineage predecessor "T1" is still a current ticket/,
+  );
+
+  const duplicateCandidate = structuredClone(original);
+  const duplicateTicket = structuredClone(duplicateCandidate.tickets[1]);
+  duplicateTicket.id = 'T9';
+  duplicateCandidate.tickets.push(duplicateTicket);
+  duplicateCandidate.coverage_ledger[1].ticket_ids.push('T9');
+  assert.throws(
+    () => validatePlan(duplicateCandidate),
+    /tickets contain duplicate outcome and seam/,
+  );
+
+  const cyclicLineage = structuredClone(original);
+  cyclicLineage.lineage = [
+    {
+      kind: 'replace',
+      predecessor_ids: ['OLD-1'],
+      successor_ids: ['OLD-2'],
+    },
+    {
+      kind: 'replace',
+      predecessor_ids: ['OLD-2'],
+      successor_ids: ['OLD-1'],
+    },
+  ];
+  assert.throws(
+    () => validatePlan(cyclicLineage),
+    /replacement lineage must be acyclic/,
+  );
+});
+
+test('prefactor and expand-contract plans validate concrete migration ordering', () => {
+  const {
+    validatePlan,
+  } = require('../skills/slice-plan/scripts/validate-plan');
+  const prefactor = readJson(prefactorPlanPath);
+  const expandContract = readJson(expandContractPlanPath);
+
+  assert.strictEqual(validatePlan(prefactor), prefactor);
+  assert.strictEqual(validatePlan(expandContract), expandContract);
+  assert.equal(prefactor.tickets[0].shape, 'prerequisite');
+  assert.equal(prefactor.migration_strategy, 'prefactor');
+  assert.equal(expandContract.tickets[0].shape, 'prerequisite');
+  assert.equal(expandContract.migration_strategy, 'expand-contract');
+
+  const convenienceFoundation = structuredClone(prefactor);
+  convenienceFoundation.tickets[2].blockers = [];
+  convenienceFoundation.tickets[2].consumes = [];
+  assert.throws(
+    () => validatePlan(convenienceFoundation),
+    /prefactor ticket "P1" must provide concrete output to multiple consumers/,
+  );
+
+  const incompleteContraction = structuredClone(expandContract);
+  incompleteContraction.tickets[3].blockers = ['M1'];
+  incompleteContraction.tickets[3].consumes.pop();
+  assert.throws(
+    () => validatePlan(incompleteContraction),
+    /contraction ticket "C1" must depend directly on every migration group ticket/,
+  );
+
+  const coupledGroup = structuredClone(expandContract);
+  coupledGroup.migration.migration_groups[0].independently_mergeable = false;
+  assert.throws(
+    () => validatePlan(coupledGroup),
+    /migration group "api-readers" must be independently mergeable/,
+  );
+
+  const missingIntegrationPoint = structuredClone(expandContract);
+  missingIntegrationPoint.migration.migration_groups[1].integration_point = null;
+  assert.throws(
+    () => validatePlan(missingIntegrationPoint),
+    /migration group "scheduler-readers" must record its required integration point/,
+  );
+});
+
+test('needs-decision plans validate unresolved choices and refuse publication', () => {
+  const {
+    validatePlan,
+  } = require('../skills/slice-plan/scripts/validate-plan');
+  const definition = readEvaluation('carve', 'outcome.json');
+  const caseDefinition = definition.evals.find(
+    ({ id }) => id === 'needs-decision-refuses-publication',
+  );
+  const { gradeCarveResult } = require('../skills/carve/evals/grader');
+  const plan = readJson(needsDecisionPlanPath);
+  const artifactReference = 'fixture://needs-decision-plan.json';
+  const responseText = `Needs decision plan: ${artifactReference}`;
+  const result = normalizedPlanningResult({ artifactReference, responseText });
+  const grade = (attemptedMutations = []) => gradeCarveResult({
+    definition,
+    caseDefinition,
+    result: normalizedPlanningResult({
+      artifactReference,
+      attemptedMutations,
+      responseText,
+    }),
+    resolvePlan: (reference) => (
+      reference === artifactReference ? plan : null
+    ),
+  });
+
+  assert.strictEqual(validatePlan(plan), plan);
+  assert.equal(caseDefinition.publication_authorized, true);
+  assert.equal(caseDefinition.expected_status, 'needs-decision');
+  assert.equal(grade().passed, true);
+  assert.equal(grade([{
+    operation: 'create-ticket',
+    target: 'T1',
+    outcome: 'succeeded',
+  }]).passed, false);
+
+  const malformed = structuredClone(plan);
+  malformed.decisions = [];
+  assert.throws(
+    () => validatePlan(malformed),
+    /needs-decision plan must state at least one unresolved choice/,
+  );
+  const noUnresolvedCoverage = structuredClone(plan);
+  noUnresolvedCoverage.coverage_ledger[0].disposition = 'excluded';
+  assert.throws(
+    () => validatePlan(noUnresolvedCoverage),
+    /needs-decision plan must leave at least one requirement unresolved/,
+  );
+  assert.equal(result.observations.attemptedMutations.length, 0);
+});
+
+test('graph validation rejects every structural defect before publication', () => {
+  const {
+    validatePlan,
+  } = require('../skills/slice-plan/scripts/validate-plan');
+
+  const missingTarget = readJson(readyPlanPath);
+  missingTarget.tickets[1].blockers = ['MISSING'];
+  missingTarget.tickets[1].consumes[0].ticket_id = 'MISSING';
+  assert.throws(
+    () => validatePlan(missingTarget),
+    /names unknown ticket "MISSING"/,
+  );
+
+  const convenienceFoundation = readJson(readyPlanPath);
+  convenienceFoundation.tickets[1].blockers = [];
+  convenienceFoundation.tickets[1].consumes = [];
+  convenienceFoundation.initial_frontier = ['T1', 'T2'];
+  assert.throws(
+    () => validatePlan(convenienceFoundation),
+    /prerequisite ticket "T1" must provide concrete output to a consumer/,
+  );
+
+  const skeletalTicket = readJson(readyPlanPath);
+  skeletalTicket.tickets[1].acceptance = [];
+  assert.throws(
+    () => validatePlan(skeletalTicket),
+    /tickets\[1\]\.acceptance must be a non-empty array/,
+  );
+});
+
+test('overlapping collisions remain metadata and preserve equivalent frontiers', () => {
+  const {
+    validatePlan,
+    validateRegeneration,
+  } = require('../skills/slice-plan/scripts/validate-plan');
+  const plan = readJson(collisionPlanPath);
+  plan.tickets.push({
+    id: 'T3',
+    title: 'Document the preference contract',
+    outcome: 'Clients can discover the account time-zone preference contract.',
+    seam: 'account API documentation',
+    shape: 'vertical',
+    in_scope: ['Document the account time-zone request and response fields.'],
+    out_of_scope: ['Change account API runtime behavior.'],
+    acceptance: ['Published API documentation includes the preference fields.'],
+    validation: ['Run the API documentation contract test.'],
+    blockers: [],
+    consumes: [],
+    collisions: ['account persistence model'],
+  });
+  plan.coverage_ledger[1].ticket_ids.push('T3');
+  plan.initial_frontier.push('T3');
+
+  assert.strictEqual(validatePlan(plan), plan);
+  assert.deepEqual(plan.initial_frontier, ['T1', 'T3']);
+  assert.deepEqual(plan.tickets[2].blockers, []);
+
+  const regenerated = structuredClone(plan);
+  regenerated.tickets.reverse();
+  regenerated.initial_frontier.reverse();
+  assert.strictEqual(validateRegeneration(plan, regenerated), regenerated);
 });
 
 test('plan validation rejects cycles, redundant blockers, and an incorrect frontier', (t) => {
@@ -317,12 +581,12 @@ test('plan validation rejects cycles, redundant blockers, and an incorrect front
     id: 'T3',
     title: 'Audit account time-zone changes',
     outcome: 'Operators can audit account time-zone changes.',
+    seam: 'account audit stream',
     shape: 'vertical',
     in_scope: ['Record API updates in the audit stream.'],
     out_of_scope: ['Add new audit storage.'],
     acceptance: ['Updating a preference emits an audit record.'],
     validation: ['Run the audit integration test.'],
-    replaces: [],
     blockers: ['T1', 'T2'],
     consumes: [
       {

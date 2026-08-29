@@ -1,0 +1,140 @@
+{
+  "schema": "slice-plan/v2",
+  "status": "ready",
+  "migration_strategy": "expand-contract",
+  "migration": {
+    "prefactor_ticket_ids": [],
+    "expansion_ticket_id": "E1",
+    "migration_groups": [
+      {
+        "id": "api-readers",
+        "ticket_ids": ["M1"],
+        "independently_mergeable": true,
+        "green_independently": true,
+        "integration_point": null
+      },
+      {
+        "id": "scheduler-readers",
+        "ticket_ids": ["M2"],
+        "independently_mergeable": true,
+        "green_independently": false,
+        "integration_point": "Integrate the scheduler compatibility adapter before enabling its new reads."
+      }
+    ],
+    "contraction_ticket_id": "C1"
+  },
+  "requirements": [
+    {
+      "id": "REQ-1",
+      "text": "Add the replacement time-zone representation before migrating readers."
+    },
+    {
+      "id": "REQ-2",
+      "text": "Migrate account API and scheduler readers independently."
+    },
+    {
+      "id": "REQ-3",
+      "text": "Remove the legacy representation only after all readers migrate."
+    }
+  ],
+  "coverage_ledger": [
+    {
+      "requirement_id": "REQ-1",
+      "disposition": "covered",
+      "ticket_ids": ["E1"],
+      "reason": "The expansion prerequisite adds the compatible representation."
+    },
+    {
+      "requirement_id": "REQ-2",
+      "disposition": "covered",
+      "ticket_ids": ["M1", "M2"],
+      "reason": "The API and scheduler migration groups are independently mergeable."
+    },
+    {
+      "requirement_id": "REQ-3",
+      "disposition": "covered",
+      "ticket_ids": ["C1"],
+      "reason": "Contraction waits directly for both migration groups."
+    }
+  ],
+  "tickets": [
+    {
+      "id": "E1",
+      "title": "Expand the time-zone representation",
+      "outcome": "Both legacy and replacement time-zone representations are available.",
+      "seam": "account persistence compatibility",
+      "shape": "prerequisite",
+      "in_scope": ["Add and verify the replacement representation."],
+      "out_of_scope": ["Migrate readers or remove the legacy representation."],
+      "acceptance": ["Old and new readers remain compatible after expansion."],
+      "validation": ["Run persistence compatibility tests."],
+      "blockers": [],
+      "consumes": [],
+      "collisions": []
+    },
+    {
+      "id": "M1",
+      "title": "Migrate account API readers",
+      "outcome": "The account API reads the replacement time-zone representation.",
+      "seam": "account API reads",
+      "shape": "vertical",
+      "in_scope": ["Move account API reads to the replacement representation."],
+      "out_of_scope": ["Migrate scheduler reads or remove legacy storage."],
+      "acceptance": ["Account API reads remain green using the replacement representation."],
+      "validation": ["Run account API integration tests."],
+      "blockers": ["E1"],
+      "consumes": [
+        {
+          "ticket_id": "E1",
+          "output": "The compatible replacement time-zone representation."
+        }
+      ],
+      "collisions": []
+    },
+    {
+      "id": "M2",
+      "title": "Migrate scheduler readers",
+      "outcome": "The scheduler reads the replacement time-zone representation.",
+      "seam": "scheduler reads",
+      "shape": "vertical",
+      "in_scope": ["Move scheduler reads to the replacement representation."],
+      "out_of_scope": ["Migrate account API reads or remove legacy storage."],
+      "acceptance": ["Scheduler reads remain green at the recorded integration point."],
+      "validation": ["Run scheduler integration tests."],
+      "blockers": ["E1"],
+      "consumes": [
+        {
+          "ticket_id": "E1",
+          "output": "The compatible replacement time-zone representation."
+        }
+      ],
+      "collisions": []
+    },
+    {
+      "id": "C1",
+      "title": "Contract the legacy time-zone representation",
+      "outcome": "The legacy time-zone representation is removed after all readers migrate.",
+      "seam": "account persistence compatibility",
+      "shape": "vertical",
+      "in_scope": ["Remove the legacy representation and compatibility path."],
+      "out_of_scope": ["Change migrated reader behavior."],
+      "acceptance": ["No runtime reader uses the legacy representation."],
+      "validation": ["Run full time-zone integration tests."],
+      "blockers": ["M1", "M2"],
+      "consumes": [
+        {
+          "ticket_id": "M1",
+          "output": "Account API reads migrated to the replacement representation."
+        },
+        {
+          "ticket_id": "M2",
+          "output": "Scheduler reads migrated to the replacement representation."
+        }
+      ],
+      "collisions": []
+    }
+  ],
+  "lineage": [],
+  "decisions": [],
+  "initial_frontier": ["E1"]
+}

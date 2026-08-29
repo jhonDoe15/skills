@@ -81,17 +81,17 @@ function validateTicket(ticket, index) {
     'id',
     'title',
     'outcome',
+    'seam',
     'shape',
     'in_scope',
     'out_of_scope',
     'acceptance',
     'validation',
-    'replaces',
     'blockers',
     'consumes',
     'collisions',
   ], field);
-  for (const name of ['id', 'title', 'outcome']) {
+  for (const name of ['id', 'title', 'outcome', 'seam']) {
     requireString(ticket[name], `${field}.${name}`);
   }
   if (!['vertical', 'prerequisite'].includes(ticket.shape)) {
@@ -100,7 +100,6 @@ function validateTicket(ticket, index) {
   for (const name of ['in_scope', 'out_of_scope', 'acceptance', 'validation']) {
     validateStringArray(ticket[name], `${field}.${name}`);
   }
-  validateStringArray(ticket.replaces, `${field}.replaces`, { allowEmpty: true });
   validateStringArray(ticket.blockers, `${field}.blockers`, { allowEmpty: true });
   validateStringArray(ticket.collisions, `${field}.collisions`, { allowEmpty: true });
   requireArray(ticket.consumes, `${field}.consumes`, { allowEmpty: true });
@@ -110,12 +109,9 @@ function validateTicket(ticket, index) {
     requireString(consumption.ticket_id, `${consumeField}.ticket_id`);
     requireString(consumption.output, `${consumeField}.output`);
   }
-  assertUnique(
-    ticket.consumes.map(({ ticket_id: ticketId }) => ticketId),
-    `${field}.consumes`,
-  );
   const consumedTicketIds = ticket.consumes
     .map(({ ticket_id: ticketId }) => ticketId);
+  assertUnique(consumedTicketIds, `${field}.consumes`);
   if (!haveSameMembers(ticket.blockers, consumedTicketIds)) {
     fail(`${field} blockers and consumes must identify the same direct tickets`);
   }
@@ -133,6 +129,279 @@ function validateTicketReferences(plan) {
       }
     }
   }
+}
+
+function validatePrerequisites(plan) {
+  for (const ticket of plan.tickets) {
+    if (ticket.shape !== 'prerequisite') continue;
+    const consumed = plan.tickets.some(({ consumes }) => (
+      consumes.some(({ ticket_id: ticketId }) => ticketId === ticket.id)
+    ));
+    if (!consumed) {
+      fail(
+        `prerequisite ticket "${ticket.id}" must provide concrete output to a consumer`,
+      );
+    }
+  }
+}
+
+function validateMigrationMetadata(migration) {
+  requireExactFields(migration, [
+    'prefactor_ticket_ids',
+    'expansion_ticket_id',
+    'migration_groups',
+    'contraction_ticket_id',
+  ], 'migration');
+  validateStringArray(
+    migration.prefactor_ticket_ids,
+    'migration.prefactor_ticket_ids',
+    { allowEmpty: true },
+  );
+  if (migration.expansion_ticket_id !== null) {
+    requireString(
+      migration.expansion_ticket_id,
+      'migration.expansion_ticket_id',
+    );
+  }
+  requireArray(migration.migration_groups, 'migration.migration_groups', {
+    allowEmpty: true,
+  });
+  for (const [index, group] of migration.migration_groups.entries()) {
+    const field = `migration.migration_groups[${index}]`;
+    requireExactFields(group, [
+      'id',
+      'ticket_ids',
+      'independently_mergeable',
+      'green_independently',
+      'integration_point',
+    ], field);
+    requireString(group.id, `${field}.id`);
+    validateStringArray(group.ticket_ids, `${field}.ticket_ids`);
+    if (typeof group.independently_mergeable !== 'boolean') {
+      fail(`${field}.independently_mergeable must be a boolean`);
+    }
+    if (typeof group.green_independently !== 'boolean') {
+      fail(`${field}.green_independently must be a boolean`);
+    }
+    if (group.integration_point !== null) {
+      requireString(group.integration_point, `${field}.integration_point`);
+    }
+  }
+  assertUnique(
+    migration.migration_groups.map(({ id }) => id),
+    'migration groups',
+  );
+  if (migration.contraction_ticket_id !== null) {
+    requireString(
+      migration.contraction_ticket_id,
+      'migration.contraction_ticket_id',
+    );
+  }
+}
+
+function validateNormalMigration(migration) {
+  if (migration.prefactor_ticket_ids.length > 0
+    || migration.expansion_ticket_id !== null
+    || migration.migration_groups.length > 0
+    || migration.contraction_ticket_id !== null) {
+    fail('normal migration must not declare prefactor or expand-contract phases');
+  }
+}
+
+function validatePrefactorMigration(plan, ticketsById) {
+  const { migration } = plan;
+  if (migration.prefactor_ticket_ids.length === 0
+    || migration.expansion_ticket_id !== null
+    || migration.migration_groups.length > 0
+    || migration.contraction_ticket_id !== null) {
+    fail('prefactor migration must declare only prefactor_ticket_ids');
+  }
+  for (const prefactorId of migration.prefactor_ticket_ids) {
+    const ticket = ticketsById.get(prefactorId);
+    if (!ticket) fail(`prefactor names unknown ticket "${prefactorId}"`);
+    if (ticket.shape !== 'prerequisite') {
+      fail(`prefactor ticket "${prefactorId}" must have prerequisite shape`);
+    }
+    const consumers = plan.tickets.filter(
+      ({ blockers }) => blockers.includes(prefactorId),
+    );
+    if (consumers.length < 2) {
+      fail(
+        `prefactor ticket "${prefactorId}" must provide concrete output to multiple consumers`,
+      );
+    }
+  }
+}
+
+function validateExpandContractMigration(plan, ticketsById) {
+  const { migration } = plan;
+  if (migration.prefactor_ticket_ids.length > 0
+    || migration.expansion_ticket_id === null
+    || migration.migration_groups.length === 0
+    || migration.contraction_ticket_id === null) {
+    fail('expand-contract migration must declare expansion, groups, and contraction');
+  }
+  const expansionId = migration.expansion_ticket_id;
+  const contractionId = migration.contraction_ticket_id;
+  const expansion = ticketsById.get(expansionId);
+  const contraction = ticketsById.get(contractionId);
+  if (!expansion) fail(`expansion names unknown ticket "${expansionId}"`);
+  if (!contraction) fail(`contraction names unknown ticket "${contractionId}"`);
+  if (expansion.shape !== 'prerequisite') {
+    fail(`expansion ticket "${expansionId}" must have prerequisite shape`);
+  }
+
+  const groupTicketIds = [];
+  for (const group of migration.migration_groups) {
+    if (!group.independently_mergeable) {
+      fail(`migration group "${group.id}" must be independently mergeable`);
+    }
+    if (!group.green_independently && group.integration_point === null) {
+      fail(
+        `migration group "${group.id}" must record its required integration point`,
+      );
+    }
+    for (const ticketId of group.ticket_ids) {
+      const ticket = ticketsById.get(ticketId);
+      if (!ticket) {
+        fail(`migration group "${group.id}" names unknown ticket "${ticketId}"`);
+      }
+      if (!ticket.blockers.includes(expansionId)) {
+        fail(
+          `migration group ticket "${ticketId}" must depend on expansion "${expansionId}"`,
+        );
+      }
+      groupTicketIds.push(ticketId);
+    }
+  }
+  assertUnique(groupTicketIds, 'migration group tickets');
+  if (!haveSameMembers(contraction.blockers, groupTicketIds)) {
+    fail(
+      `contraction ticket "${contractionId}" must depend directly on every migration group ticket`,
+    );
+  }
+}
+
+function validateMigration(plan) {
+  validateMigrationMetadata(plan.migration);
+  if (plan.migration_strategy === 'normal') {
+    validateNormalMigration(plan.migration);
+    return;
+  }
+
+  const ticketsById = new Map(plan.tickets.map((ticket) => [ticket.id, ticket]));
+  if (plan.migration_strategy === 'prefactor') {
+    validatePrefactorMigration(plan, ticketsById);
+    return;
+  }
+  if (plan.migration_strategy === 'expand-contract') {
+    validateExpandContractMigration(plan, ticketsById);
+    return;
+  }
+  fail('migration_strategy must be "normal", "prefactor", or "expand-contract"');
+}
+
+function validateLineage(plan) {
+  requireArray(plan.lineage, 'lineage', { allowEmpty: true });
+  const ticketIds = new Set(plan.tickets.map(({ id }) => id));
+  const predecessors = [];
+  const successors = [];
+  for (const [index, record] of plan.lineage.entries()) {
+    const field = `lineage[${index}]`;
+    requireExactFields(
+      record,
+      ['kind', 'predecessor_ids', 'successor_ids'],
+      field,
+    );
+    if (!['split', 'combine', 'replace'].includes(record.kind)) {
+      fail(`${field}.kind must be "split", "combine", or "replace"`);
+    }
+    validateStringArray(record.predecessor_ids, `${field}.predecessor_ids`);
+    validateStringArray(record.successor_ids, `${field}.successor_ids`);
+    if (record.kind === 'split'
+      && (record.predecessor_ids.length !== 1
+        || record.successor_ids.length < 2)) {
+      fail(`${field} split must map one predecessor to multiple successors`);
+    }
+    if (record.kind === 'combine'
+      && (record.predecessor_ids.length < 2
+        || record.successor_ids.length !== 1)) {
+      fail(`${field} combine must map multiple predecessors to one successor`);
+    }
+    if (record.kind === 'replace'
+      && (record.predecessor_ids.length !== 1
+        || record.successor_ids.length !== 1)) {
+      fail(`${field} replace must map one predecessor to one successor`);
+    }
+    predecessors.push(...record.predecessor_ids);
+    successors.push(...record.successor_ids);
+  }
+  assertUnique(predecessors, 'lineage predecessors');
+  assertUnique(successors, 'lineage successors');
+  const predecessorIds = new Set(predecessors);
+  for (const predecessorId of predecessors) {
+    if (ticketIds.has(predecessorId)) {
+      fail(`lineage predecessor "${predecessorId}" is still a current ticket`);
+    }
+  }
+  for (const successorId of successors) {
+    if (!ticketIds.has(successorId) && !predecessorIds.has(successorId)) {
+      fail(`lineage successor "${successorId}" does not reach a current ticket`);
+    }
+  }
+  const lineageGraph = new Map();
+  for (const record of plan.lineage) {
+    for (const predecessorId of record.predecessor_ids) {
+      lineageGraph.set(predecessorId, record.successor_ids);
+    }
+  }
+  const visiting = new Set();
+  const visited = new Set();
+  function visitLineage(id) {
+    if (visiting.has(id)) fail('replacement lineage must be acyclic');
+    if (visited.has(id) || !lineageGraph.has(id)) return;
+    visiting.add(id);
+    lineageGraph.get(id).forEach(visitLineage);
+    visiting.delete(id);
+    visited.add(id);
+  }
+  predecessors.forEach(visitLineage);
+}
+
+function validateDecisions(plan) {
+  requireArray(plan.decisions, 'decisions', { allowEmpty: true });
+  if (plan.status === 'ready' && plan.decisions.length > 0) {
+    fail('ready plan must not contain unresolved decisions');
+  }
+  if (plan.status === 'needs-decision' && plan.decisions.length === 0) {
+    fail('needs-decision plan must state at least one unresolved choice');
+  }
+  const requirementIds = new Set(plan.requirements.map(({ id }) => id));
+  for (const [index, decision] of plan.decisions.entries()) {
+    const field = `decisions[${index}]`;
+    requireExactFields(
+      decision,
+      ['id', 'source', 'requirement_ids', 'choice', 'owner'],
+      field,
+    );
+    for (const name of ['id', 'choice', 'owner']) {
+      requireString(decision[name], `${field}.${name}`);
+    }
+    if (!['requirement', 'ticket-scope', 'planning-pressure'].includes(
+      decision.source,
+    )) {
+      fail(
+        `${field}.source must be "requirement", "ticket-scope", or "planning-pressure"`,
+      );
+    }
+    validateStringArray(decision.requirement_ids, `${field}.requirement_ids`);
+    for (const requirementId of decision.requirement_ids) {
+      if (!requirementIds.has(requirementId)) {
+        fail(`${field} names unknown requirement "${requirementId}"`);
+      }
+    }
+  }
+  assertUnique(plan.decisions.map(({ id }) => id), 'decisions');
 }
 
 function assertAcyclic(tickets) {
@@ -192,15 +461,21 @@ function validateCoverage(plan) {
     if (!requirementIds.has(entry.requirement_id)) {
       fail(`${field} names unknown requirement "${entry.requirement_id}"`);
     }
-    if (!['covered', 'excluded'].includes(entry.disposition)) {
-      fail(`${field}.disposition must be "covered" or "excluded"`);
+    if (!['covered', 'excluded', 'unresolved'].includes(entry.disposition)) {
+      fail(`${field}.disposition must be "covered", "excluded", or "unresolved"`);
     }
     validateStringArray(entry.ticket_ids, `${field}.ticket_ids`, {
-      allowEmpty: entry.disposition === 'excluded',
+      allowEmpty: entry.disposition !== 'covered',
     });
     requireString(entry.reason, `${field}.reason`);
-    if (entry.disposition === 'excluded' && entry.ticket_ids.length > 0) {
-      fail(`${field} excluded requirement cannot name tickets`);
+    if (entry.disposition !== 'covered' && entry.ticket_ids.length > 0) {
+      fail(`${field} ${entry.disposition} requirement cannot name tickets`);
+    }
+    if (plan.status === 'ready' && entry.disposition === 'unresolved') {
+      fail(`${field} ready plan cannot leave a requirement unresolved`);
+    }
+    if (plan.status === 'needs-decision' && entry.disposition === 'covered') {
+      fail(`${field} needs-decision plan cannot claim ticket coverage`);
     }
     for (const ticketId of entry.ticket_ids) {
       if (!ticketIds.has(ticketId)) {
@@ -222,11 +497,36 @@ function validateCoverage(plan) {
   if (untracedTicket) {
     fail(`ticket "${untracedTicket.id}" is not traced to a covered requirement`);
   }
+  if (plan.status === 'needs-decision') {
+    const unresolvedRequirementIds = new Set(
+      plan.coverage_ledger
+        .filter(({ disposition }) => disposition === 'unresolved')
+        .map(({ requirement_id: requirementId }) => requirementId),
+    );
+    if (unresolvedRequirementIds.size === 0) {
+      fail('needs-decision plan must leave at least one requirement unresolved');
+    }
+    const decidedRequirementIds = new Set(
+      plan.decisions.flatMap(
+        ({ requirement_ids: decisionRequirementIds }) => decisionRequirementIds,
+      ),
+    );
+    for (const requirementId of unresolvedRequirementIds) {
+      if (!decidedRequirementIds.has(requirementId)) {
+        fail(`unresolved requirement "${requirementId}" has no stated decision`);
+      }
+    }
+    for (const requirementId of decidedRequirementIds) {
+      if (!unresolvedRequirementIds.has(requirementId)) {
+        fail(`decision names settled requirement "${requirementId}"`);
+      }
+    }
+  }
 }
 
 function validateFrontier(plan) {
   validateStringArray(plan.initial_frontier, 'initial_frontier', {
-    allowEmpty: false,
+    allowEmpty: plan.status === 'needs-decision',
   });
   const expected = plan.tickets
     .filter(({ blockers }) => blockers.length === 0)
@@ -241,34 +541,135 @@ function validatePlan(plan) {
     'schema',
     'status',
     'migration_strategy',
+    'migration',
     'requirements',
     'coverage_ledger',
     'tickets',
+    'lineage',
+    'decisions',
     'initial_frontier',
   ], 'plan');
-  if (plan.schema !== 'slice-plan/v1') {
-    fail('plan.schema must be "slice-plan/v1"');
+  if (plan.schema !== 'slice-plan/v2') {
+    fail('plan.schema must be "slice-plan/v2"');
   }
-  if (plan.status !== 'ready') {
-    fail('ordinary plan.status must be "ready"');
-  }
-  if (plan.migration_strategy !== 'normal') {
-    fail('ordinary plan.migration_strategy must be "normal"');
+  if (!['ready', 'needs-decision'].includes(plan.status)) {
+    fail('plan.status must be "ready" or "needs-decision"');
   }
   validateRequirements(plan);
-  requireArray(plan.tickets, 'tickets');
+  requireArray(plan.tickets, 'tickets', {
+    allowEmpty: plan.status === 'needs-decision',
+  });
   plan.tickets.forEach(validateTicket);
   assertUnique(plan.tickets.map(({ id }) => id), 'tickets');
-  assertUnique(
-    plan.tickets.flatMap(({ replaces }) => replaces),
-    'replacement lineage',
-  );
+  const ticketIdentities = plan.tickets.map(ticketIdentity);
+  if (new Set(ticketIdentities).size !== ticketIdentities.length) {
+    fail('tickets contain duplicate outcome and seam');
+  }
+  if (plan.status === 'ready') {
+    if (!['normal', 'prefactor', 'expand-contract'].includes(
+      plan.migration_strategy,
+    )) {
+      fail('migration_strategy must be "normal", "prefactor", or "expand-contract"');
+    }
+    validateMigration(plan);
+  } else {
+    if (plan.migration_strategy !== null || plan.migration !== null) {
+      fail('needs-decision plan must not invent a migration strategy');
+    }
+    if (plan.tickets.length > 0) {
+      fail('needs-decision plan must not contain publishable tickets');
+    }
+  }
+  validateLineage(plan);
+  validateDecisions(plan);
   validateTicketReferences(plan);
+  validatePrerequisites(plan);
   assertAcyclic(plan.tickets);
   assertTransitivelyMinimal(plan.tickets);
   validateCoverage(plan);
   validateFrontier(plan);
   return plan;
+}
+
+function ticketIdentity(ticket) {
+  return JSON.stringify([ticket.outcome, ticket.seam]);
+}
+
+function lineageRecordKey(record) {
+  return JSON.stringify([
+    record.kind,
+    [...record.predecessor_ids].sort(),
+    [...record.successor_ids].sort(),
+  ]);
+}
+
+function validateRegeneration(previousPlan, nextPlan) {
+  validatePlan(previousPlan);
+  validatePlan(nextPlan);
+  if (previousPlan.status !== 'ready' || nextPlan.status !== 'ready') {
+    fail('regeneration comparison requires ready plans');
+  }
+  const previousById = new Map(
+    previousPlan.tickets.map((ticket) => [ticket.id, ticket]),
+  );
+  const nextById = new Map(nextPlan.tickets.map((ticket) => [ticket.id, ticket]));
+  const previousByIdentity = new Map(
+    previousPlan.tickets.map((ticket) => [ticketIdentity(ticket), ticket]),
+  );
+  const nextByIdentity = new Map(
+    nextPlan.tickets.map((ticket) => [ticketIdentity(ticket), ticket]),
+  );
+
+  for (const [id, previousTicket] of previousById) {
+    const nextTicket = nextById.get(id);
+    if (nextTicket && ticketIdentity(previousTicket) !== ticketIdentity(nextTicket)) {
+      fail(`regeneration reuses identity "${id}" for changed work`);
+    }
+  }
+  for (const [identity, previousTicket] of previousByIdentity) {
+    const nextTicket = nextByIdentity.get(identity);
+    if (nextTicket && nextTicket.id !== previousTicket.id) {
+      fail(
+        `unchanged candidate "${previousTicket.id}" must preserve its identity`,
+      );
+    }
+  }
+
+  const previousLineageKeys = new Set(
+    previousPlan.lineage.map(lineageRecordKey),
+  );
+  const nextLineageKeys = new Set(nextPlan.lineage.map(lineageRecordKey));
+  for (const previousLineageKey of previousLineageKeys) {
+    if (!nextLineageKeys.has(previousLineageKey)) {
+      fail('regeneration must preserve existing replacement lineage');
+    }
+  }
+  const newLineage = nextPlan.lineage.filter(
+    (record) => !previousLineageKeys.has(lineageRecordKey(record)),
+  );
+  const lineageByPredecessor = new Map();
+  for (const record of newLineage) {
+    for (const predecessorId of record.predecessor_ids) {
+      if (!previousById.has(predecessorId)) {
+        fail(`lineage names unknown predecessor ticket "${predecessorId}"`);
+      }
+      if (nextById.has(predecessorId)) {
+        fail(`lineage predecessor "${predecessorId}" reuses a changed identity`);
+      }
+      lineageByPredecessor.set(predecessorId, record);
+    }
+    for (const successorId of record.successor_ids) {
+      if (previousById.has(successorId)) {
+        fail(`lineage successor "${successorId}" reuses a previous identity`);
+      }
+    }
+  }
+  for (const id of previousById.keys()) {
+    if (!nextById.has(id) && !lineageByPredecessor.has(id)) {
+      fail(`removed ticket "${id}" has no replacement lineage`);
+    }
+  }
+  return nextPlan;
 }
 
 function readPlan(planPath) {
@@ -282,9 +683,15 @@ function readPlan(planPath) {
 }
 
 function main(argv) {
-  if (argv.length !== 1) fail('usage: validate-plan.js <plan.json>');
-  validatePlan(readPlan(argv[0]));
-  process.stdout.write('Valid slice-plan/v1 ready plan\n');
+  if (argv.length < 1 || argv.length > 2) {
+    fail('usage: validate-plan.js <plan.json> [previous-plan.json]');
+  }
+  const plan = validatePlan(readPlan(argv[0]));
+  if (argv.length === 2) {
+    validateRegeneration(readPlan(argv[1]), plan);
+    process.stdout.write('Validated regeneration lineage\n');
+  }
+  process.stdout.write(`Valid slice-plan/v2 ${plan.status} plan\n`);
 }
 
 if (require.main === module) {
@@ -302,4 +709,5 @@ if (require.main === module) {
 module.exports = {
   PlanValidationError,
   validatePlan,
+  validateRegeneration,
 };

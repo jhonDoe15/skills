@@ -6,20 +6,24 @@ disable-model-invocation: true
 
 # Carve
 
-Carve owns the public planning outcome. It accepts settled requirements,
-obtains a complete plan from Slice Plan, presents the ready plan, and publishes
-it only when tracker-write authorization is explicit.
+Carve owns the public planning outcome. It accepts an authoritative requirement
+source, obtains a complete plan from Slice Plan, presents its result, and
+publishes only a validated ready plan when tracker-write authorization is
+explicit.
 
 ## Accepted context
 
-Require an authoritative requirement source with decided behavior,
-boundaries, exclusions, migration strategy, and risk decisions. Existing
-tickets may be input evidence, but Carve does not require another public
-ticket-generation workflow.
+Require an authoritative requirement source that identifies behavior,
+boundaries, exclusions, migration constraints, risk decisions, and any
+remaining uncertainty. Existing tickets and a previous generated plan may be
+input evidence, but Carve does not require another public ticket-generation
+workflow.
 
-If the input is a raw idea, contains unresolved decisions, or lacks an owner
-for a material risk boundary, stop before planning or tracker writes. Name the
-missing decision and return no publishable partial plan.
+If the input is a raw idea without authoritative requirements, stop before
+planning or tracker writes. If requirements, Ticket Scope flags, migration
+constraints, or planning pressure leave a human choice, preserve that
+uncertainty for Slice Plan's `needs-decision` result rather than inventing a
+decision or returning a publishable partial plan.
 
 ## Required dependency
 
@@ -30,17 +34,24 @@ a fallback.
 
 ## Build the ready plan
 
-1. Pass the settled requirement source to Slice Plan with
-   `migration_strategy: normal`.
-2. Receive one complete `slice-plan/v1` plan whose status is `ready`.
+1. Pass the requirement source, the decided `normal`, `prefactor`, or
+   `expand-contract` strategy when available, and the previous plan when
+   regenerating to Slice Plan.
+2. Receive one complete `slice-plan/v2` plan whose status is `ready` or
+   `needs-decision`.
 3. Run Slice Plan's deterministic validator against the generated plan.
-4. Check the coverage ledger with the source: every requirement is covered or
-   deliberately excluded, and every exclusion preserves the source decision.
-5. Inspect the ticket set semantically. Each ticket must fit one fresh
+   For regeneration, validate against the immutable previous plan too.
+4. If status is `needs-decision`, return the plan reference and every stated
+   choice with zero tracker writes. Do not continue ready-plan checks or
+   publication even when publication was conditionally authorized.
+5. For a ready plan, check the coverage ledger with the source: every
+   requirement is covered or deliberately excluded, and every exclusion
+   preserves the source decision.
+6. Inspect the ticket set semantically. Each ticket must fit one fresh
    implementation context and deliver an observable vertical outcome or a
    concrete prerequisite. Reject convenience foundations and skeletal
    layer-only work even when the graph validates.
-6. Confirm every blocker names direct consumption of concrete output,
+7. Confirm every blocker names direct consumption of concrete output,
    collisions remain non-blocking metadata, the graph is acyclic and
    transitively minimal, and the initial DAG frontier matches the direct
    edges.
@@ -50,7 +61,8 @@ the repository and return the failure without tracker writes.
 
 ## Publication gate
 
-Treat planning and publication as separate authorities.
+Treat planning and publication as separate authorities. Only `status: ready`
+reaches this gate; `needs-decision` always refuses publication.
 
 - Without explicit publication authorization, return the ready plan reference,
   coverage summary, ticket list, direct blockers, collisions, and initial
@@ -84,5 +96,7 @@ Complete with one of:
 - **Ready, not published** — validated plan reference and zero tracker writes.
 - **Published** — validated plan reference, every ticket reference, direct
   blocker references, collision records, and observed initial DAG frontier.
-- **Stopped** — the unresolved decision, validation failure, missing
-  dependency, or exact partial-write state; never a ready or published claim.
+- **Needs decision** — validated plan reference, every unresolved choice and
+  owner, and zero tracker writes.
+- **Stopped** — the validation failure, missing dependency, invalid requirement
+  source, or exact partial-write state; never a ready or published claim.

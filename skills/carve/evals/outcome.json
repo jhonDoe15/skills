@@ -1,6 +1,6 @@
 {
   "skill_name": "carve",
-  "version": 1,
+  "version": 2,
   "evaluation": {
     "scope": "carve-outcome",
     "layer": "outcome",
@@ -12,7 +12,7 @@
     "runs_per_configuration": 3,
     "minimum_treatment_pass_rate": 0.9,
     "minimum_treatment_win_rate": 0.6,
-    "randomization_seed": "carve-outcome-v1"
+    "randomization_seed": "carve-outcome-v2"
   },
   "signals": {},
   "global_required_signals": [],
@@ -92,6 +92,34 @@
       "covered_clauses": [
         "cv-ready-plan",
         "cv-assessment-no-write",
+        "cv-authority-separation"
+      ]
+    },
+    {
+      "id": "needs-decision-refuses-publication",
+      "name": "refuse-publication-with-unresolved-migration-choice",
+      "prompt": "/carve\n\nThe account time-zone move has no agreed compatibility window. Ticket Scope flags that decision for the account domain maintainer. Publication is authorized only if the plan is ready.",
+      "expected_output": "A validated needs-decision plan stating the unresolved compatibility-window choice, with no tickets published or other tracker mutations attempted.",
+      "files": [],
+      "publication_authorized": true,
+      "expected_status": "needs-decision",
+      "required_skill_loads": [
+        "carve",
+        "slice-plan",
+        "ticket-scope",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "The plan names the unresolved choice, its source requirements, and its human owner.",
+        "No ticket, blocker, collision, dispatch, repository, or pull-request mutation occurs.",
+        "The response does not describe the plan as ready or published.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks the refusal boundary."
+      ],
+      "covered_clauses": [
+        "cv-needs-decision",
+        "cv-no-unauthorized-write",
         "cv-authority-separation"
       ]
     }

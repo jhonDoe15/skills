@@ -197,10 +197,15 @@ function gradeCarveResult({
   }
   const checks = [];
   const artifact = resolvePlanArtifact(result, resolvePlan);
+  const expectedStatus = caseDefinition.expected_status || 'ready';
+  let artifactDetails = artifact.error || artifact.reference;
+  if (artifact.plan) {
+    artifactDetails = `expected=${expectedStatus} observed=${artifact.plan.status}`;
+  }
   checks.push(check(
-    'one valid ready plan artifact',
-    artifact.plan !== null,
-    artifact.error || artifact.reference,
+    `one valid ${expectedStatus} plan artifact`,
+    artifact.plan !== null && artifact.plan.status === expectedStatus,
+    artifactDetails,
   ));
   const response = result.observations.responses
     .map(({ text }) => text)
@@ -219,7 +224,18 @@ function gradeCarveResult({
     `missing=${missingLoads.join(',') || 'none'}`,
   ));
 
-  if (caseDefinition.publication_authorized) {
+  if (artifact.plan && artifact.plan.status === 'needs-decision') {
+    checks.push(check(
+      'needs-decision plan performs no tracker writes',
+      result.observations.attemptedMutations.length === 0,
+      `mutations=${result.observations.attemptedMutations.length}`,
+    ));
+    checks.push(check(
+      'needs-decision plan has no publication read-back',
+      observedPublication === null,
+      observedPublication === null ? 'none' : 'unexpected observation',
+    ));
+  } else if (caseDefinition.publication_authorized) {
     if (artifact.plan) {
       checks.push(...gradePublication(artifact.plan, result, observedPublication));
     } else {

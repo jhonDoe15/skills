@@ -1,7 +1,13 @@
 {
-  "schema": "slice-plan/v1",
+  "schema": "slice-plan/v2",
   "status": "ready",
   "migration_strategy": "normal",
+  "migration": {
+    "prefactor_ticket_ids": [],
+    "expansion_ticket_id": null,
+    "migration_groups": [],
+    "contraction_ticket_id": null
+  },
   "requirements": [
     {
       "id": "REQ-1",
@@ -31,12 +37,12 @@
       "id": "T1",
       "title": "Add the account time-zone column",
       "outcome": "The database can persist an optional account time zone.",
+      "seam": "account database schema",
       "shape": "prerequisite",
       "in_scope": ["Add the nullable column and migration verification."],
       "out_of_scope": ["Read or write the field through the API."],
       "acceptance": ["A migrated database accepts the new column."],
       "validation": ["Run the migration integration test."],
-      "replaces": [],
       "blockers": [],
       "consumes": [],
       "collisions": ["account persistence model"]
@@ -45,12 +51,12 @@
       "id": "T2",
       "title": "Expose account time-zone preferences",
       "outcome": "Clients can save and read an account time-zone preference.",
+      "seam": "account API",
       "shape": "vertical",
       "in_scope": ["Add API validation, persistence, and response serialization."],
       "out_of_scope": ["Change notification scheduling."],
       "acceptance": ["The account API round-trips a valid IANA time zone."],
       "validation": ["Run the account API integration test."],
-      "replaces": [],
       "blockers": ["T1"],
       "consumes": [
         {
@@ -61,5 +67,7 @@
       "collisions": ["account persistence model"]
     }
   ],
+  "lineage": [],
+  "decisions": [],
   "initial_frontier": ["T1"]
 }

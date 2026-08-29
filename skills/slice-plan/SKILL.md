@@ -7,13 +7,17 @@ description: Private set-level decomposition consumed by Carve; not a user-facin
 
 ## Interface
 
-Accept settled source requirements and return one complete `slice-plan/v1`
-ready plan. Own candidate decomposition, requirement coverage, stable identity
-and replacement lineage, direct dependencies, collision metadata, and the
-initial DAG frontier. Do not publish tickets or authorize later workflows.
+Accept authoritative source requirements, a migration strategy when decided,
+and the previous plan when regenerating. Return one complete `slice-plan/v2`
+plan with status `ready` or `needs-decision`. Own candidate decomposition,
+requirement coverage, stable identity and replacement lineage, direct
+dependencies, collision metadata, migration representation, and the initial
+DAG frontier. Do not publish tickets or authorize later workflows.
 
-If any requirement, migration decision, risk boundary, or exclusion remains
-unresolved, stop the ordinary path. Do not represent a partial plan as ready.
+If any requirement, Ticket Scope flag, migration decision, risk boundary, or
+planning pressure requires a human choice, return `needs-decision`. State each
+choice, its source requirements, and its owner. Such a plan contains no tickets,
+frontier, lineage, or invented migration strategy and cannot be published.
 
 ## Required dependencies
 
@@ -37,9 +41,12 @@ a replacement for the final plan.
 3. Ask Ticket Scope for one `fit`, `split`, `combine`, or `flag` judgment per
    candidate. Reconcile all splits and combinations at set level, then
    reassess the resulting candidates. Stop on every flag.
-4. Preserve a candidate ID when its outcome and seam remain the same. A split
-   or combination assigns new IDs and records the replaced IDs in `replaces`.
-   One replaced ID may appear in only one resulting ticket.
+4. Preserve a candidate ID when its outcome and seam remain the same. Changed
+   work never reuses an ID. Record one plan-level lineage entry for every
+   replacement: one predecessor to multiple successors for a split, multiple
+   predecessors to one successor for a combination, or one-to-one replacement.
+   Preserve existing lineage so every removed candidate still reaches a current
+   successor, and add every removed prior candidate to exactly one new entry.
 5. Reject framework shells, convenience foundations, skeletal layer-only
    tickets, and prerequisites without an independently verifiable concrete
    result. Each ticket must fit one fresh implementation context.
@@ -71,9 +78,20 @@ exactly as the tickets with no blockers.
 ## Keep shape and migration distinct
 
 Each ticket has `shape: vertical` or `shape: prerequisite`. Record rollout
-separately as `migration_strategy`. The ordinary settled path uses
-`migration_strategy: normal`; do not encode migration strategy in ticket shape
-or blocker metadata.
+separately as `migration_strategy: normal | prefactor | expand-contract`; do not
+encode migration strategy in ticket shape, lineage, collisions, or blocker
+metadata.
+
+- **Normal** has no migration phases.
+- **Prefactor** names only genuine shared prerequisite tickets. Each prefactor
+  has an independently verifiable concrete output consumed directly by
+  multiple later tickets. Reject a convenience foundation.
+- **Expand-contract** names one expansion prerequisite, one or more
+  independently mergeable migration groups, and one contraction ticket. Every
+  migration-group ticket directly consumes expansion output. Contraction
+  depends directly on every migration-group ticket that must finish first, not
+  transitively on expansion. Record the required integration point for a group
+  that cannot keep the system green independently.
 
 ## Produce and validate the plan
 
@@ -84,12 +102,20 @@ plans outside the repository. Before returning it, run:
 node skills/slice-plan/scripts/validate-plan.js <plan.json>
 ```
 
-The validator proves schema, coverage-ledger completeness, unique stable
-identity and lineage, blocker/output agreement, acyclicity, transitive
-minimality, and frontier correctness. Semantic independence, natural seams,
-and whether a prerequisite is genuine require evidence-bearing judgment; a
-valid graph alone does not prove them.
+For regeneration, also supply the immutable previous plan:
 
-Return the validated plan reference and its requirement, ticket, blocker,
-collision, and frontier counts. The output remains a plan only: it grants no
-tracker-write, dispatch, branch, PR, or implementation authority.
+```bash
+node skills/slice-plan/scripts/validate-plan.js <plan.json> <previous-plan.json>
+```
+
+The validator proves schema, coverage-ledger completeness, replacement-lineage
+structure, identity stability against a supplied prior plan, prerequisite
+consumption, migration ordering, blocker/output agreement, missing-target
+rejection, acyclicity, transitive minimality, and frontier correctness.
+Semantic independence and natural seams still require evidence-bearing
+judgment; a valid graph alone does not prove them.
+
+Return the validated plan reference and its status, requirement, ticket,
+blocker, collision, decision, and frontier counts. The output remains a plan
+only: it grants no tracker-write, dispatch, branch, PR, or implementation
+authority.
