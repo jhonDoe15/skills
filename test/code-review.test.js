@@ -61,7 +61,7 @@ test('production Skills define the whole-ticket multi-lens review contract', () 
   assert.match(codeReview, /Domain/);
   assert.match(codeReview, /Engineering\/Design/);
   assert.match(codeReview, /separate fresh/);
-  assert.match(codeReview, /one-lens result.*structurally invalid/is);
+  assert.match(codeReview, /missing planned lens.*structurally invalid/is);
   assert.match(codeReview, /read-only/i);
   assert.match(codeReview, /run manifest/);
   assert.match(codeReview, /immutable diff package/);
@@ -70,6 +70,9 @@ test('production Skills define the whole-ticket multi-lens review contract', () 
   assert.match(codeReview, /coordination dispositions/);
   assert.match(codeReview, /completeness state/);
   assert.match(codeReview, /Markdown brief/);
+  assert.match(codeReview, /behavior, contracts, state, dependencies, data, and failure handling/);
+  assert.match(codeReview, /change signals/i);
+  assert.match(codeReview, /specialist.*Context\s+limit/is);
 
   assert.match(worker, /complete Ticket outcome/);
   assert.match(worker, /engineering-guidance/);
@@ -90,6 +93,9 @@ test('production Skills define the whole-ticket multi-lens review contract', () 
   ]) {
     assert.match(worker, new RegExp(field, 'i'), field);
   }
+  assert.match(worker, /confidence inputs/i);
+  assert.match(worker, /unaffected.*lower-level coverage/is);
+  assert.match(worker, /underlying problem.*conclusion identity/is);
 
   assert.match(coordinator, /validates? structure/i);
   assert.match(coordinator, /groups? compatible duplicates/i);
@@ -97,6 +103,9 @@ test('production Skills define the whole-ticket multi-lens review contract', () 
   assert.match(coordinator, /unions? coverage/i);
   assert.match(coordinator, /preserves? worker conclusions/i);
   assert.match(coordinator, /does not.*second review/is);
+  assert.match(coordinator, /exact duplicate guidance/i);
+  assert.match(coordinator, /disagreement/i);
+  assert.match(coordinator, /worker-declared supersession/i);
 });
 
 function finding(id, workerId) {
@@ -112,6 +121,20 @@ function finding(id, workerId) {
       reference: 'diff://base..head/review-artifact',
       observation: 'The completeness state accepts one worker.',
     }],
+    confidence_inputs: {
+      evidence_quality: [{
+        reference: 'diff://base..head/review-artifact',
+        quality: 'direct',
+      }],
+      finding: {
+        context_limits: [],
+        rationale: 'Direct artifact evidence supports the finding.',
+      },
+      fix_direction: {
+        context_limits: [],
+        rationale: 'The required two-lens contract supports the direction.',
+      },
+    },
     impact: 'A partial review could be presented as complete.',
     affected_scope: ['skills/code-review'],
     highest_actionable_fix_direction:
@@ -121,6 +144,7 @@ function finding(id, workerId) {
     ],
     conclusion: `${workerId} concluded that two lenses are required.`,
     duplicate_key: 'requires-two-lenses',
+    conclusion_key: 'two-independent-lenses-required',
   };
 }
 
@@ -128,6 +152,28 @@ function immutableRange() {
   return {
     base: 'a'.repeat(40),
     head: 'b'.repeat(40),
+  };
+}
+
+function reviewPlan(mode = 'separate') {
+  const unchanged = mode === 'combined';
+  return {
+    consolidation: {
+      mode,
+      evidence: [
+        'behavior',
+        'contracts',
+        'state',
+        'dependencies',
+        'data',
+        'failure-handling',
+      ].map((dimension) => ({
+        dimension,
+        unchanged,
+        references: [`artifact://consolidation/${dimension}`],
+      })),
+    },
+    specialist_routing: [],
   };
 }
 
@@ -169,6 +215,7 @@ function reviewInput() {
   return {
     schema: 'code-review-input/v1',
     run_id: 'issue-42-review',
+    review_plan: reviewPlan(),
     ticket_outcome: {
       requirement_references: ['issue://42'],
       immutable_range: immutableRange(),
@@ -228,6 +275,107 @@ test('structural coordinator completes two lenses and rejects one lens', () => {
   assert.throws(
     () => coordinateReview(oneLens),
     /exactly one Domain and one Engineering\/Design worker/,
+  );
+});
+
+test('mechanical evidence permits one combined worker without weakening review structure', () => {
+  const input = reviewInput();
+  input.review_plan = reviewPlan('combined');
+  input.workers = [worker('combined-worker', 'Combined')];
+  input.artifacts.worker_candidate_streams = [
+    'artifact://combined/findings.jsonl',
+  ];
+  input.artifacts.worker_concern_coverage = [
+    'artifact://combined/coverage.json',
+  ];
+
+  const coordinated = coordinateReview(input);
+  assert.equal(coordinated.status, 'completed');
+  assert.deepEqual(coordinated.coordination.coverage_union.lenses, ['Combined']);
+  assert.equal(
+    coordinated.completeness.checks.some(
+      ({ id }) => id === 'planned-review-lenses',
+    ),
+    true,
+  );
+  assert.deepEqual(
+    coordinated.review_plan.consolidation.evidence.map(
+      ({ dimension, unchanged }) => [dimension, unchanged],
+    ),
+    [
+      ['behavior', true],
+      ['contracts', true],
+      ['state', true],
+      ['dependencies', true],
+      ['data', true],
+      ['failure-handling', true],
+    ],
+  );
+
+  const changedBehavior = structuredClone(input);
+  changedBehavior.review_plan.consolidation.evidence[0].unchanged = false;
+  assert.throws(
+    () => coordinateReview(changedBehavior),
+    /combined worker requires unchanged consolidation evidence/,
+  );
+});
+
+test('change signals route available specialists and retain unavailable capability gaps', () => {
+  const available = reviewInput();
+  available.review_plan.specialist_routing.push({
+    lens: 'Node Runtime',
+    category: 'technology',
+    signal_references: ['diff://base..head/package-json'],
+    capability: 'available',
+    worker_id: 'node-worker',
+    context_limit: null,
+  });
+  available.workers.push(worker('node-worker', 'Node Runtime'));
+  available.artifacts.worker_candidate_streams.push(
+    'artifact://node/findings.jsonl',
+  );
+  available.artifacts.worker_concern_coverage.push(
+    'artifact://node/coverage.json',
+  );
+
+  const routed = coordinateReview(available);
+  assert.equal(routed.status, 'completed');
+  assert.deepEqual(
+    routed.coordination.coverage_union.lenses,
+    ['Domain', 'Engineering/Design', 'Node Runtime'],
+  );
+  assert.deepEqual(
+    routed.review_plan.specialist_routing,
+    available.review_plan.specialist_routing,
+  );
+
+  const unavailable = reviewInput();
+  unavailable.review_plan.specialist_routing.push({
+    lens: 'Security',
+    category: 'specialist',
+    signal_references: ['issue://47/security-sensitive-change'],
+    capability: 'unavailable',
+    worker_id: null,
+    context_limit: 'No security specialist capability is installed.',
+  });
+  const incompleteCapability = coordinateReview(unavailable);
+  assert.equal(incompleteCapability.status, 'completed');
+  assert.deepEqual(
+    incompleteCapability.review_plan.specialist_routing,
+    unavailable.review_plan.specialist_routing,
+  );
+
+  const imitated = structuredClone(unavailable);
+  imitated.workers.push(worker('generalist-security', 'Security'));
+  imitated.artifacts.worker_candidate_streams.push(
+    'artifact://generalist-security/findings.jsonl',
+  );
+  imitated.artifacts.worker_concern_coverage.push(
+    'artifact://generalist-security/coverage.json',
+  );
+  assert.throws(
+    () => coordinateReview(imitated),
+    /unavailable specialist must not have a Review worker/,
   );
 });
 
@@ -657,6 +805,7 @@ test('coordination records only worker-declared region supersession', () => {
   domain.regions[0].analysis[2].status = 'superseded';
   domain.regions[0].supersession = {
     source_finding_id: domain.findings[0].id,
+    suppressed_finding_ids: [],
     reason: 'The requirement mismatch makes lower-level review irrelevant.',
   };
 
@@ -666,12 +815,191 @@ test('coordination records only worker-declared region supersession', () => {
     worker_id: 'domain-worker',
     region_id: 'review-artifact',
     source_finding_id: 'domain-worker-finding',
+    suppressed_finding_ids: [],
     superseded_levels: [
       'Engineering & Architecture',
       'Code Quality',
     ],
     reason: 'The requirement mismatch makes lower-level review irrelevant.',
   }]);
+});
+
+test('only a worker declaration suppresses lower-level findings in its own region', () => {
+  const input = reviewInput();
+  const domain = input.workers[0];
+  domain.findings[0].review_level = 'Requirements & Expectations';
+  const lowerFinding = {
+    ...structuredClone(domain.findings[0]),
+    id: 'domain-worker-lower-finding',
+    review_level: 'Code Quality',
+    severity: 'Minor',
+    duplicate_key: 'lower-level-style',
+    conclusion_key: 'lower-level-style-problem',
+  };
+  domain.findings.push(lowerFinding);
+  domain.regions[0].analysis[1].status = 'superseded';
+  domain.regions[0].analysis[2].status = 'superseded';
+  domain.regions[0].supersession = {
+    source_finding_id: domain.findings[0].id,
+    suppressed_finding_ids: [lowerFinding.id],
+    reason: 'The requirement fix materially replaces this Review region.',
+  };
+  domain.regions.push({
+    id: 'unaffected-region',
+    affected_scope: ['skills/review-worker'],
+    analysis: levels.map((level) => ({
+      level,
+      status: 'examined',
+      evidence: ['diff://base..head/unaffected-region'],
+    })),
+    supersession: null,
+  });
+
+  const coordinated = coordinateReview(input);
+  assert.deepEqual(
+    coordinated.coordination.dispositions.find(
+      ({ finding_id: findingId }) => findingId === lowerFinding.id,
+    ),
+    {
+      worker_id: 'domain-worker',
+      finding_id: lowerFinding.id,
+      disposition: 'superseded',
+      source_finding_id: 'domain-worker-finding',
+      region_id: 'review-artifact',
+    },
+  );
+  assert.equal(
+    coordinated.coordination.ordered_finding_ids.includes(lowerFinding.id),
+    false,
+  );
+  assert.deepEqual(
+    coordinated.workers[0].regions[1].analysis.map(({ status }) => status),
+    ['examined', 'examined', 'examined'],
+  );
+
+  const crossWorker = structuredClone(input);
+  crossWorker.workers[0].regions[0].supersession.suppressed_finding_ids = [
+    'engineering-worker-finding',
+  ];
+  assert.throws(
+    () => coordinateReview(crossWorker),
+    /suppressed finding from the same worker and Review region/,
+  );
+});
+
+test('coordination groups exact guidance and preserves finding and authority disagreements', () => {
+  const compatible = coordinateReview(reviewInput());
+  assert.equal(compatible.coordination.guidance_groups.length, concernIds.length);
+  assert.deepEqual(compatible.coordination.guidance_disagreements, []);
+
+  const input = reviewInput();
+  input.workers[1].findings[0].severity = 'Minor';
+  input.workers[1].guidance_coverage[0].sources = ['repository://conflicting-rule'];
+  const coordinated = coordinateReview(input);
+
+  assert.deepEqual(coordinated.coordination.groups, []);
+  assert.deepEqual(
+    coordinated.coordination.dispositions.map(
+      ({ finding_id: findingId, disposition }) => [findingId, disposition],
+    ),
+    [
+      ['domain-worker-finding', 'retained'],
+      ['engineering-worker-finding', 'retained'],
+    ],
+  );
+  assert.deepEqual(coordinated.coordination.disagreements, [{
+    duplicate_key: 'requires-two-lenses',
+    finding_ids: ['domain-worker-finding', 'engineering-worker-finding'],
+    worker_ids: ['domain-worker', 'engineering-worker'],
+    incompatible_fields: ['severity'],
+  }]);
+  assert.equal(coordinated.coordination.guidance_groups.length, concernIds.length - 1);
+  assert.deepEqual(
+    coordinated.coordination.guidance_disagreements.map(({ concern }) => concern),
+    ['intent-and-scope'],
+  );
+  assert.deepEqual(
+    coordinated.workers[1].guidance_coverage[0].sources,
+    ['repository://conflicting-rule'],
+  );
+
+  const retained = retainReview(coordinated);
+  const brief = retained.bodies.get(retained.run.artifacts.markdown_brief);
+  assert.match(
+    brief,
+    /Finding disagreements: requires-two-lenses \(severity\)/,
+  );
+  assert.match(brief, /Guidance disagreements: intent-and-scope/);
+});
+
+test('compatible subgroups for one problem retain distinct coordination identities', () => {
+  const input = reviewInput();
+  for (const [workerId, lens, category] of [
+    ['node-worker', 'Node Runtime', 'technology'],
+    ['security-worker', 'Security', 'specialist'],
+  ]) {
+    input.review_plan.specialist_routing.push({
+      lens,
+      category,
+      signal_references: [`diff://base..head/${workerId}`],
+      capability: 'available',
+      worker_id: workerId,
+      context_limit: null,
+    });
+    const specialist = worker(workerId, lens);
+    specialist.findings[0].conclusion_key = 'specialist-conclusion';
+    specialist.findings[0].severity = 'Minor';
+    input.workers.push(specialist);
+    input.artifacts.worker_candidate_streams.push(
+      `artifact://${workerId}/findings.jsonl`,
+    );
+    input.artifacts.worker_concern_coverage.push(
+      `artifact://${workerId}/coverage.json`,
+    );
+  }
+
+  const coordinated = coordinateReview(input);
+  assert.equal(coordinated.coordination.groups.length, 2);
+  assert.equal(
+    new Set(coordinated.coordination.groups.map(({ id }) => id)).size,
+    2,
+  );
+  assert.equal(
+    new Set(coordinated.coordination.ordered_finding_ids).size,
+    coordinated.coordination.ordered_finding_ids.length,
+  );
+});
+
+test('confidence records evidence quality and explicit Context-limit effects', () => {
+  const input = reviewInput();
+  const findingRecord = input.workers[0].findings[0];
+  findingRecord.context_limits = ['The external API contract is unavailable.'];
+  findingRecord.finding_confidence = 78;
+  findingRecord.fix_direction_confidence = 63;
+  findingRecord.confidence_inputs.finding.context_limits = [
+    'The external API contract is unavailable.',
+  ];
+  findingRecord.confidence_inputs.fix_direction.context_limits = [
+    'The external API contract is unavailable.',
+  ];
+  assert.equal(coordinateReview(input).status, 'completed');
+
+  const omittedLimit = structuredClone(input);
+  omittedLimit.workers[0].findings[0]
+    .confidence_inputs.fix_direction.context_limits = [];
+  omittedLimit.workers[0].findings[0]
+    .confidence_inputs.finding.context_limits = [];
+  assert.throws(
+    () => coordinateReview(omittedLimit),
+    /confidence inputs must account for every Context limit/,
+  );
+
+  const unaffectedScore = structuredClone(input);
+  unaffectedScore.workers[0].findings[0].fix_direction_confidence = 100;
+  assert.throws(
+    () => coordinateReview(unaffectedScore),
+    /Context limit must reduce Fix-direction confidence/,
+  );
 });
 
 test('contract coverage uses reciprocal scoped clause and case references', () => {
@@ -811,7 +1139,7 @@ test('partial worker failure retains evidence but cannot produce a final brief',
     run.completeness.checks.map(({ id }) => id),
     [
       'complete-ticket-outcome',
-      'two-independent-lenses',
+      'planned-review-lenses',
       'independent-guidance-coverage',
       'ordered-region-analysis',
       'complete-finding-records',
@@ -820,7 +1148,7 @@ test('partial worker failure retains evidence but cannot produce a final brief',
   );
   assert.equal(
     run.completeness.checks.find(
-      ({ id }) => id === 'two-independent-lenses',
+      ({ id }) => id === 'planned-review-lenses',
     ).state,
     'failed',
   );
@@ -894,6 +1222,7 @@ test('supersession source is an examined higher-level finding in the same region
     })),
     supersession: {
       source_finding_id: crossRegionWorker.findings[0].id,
+      suppressed_finding_ids: [],
       reason: 'A different region cannot supply this supersession.',
     },
   });
@@ -909,6 +1238,7 @@ test('supersession source is an examined higher-level finding in the same region
   invalidLevelWorker.regions[0].analysis[2].status = 'superseded';
   invalidLevelWorker.regions[0].supersession = {
     source_finding_id: invalidLevelWorker.findings[0].id,
+    suppressed_finding_ids: [],
     reason: 'The source finding is not at a preceding higher level.',
   };
   invalidLevelWorker.findings[0].review_level = 'Code Quality';
@@ -948,4 +1278,45 @@ test('role and outcome cases reference one committed nontrivial review scenario'
   assert.equal(defects.defects.length, 2);
   assert.match(diff, /calculateDiscount/);
   assert.match(diff, /subtotal >= 100/);
+});
+
+test('committed seeded and clean-negative cases cover every hardening branch', () => {
+  const relativePath = 'test/fixtures/code-review/hardening-cases.json';
+  const fixture = readJson(relativePath);
+  const expectedBranches = [
+    'mechanical-consolidation',
+    'dynamic-specialist-routing',
+    'worker-disagreement',
+    'worker-supersession',
+    'review-region-suppression',
+    'confidence-context-limits',
+    'partial-worker-failure',
+    'artifact-exposure',
+    'ordinary-nontrivial-preservation',
+    'production-dependency-boundary',
+  ];
+  assert.equal(fixture.schema, 'code-review-hardening-cases/v1');
+  assert.deepEqual(
+    new Set(fixture.cases.flatMap(({ branches }) => branches)),
+    new Set(expectedBranches),
+  );
+  assert.equal(fixture.cases.some(({ kind }) => kind === 'seeded'), true);
+  assert.equal(fixture.cases.some(({ kind }) => kind === 'clean-negative'), true);
+  assert.equal(
+    fixture.cases.every(({ assertions }) => assertions.length > 0),
+    true,
+  );
+
+  const definitions = [
+    require('../skills/code-review/evals').loadDefinitions(repositoryRoot)[0],
+    require('../skills/code-review/evals').loadDefinitions(repositoryRoot)[2],
+    require('../skills/review-worker/evals').loadDefinitions(repositoryRoot)[0],
+    require('../skills/review-coordinator/evals').loadDefinitions(repositoryRoot)[0],
+  ];
+  assert.equal(
+    definitions.every(({ evals }) => (
+      evals[0].files.includes(relativePath)
+    )),
+    true,
+  );
 });

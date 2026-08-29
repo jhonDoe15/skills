@@ -1,0 +1,75 @@
+{
+  "schema": "code-review-hardening-cases/v1",
+  "cases": [
+    {
+      "id": "reject-unsupported-combined-worker",
+      "kind": "seeded",
+      "branches": ["mechanical-consolidation"],
+      "assertions": [
+        "A combined worker is rejected when any required unchanged dimension lacks supporting evidence."
+      ]
+    },
+    {
+      "id": "route-signaled-specialist",
+      "kind": "seeded",
+      "branches": ["dynamic-specialist-routing", "artifact-exposure"],
+      "assertions": [
+        "An available specialist receives a distinct lens.",
+        "An unavailable capability remains a Context limit without a generalist imitation."
+      ]
+    },
+    {
+      "id": "preserve-worker-disagreement",
+      "kind": "seeded",
+      "branches": ["worker-disagreement"],
+      "assertions": [
+        "Severity, conclusion, authority, confidence, and fix-direction differences remain inspectable."
+      ]
+    },
+    {
+      "id": "bound-worker-supersession",
+      "kind": "seeded",
+      "branches": ["worker-supersession", "review-region-suppression"],
+      "assertions": [
+        "Only named lower-level findings in the declaring worker's Review region are suppressed.",
+        "Unaffected regions retain complete lower-level coverage."
+      ]
+    },
+    {
+      "id": "calibrate-confidence-from-limits",
+      "kind": "seeded",
+      "branches": ["confidence-context-limits"],
+      "assertions": [
+        "Evidence quality and every Context limit are retained as confidence inputs.",
+        "Confidence remains distinct from severity and priority."
+      ]
+    },
+    {
+      "id": "retain-partial-worker-failure",
+      "kind": "seeded",
+      "branches": ["partial-worker-failure", "artifact-exposure"],
+      "assertions": [
+        "Partial worker artifacts and failure evidence remain inspectable.",
+        "No Review brief or reviewed-ticket result is produced."
+      ]
+    },
+    {
+      "id": "ordinary-nontrivial-review-remains-separate",
+      "kind": "clean-negative",
+      "branches": ["ordinary-nontrivial-preservation"],
+      "assertions": [
+        "A nontrivial review retains separate Domain and Engineering/Design workers.",
+        "Clean Review regions remain represented without invented findings."
+      ]
+    },
+    {
+      "id": "canonical-dependencies-remain-fail-closed",
+      "kind": "clean-negative",
+      "branches": ["production-dependency-boundary"],
+      "assertions": [
+        "Missing production dependencies report the exact canonical name.",
+        "No test Adapter or copied fallback is reachable from production construction."
+      ]
+    }
+  ]
+}

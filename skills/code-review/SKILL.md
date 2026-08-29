@@ -33,14 +33,26 @@ failure:
 
 Use no copied fallback behavior and never select a test Adapter in production.
 
-## Run two fresh lenses
+## Plan fresh lenses
 
-Start separate fresh Review workers with these change-specific lenses:
+Use separate fresh Review workers by default with these change-specific lenses:
 
 1. **Domain** focuses on requirement meaning, user-visible behavior, domain
    invariants, and acceptance evidence.
 2. **Engineering/Design** focuses on responsibilities, architecture, technology,
    compatibility, failure behavior, maintainability, and validation.
+
+One combined worker is valid only when cited mechanical evidence shows that
+behavior, contracts, state, dependencies, data, and failure handling are all
+unchanged. Record one evidence result and its references for each dimension. A
+missing, false, or unsupported result requires separate Domain and
+Engineering/Design workers.
+
+Inspect change signals before dispatch. Add a fresh technology or specialist
+Review lens when the changed language, framework, protocol, risk, or requested
+scope requires it. Record the signals, capability decision, and assigned worker.
+When required specialist capability is unavailable, record that gap as a Context
+limit and run no general worker under the specialist label.
 
 Give each worker the complete Ticket outcome and the same immutable diff
 package. A worker receives the complete requirements, range, implementation
@@ -48,8 +60,9 @@ handoff, validation evidence, repository authority, and input artifact
 references. Neither worker receives the other worker's output or conclusions.
 
 Each worker must resolve Engineering Guidance independently. Do not inherit the
-implementation handoff's concern dispositions. A one-lens result is
-structurally invalid and cannot become a complete Review brief.
+implementation handoff's concern dispositions. A missing planned lens or an
+unsupported combined worker is structurally invalid and cannot become a complete
+Review brief.
 
 ## Retain the review run
 
@@ -57,8 +70,8 @@ Keep generated review artifacts outside the repository. Retain:
 
 - `run-manifest.json`, with run identity, complete Ticket outcome references,
   worker identities, lens provenance, immutable range, Ticket outcome
-  fingerprint, and an artifact index that binds each body by media type and
-  SHA-256 digest;
+  fingerprint, consolidation evidence, specialist routing decisions, and an
+  artifact index that binds each body by media type and SHA-256 digest;
 - `diff-package.json`, the immutable diff package and its base and head;
 - per-worker candidate streams containing complete finding records;
 - one per-worker concern coverage artifact, separate from findings;
@@ -77,7 +90,7 @@ inconsistent body makes the run incomplete.
 
 ## Coordinate structurally
 
-Give the coordinator the two unchanged worker outputs and retained references.
+Give the coordinator every planned worker output unchanged with retained references.
 The coordinator validates structure, groups compatible duplicates, sorts
 findings, unions coverage, preserves worker conclusions, and assembles the
 Review brief. It performs no second review and makes no new finding.
@@ -102,7 +115,7 @@ storage. It does not:
 
 ## Completion
 
-Complete only when both required lenses examined the same complete Ticket
-outcome, each independently resolved all Engineering Guidance concerns, all
-worker and coordinator structures validate, retained artifacts are inspectable,
-and the concise Review summary links the immutable range and final Review brief.
+Complete only when every required lens examined the same complete Ticket outcome,
+each worker independently resolved all Engineering Guidance concerns, all worker
+and coordinator structures validate, retained artifacts are inspectable, and the
+concise Review summary links the immutable range and final Review brief.

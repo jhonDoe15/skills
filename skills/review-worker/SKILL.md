@@ -54,9 +54,10 @@ For every region, examine Review levels in this order:
 Record the levels examined, evidence inspected, and any worker-declared
 supersession. When a finding at a higher level supersedes lower-level analysis
 for that same region, the source finding must be at an examined level preceding
-one contiguous superseded suffix. State the skipped levels and reason. Do not
-silently omit a region or level, and never use a finding from another region or
-worker as the source.
+one contiguous superseded suffix. Name each finding suppressed by that
+declaration, the skipped levels, and the reason. Unaffected Review regions retain
+complete lower-level coverage. Do not silently omit a region or level, and never
+use a finding from another region or worker as the source.
 
 Use the assigned lens to focus the work, not to narrow the input. Follow relevant
 evidence into repository history or surrounding code when needed. Route a
@@ -72,16 +73,22 @@ Each finding records:
 - Finding confidence from 0 through 100;
 - Fix-direction confidence from 0 through 100;
 - Context limits;
+- confidence inputs that identify evidence quality, the limits affecting each
+  value, and a rationale for each value;
 - evidence with source references;
 - impact;
 - affected scope;
+- stable underlying problem and conclusion identity for structural duplicate
+  comparison;
 - highest actionable fix direction; and
 - acceptance evidence that would show the fix is complete.
 
 Finding confidence measures support for the claim, scope, impact, and severity.
 Fix-direction confidence measures support for the proposed direction. Neither is
-a probability. Report no finding when evidence does not support one. A clean
-region still receives coverage.
+a probability, severity, or remediation priority. Each explicit Context limit
+must affect at least one confidence value, and limited or conflicting evidence
+cannot support an unaffected maximum value. Report no finding when evidence does
+not support one. A clean region still receives coverage.
 
 ## Return worker artifacts
 

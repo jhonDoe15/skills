@@ -25,11 +25,11 @@
     "dimensions": [
       {
         "id": "whole-ticket-dispatch",
-        "description": "Both fresh lenses receive the complete Ticket outcome and preserve independent provenance."
+        "description": "The evidence-backed consolidation decision and change signals select every required fresh lens; each worker receives the complete Ticket outcome and preserves independent provenance."
       },
       {
         "id": "artifact-completeness",
-        "description": "The run retains inspectable artifacts and cannot present a partial lens result as complete."
+        "description": "The run retains consolidation, specialist-routing, worker, disagreement, supersession, confidence, Context-limit, and failure evidence and cannot present a partial result as complete."
       },
       {
         "id": "review-boundary",
@@ -50,6 +50,7 @@
         "test/fixtures/code-review/scenario/validation.json",
         "test/fixtures/code-review/scenario/diff.patch",
         "test/fixtures/code-review/scenario/seeded-defects.json",
+        "test/fixtures/code-review/hardening-cases.json",
         "test/fixtures/code-review/scenario/repository/src/discount.js",
         "test/fixtures/code-review/scenario/repository/test/discount.test.js"
       ],
@@ -63,14 +64,19 @@
         "writing-foundation"
       ],
       "expectations": [
+        "Consolidation records all six unchanged dimensions; unsupported consolidation retains separate Domain and Engineering/Design workers.",
+        "Change signals route available technology or specialist lenses, while unavailable capability remains an explicit Context limit.",
         "Each worker receives the same complete Ticket outcome and immutable range while retaining distinct identity and lens provenance.",
         "Each worker resolves Engineering Guidance independently rather than inheriting implementation conclusions.",
         "The retained run exposes its manifest, diff package, worker streams and coverage, coordination, completeness, and Markdown brief.",
-        "A one-lens or structurally invalid result remains incomplete.",
+        "A missing planned lens, unsupported combined worker, or structurally invalid result remains incomplete.",
+        "A failed worker retains partial artifacts and structured failure evidence without producing a Review brief or reviewed-ticket result.",
         "The run performs no source, tracker, pull-request, dependency, or release mutation.",
         "Blind model judgment and sampled human review assess semantic review quality from cited evidence."
       ],
       "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr47-consolidation-and-specialist-routing"},
+        {"scope": "issue-42-code-review", "id": "cr47-artifact-exposure-and-partial-failure"},
         {"scope": "issue-42-code-review", "id": "cr-complete-ticket-input"},
         {"scope": "issue-42-code-review", "id": "cr-two-fresh-lenses"},
         {"scope": "issue-42-code-review", "id": "cr-retained-artifacts"},

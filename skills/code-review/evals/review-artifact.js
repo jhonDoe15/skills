@@ -13,7 +13,15 @@ const CONCERNS = [
   'maintainer-legibility',
   'evidence-and-validation',
 ];
-const LENSES = ['Domain', 'Engineering/Design'];
+const BASE_LENSES = ['Domain', 'Engineering/Design'];
+const CONSOLIDATION_DIMENSIONS = [
+  'behavior',
+  'contracts',
+  'state',
+  'dependencies',
+  'data',
+  'failure-handling',
+];
 const LEVELS = [
   'Requirements & Expectations',
   'Engineering & Architecture',
@@ -28,7 +36,7 @@ const DISPOSITIONS = new Set([
 const ANALYSIS_STATUSES = new Set(['examined', 'superseded']);
 const COMPLETENESS_CHECKS = [
   'complete-ticket-outcome',
-  'two-independent-lenses',
+  'planned-review-lenses',
   'independent-guidance-coverage',
   'ordered-region-analysis',
   'complete-finding-records',
@@ -192,6 +200,85 @@ function validateGuidanceCoverage(coverage, field, { complete = true } = {}) {
   }
 }
 
+function validateReviewPlan(plan) {
+  requireObject(plan, 'review_plan');
+  requireObject(plan.consolidation, 'review_plan.consolidation');
+  if (!['separate', 'combined'].includes(plan.consolidation.mode)) {
+    fail('review_plan.consolidation.mode must be separate or combined');
+  }
+  requireArray(plan.consolidation.evidence, 'review_plan.consolidation.evidence');
+  const dimensions = plan.consolidation.evidence.map(({ dimension }) => dimension);
+  requireExactMembers(
+    dimensions,
+    CONSOLIDATION_DIMENSIONS,
+    'review_plan.consolidation evidence dimensions',
+  );
+  for (const [index, record] of plan.consolidation.evidence.entries()) {
+    const field = `review_plan.consolidation.evidence[${index}]`;
+    requireObject(record, field);
+    if (typeof record.unchanged !== 'boolean') {
+      fail(`${field}.unchanged must be a boolean`);
+    }
+    requireUniqueStrings(record.references, `${field}.references`);
+  }
+  if (plan.consolidation.mode === 'combined'
+    && plan.consolidation.evidence.some(({ unchanged }) => !unchanged)) {
+    fail('combined worker requires unchanged consolidation evidence');
+  }
+  requireArray(plan.specialist_routing, 'review_plan.specialist_routing');
+  const routedLenses = plan.specialist_routing.map(({ lens }) => lens);
+  requireUniqueStrings(
+    routedLenses,
+    'review_plan.specialist_routing lens identities',
+    { allowEmpty: true },
+  );
+  if (routedLenses.some((lens) => (
+    [...BASE_LENSES, 'Combined'].includes(lens)
+  ))) {
+    fail('specialist routing lens must be distinct from the base lenses');
+  }
+  const availableLenses = [];
+  const unavailableLenses = [];
+  for (const [index, route] of plan.specialist_routing.entries()) {
+    const field = `review_plan.specialist_routing[${index}]`;
+    requireObject(route, field);
+    requireString(route.lens, `${field}.lens`);
+    if (!['technology', 'specialist'].includes(route.category)) {
+      fail(`${field}.category must be technology or specialist`);
+    }
+    requireUniqueStrings(
+      route.signal_references,
+      `${field}.signal_references`,
+    );
+    if (!['available', 'unavailable'].includes(route.capability)) {
+      fail(`${field}.capability must be available or unavailable`);
+    }
+    if (route.capability === 'available') {
+      requireString(route.worker_id, `${field}.worker_id`);
+      if (route.context_limit !== null) {
+        fail(`${field}.context_limit must be null when capability is available`);
+      }
+      availableLenses.push(route.lens);
+    } else {
+      if (route.worker_id !== null) {
+        fail(`${field}.worker_id must be null when capability is unavailable`);
+      }
+      requireString(route.context_limit, `${field}.context_limit`);
+      unavailableLenses.push(route.lens);
+    }
+  }
+  const baseLenses = plan.consolidation.mode === 'combined'
+    ? ['Combined']
+    : [...BASE_LENSES];
+  return {
+    expectedLenses: [...baseLenses, ...availableLenses],
+    unavailableLenses,
+    availableRoutes: plan.specialist_routing.filter(
+      ({ capability }) => capability === 'available',
+    ),
+  };
+}
+
 function validateAnalysis(analysis, field) {
   requireArray(analysis, field);
   if (analysis.length !== LEVELS.length) {
@@ -226,6 +313,11 @@ function validateRegion(region, field) {
     region.supersession.source_finding_id,
     `${field}.supersession.source_finding_id`,
   );
+  requireUniqueStrings(
+    region.supersession.suppressed_finding_ids,
+    `${field}.supersession.suppressed_finding_ids`,
+    { allowEmpty: true },
+  );
   requireString(region.supersession.reason, `${field}.supersession.reason`);
   const firstSuperseded = region.analysis.findIndex(
     ({ status }) => status === 'superseded',
@@ -235,6 +327,67 @@ function validateRegion(region, field) {
       ({ status }) => status !== 'superseded',
     )) {
     fail(`${field} supersession must follow an examined higher level`);
+  }
+}
+
+function validateConfidenceInputs(finding, field) {
+  const inputs = finding.confidence_inputs;
+  requireObject(inputs, `${field}.confidence_inputs`);
+  requireArray(
+    inputs.evidence_quality,
+    `${field}.confidence_inputs.evidence_quality`,
+  );
+  const evidenceReferences = inputs.evidence_quality.map(
+    ({ reference }) => reference,
+  );
+  requireExactMembers(
+    evidenceReferences,
+    finding.evidence.map(({ reference }) => reference),
+    `${field}.confidence_inputs evidence references`,
+  );
+  for (const [index, record] of inputs.evidence_quality.entries()) {
+    const recordField = `${field}.confidence_inputs.evidence_quality[${index}]`;
+    requireObject(record, recordField);
+    if (!['direct', 'corroborated', 'limited', 'conflicting'].includes(
+      record.quality,
+    )) {
+      fail(`${recordField}.quality is invalid`);
+    }
+  }
+  for (const dimension of ['finding', 'fix_direction']) {
+    const dimensionField = `${field}.confidence_inputs.${dimension}`;
+    requireObject(inputs[dimension], dimensionField);
+    requireUniqueStrings(
+      inputs[dimension].context_limits,
+      `${dimensionField}.context_limits`,
+      { allowEmpty: true },
+    );
+    requireString(inputs[dimension].rationale, `${dimensionField}.rationale`);
+    if (inputs[dimension].context_limits.some(
+      (limit) => !finding.context_limits.includes(limit),
+    )) {
+      fail(`${dimensionField} contains an unknown Context limit`);
+    }
+  }
+  const accountedLimits = new Set([
+    ...inputs.finding.context_limits,
+    ...inputs.fix_direction.context_limits,
+  ]);
+  if (accountedLimits.size !== finding.context_limits.length) {
+    fail(`${field} confidence inputs must account for every Context limit`);
+  }
+  if (inputs.finding.context_limits.length > 0
+    && finding.finding_confidence === 100) {
+    fail(`${field} Context limit must reduce Finding confidence`);
+  }
+  if (inputs.fix_direction.context_limits.length > 0
+    && finding.fix_direction_confidence === 100) {
+    fail(`${field} Context limit must reduce Fix-direction confidence`);
+  }
+  if (inputs.evidence_quality.some(({ quality }) => (
+    quality === 'limited' || quality === 'conflicting'
+  )) && finding.finding_confidence === 100) {
+    fail(`${field} limited evidence quality must reduce Finding confidence`);
   }
 }
 
@@ -283,15 +436,23 @@ function validateFinding(finding, field, regionIds) {
     requireString(evidence.reference, `${field}.evidence[${index}].reference`);
     requireString(evidence.observation, `${field}.evidence[${index}].observation`);
   }
+  validateConfidenceInputs(finding, field);
   if (Object.hasOwn(finding, 'duplicate_key')) {
     requireString(finding.duplicate_key, `${field}.duplicate_key`);
+    requireString(finding.conclusion_key, `${field}.conclusion_key`);
   }
 }
 
-function validateWorker(worker, expectedReferences, expectedRange, field) {
+function validateWorker(
+  worker,
+  expectedReferences,
+  expectedRange,
+  expectedLenses,
+  field,
+) {
   requireObject(worker, field);
   requireString(worker.id, `${field}.id`);
-  if (!LENSES.includes(worker.lens)) fail(`${field}.lens is invalid`);
+  if (!expectedLenses.includes(worker.lens)) fail(`${field}.lens is invalid`);
   if (!['completed', 'failed'].includes(worker.status)) {
     fail(`${field}.status must be completed or failed`);
   }
@@ -359,10 +520,21 @@ function validateWorker(worker, expectedReferences, expectedRange, field) {
       || region.analysis[sourceLevel].status !== 'examined') {
       fail(`${field} supersession source must be an examined higher Review level`);
     }
+    for (const findingId of region.supersession.suppressed_finding_ids) {
+      const suppressed = findingsById.get(findingId);
+      if (!suppressed || suppressed.region_id !== region.id) {
+        fail(`${field} supersession must name a suppressed finding from the same worker and Review region`);
+      }
+      const suppressedLevel = LEVELS.indexOf(suppressed.review_level);
+      if (suppressedLevel < firstSuperseded
+        || region.analysis[suppressedLevel].status !== 'superseded') {
+        fail(`${field} supersession may suppress only declared lower Review levels`);
+      }
+    }
   }
 }
 
-function validateArtifacts(artifacts, status) {
+function validateArtifacts(artifacts, status, workerCount) {
   requireObject(artifacts, 'artifacts');
   for (const field of ARTIFACT_FIELDS) {
     if (!Object.hasOwn(artifacts, field)) {
@@ -382,8 +554,8 @@ function validateArtifacts(artifacts, status) {
     artifacts.worker_concern_coverage,
     'artifacts.worker_concern_coverage',
   );
-  if (artifacts.worker_candidate_streams.length !== LENSES.length
-    || artifacts.worker_concern_coverage.length !== LENSES.length) {
+  if (artifacts.worker_candidate_streams.length !== workerCount
+    || artifacts.worker_concern_coverage.length !== workerCount) {
     fail('artifacts must contain one candidate stream and coverage per lens');
   }
   for (const field of [
@@ -405,23 +577,42 @@ function validateInput(input) {
     fail('review input schema must be code-review-input/v1');
   }
   requireString(input.run_id, 'run_id');
+  const {
+    expectedLenses,
+    unavailableLenses,
+    availableRoutes,
+  } = validateReviewPlan(input.review_plan);
   const references = validateTicketOutcome(input.ticket_outcome);
   requireArray(input.workers, 'workers');
-  if (input.workers.length !== LENSES.length
-    || LENSES.some((lens) => (
+  if (input.workers.some(({ lens }) => unavailableLenses.includes(lens))) {
+    fail('unavailable specialist must not have a Review worker');
+  }
+  if (input.workers.length !== expectedLenses.length
+    || expectedLenses.some((lens) => (
       input.workers.filter((worker) => worker?.lens === lens).length !== 1
     ))) {
-    fail('review requires exactly one Domain and one Engineering/Design worker');
+    const requirement = expectedLenses.length === 1
+      ? 'exactly one Combined worker'
+      : 'exactly one Domain and one Engineering/Design worker';
+    fail(`review requires ${requirement}`);
   }
   const workerIds = input.workers.map(({ id }) => id);
   if (new Set(workerIds).size !== workerIds.length) {
     fail('review worker identities must be distinct');
+  }
+  for (const route of availableRoutes) {
+    if (!input.workers.some(({ id, lens }) => (
+      id === route.worker_id && lens === route.lens
+    ))) {
+      fail('available specialist route must identify its Review worker');
+    }
   }
   for (const [index, worker] of input.workers.entries()) {
     validateWorker(
       worker,
       references,
       input.ticket_outcome.immutable_range,
+      expectedLenses,
       `workers[${index}]`,
     );
   }
@@ -434,7 +625,7 @@ function validateInput(input) {
   const status = input.workers.every(({ status: workerStatus }) => (
     workerStatus === 'completed'
   )) ? 'completed' : 'incomplete';
-  validateArtifacts(input.artifacts, status);
+  validateArtifacts(input.artifacts, status, input.workers.length);
   return {
     status,
     completedWorkers: input.workers.filter(({ status: workerStatus }) => (
@@ -449,16 +640,80 @@ function completenessCheckState(id, status) {
     : 'failed';
 }
 
+const FINDING_COMPATIBILITY_FIELDS = [
+  ['conclusion', ({ conclusion_key: value }) => value],
+  ['review_level', ({ review_level: value }) => value],
+  ['severity', ({ severity: value }) => value],
+  ['finding_confidence', ({ finding_confidence: value }) => value],
+  [
+    'fix_direction_confidence',
+    ({ fix_direction_confidence: value }) => value,
+  ],
+  ['context_limits', ({ context_limits: value }) => [...value].sort()],
+  ['impact', ({ impact: value }) => value],
+  ['affected_scope', ({ affected_scope: value }) => [...value].sort()],
+  [
+    'highest_actionable_fix_direction',
+    ({ highest_actionable_fix_direction: value }) => value,
+  ],
+  [
+    'acceptance_evidence',
+    ({ acceptance_evidence: value }) => [...value].sort(),
+  ],
+];
+
 function findingCompatibilityKey(finding) {
   if (!finding.duplicate_key) return null;
   return JSON.stringify([
     finding.duplicate_key,
-    finding.review_level,
-    finding.severity,
-    finding.impact,
-    [...finding.affected_scope].sort(),
-    finding.highest_actionable_fix_direction,
+    ...FINDING_COMPATIBILITY_FIELDS.map(([, select]) => select(finding)),
   ]);
+}
+
+function incompatibleFindingFields(sources) {
+  return FINDING_COMPATIBILITY_FIELDS
+    .filter(([, select]) => (
+      new Set(sources.map(({ finding }) => canonicalJson(select(finding)))).size > 1
+    ))
+    .map(([field]) => field);
+}
+
+function coordinateGuidance(workers) {
+  const byConcern = new Map(CONCERNS.map((concern) => [concern, []]));
+  for (const worker of workers) {
+    for (const record of worker.guidance_coverage) {
+      byConcern.get(record.concern).push({
+        worker_id: worker.id,
+        record,
+      });
+    }
+  }
+  const groups = [];
+  const disagreements = [];
+  for (const concern of CONCERNS) {
+    const entries = byConcern.get(concern);
+    const byRecord = new Map();
+    for (const entry of entries) {
+      const key = canonicalJson(entry.record);
+      if (!byRecord.has(key)) byRecord.set(key, []);
+      byRecord.get(key).push(entry);
+    }
+    for (const matching of byRecord.values()) {
+      if (matching.length < 2) continue;
+      groups.push({
+        concern,
+        worker_ids: matching.map(({ worker_id: workerId }) => workerId),
+        record: structuredClone(matching[0].record),
+      });
+    }
+    if (byRecord.size > 1) {
+      disagreements.push({
+        concern,
+        entries: structuredClone(entries),
+      });
+    }
+  }
+  return { groups, disagreements };
 }
 
 function compareFindings(left, right) {
@@ -474,17 +729,41 @@ function buildCoordination(workers) {
     worker_id: worker.id,
     finding,
   })));
+  const supersessions = workers.flatMap((worker) => worker.regions
+    .filter(({ supersession }) => supersession !== null)
+    .map((region) => ({
+      worker_id: worker.id,
+      region_id: region.id,
+      source_finding_id: region.supersession.source_finding_id,
+      suppressed_finding_ids: [
+        ...region.supersession.suppressed_finding_ids,
+      ],
+      superseded_levels: region.analysis
+        .filter(({ status }) => status === 'superseded')
+        .map(({ level }) => level),
+      reason: region.supersession.reason,
+    })));
+  const suppressed = new Map(supersessions.flatMap((declaration) => (
+    declaration.suppressed_finding_ids.map((findingId) => [
+      findingId,
+      declaration,
+    ])
+  )));
+  const activeSources = sources.filter(
+    ({ finding }) => !suppressed.has(finding.id),
+  );
   const candidates = new Map();
-  for (const source of sources) {
+  for (const source of activeSources) {
     const key = findingCompatibilityKey(source.finding);
     if (!key) continue;
     if (!candidates.has(key)) candidates.set(key, []);
     candidates.get(key).push(source);
   }
-  const groups = [...candidates.values()]
-    .filter((group) => group.length > 1)
-    .map((group) => ({
-      id: `group:${group[0].finding.duplicate_key}`,
+  const groups = [...candidates.entries()]
+    .filter(([, group]) => group.length > 1)
+    .map(([compatibilityKey, group]) => ({
+      id: `group:${group[0].finding.duplicate_key}:`
+        + sha256(compatibilityKey).slice(0, 12),
       source_finding_ids: group.map(({ finding }) => finding.id),
       source_worker_ids: group.map(({ worker_id: workerId }) => workerId),
       rationale:
@@ -492,10 +771,40 @@ function buildCoordination(workers) {
       representative: group[0],
     }))
     .sort((left, right) => compareFindings(left.representative, right.representative));
+  const byDuplicateKey = new Map();
+  for (const source of activeSources) {
+    if (!source.finding.duplicate_key) continue;
+    if (!byDuplicateKey.has(source.finding.duplicate_key)) {
+      byDuplicateKey.set(source.finding.duplicate_key, []);
+    }
+    byDuplicateKey.get(source.finding.duplicate_key).push(source);
+  }
+  const disagreements = [];
+  for (const [duplicateKey, matching] of byDuplicateKey) {
+    if (matching.length < 2) continue;
+    const incompatibleFields = incompatibleFindingFields(matching);
+    if (incompatibleFields.length === 0) continue;
+    disagreements.push({
+      duplicate_key: duplicateKey,
+      finding_ids: matching.map(({ finding }) => finding.id),
+      worker_ids: matching.map(({ worker_id: workerId }) => workerId),
+      incompatible_fields: incompatibleFields,
+    });
+  }
   const grouped = new Map(groups.flatMap((group) => (
     group.source_finding_ids.map((findingId) => [findingId, group.id])
   )));
   const dispositions = sources.map(({ worker_id: workerId, finding }) => {
+    const declaration = suppressed.get(finding.id);
+    if (declaration) {
+      return {
+        worker_id: workerId,
+        finding_id: finding.id,
+        disposition: 'superseded',
+        source_finding_id: declaration.source_finding_id,
+        region_id: declaration.region_id,
+      };
+    }
     const groupId = grouped.get(finding.id);
     if (groupId) {
       return {
@@ -511,18 +820,7 @@ function buildCoordination(workers) {
       disposition: 'retained',
     };
   });
-  const supersessions = workers.flatMap((worker) => worker.regions
-    .filter(({ supersession }) => supersession !== null)
-    .map((region) => ({
-      worker_id: worker.id,
-      region_id: region.id,
-      source_finding_id: region.supersession.source_finding_id,
-      superseded_levels: region.analysis
-        .filter(({ status }) => status === 'superseded')
-        .map(({ level }) => level),
-      reason: region.supersession.reason,
-    })));
-  const retained = sources
+  const retained = activeSources
     .filter(({ finding }) => !grouped.has(finding.id))
     .sort(compareFindings);
   const orderedFindingIds = [
@@ -534,9 +832,13 @@ function buildCoordination(workers) {
       right.representative,
     ))
     .map(({ id }) => id);
+  const guidance = coordinateGuidance(workers);
 
   return {
     groups: groups.map(({ representative, ...group }) => group),
+    disagreements,
+    guidance_groups: guidance.groups,
+    guidance_disagreements: guidance.disagreements,
     dispositions,
     supersessions,
     ordered_finding_ids: orderedFindingIds,
@@ -719,6 +1021,27 @@ function retainedArtifactEntries(run, fingerprint) {
   ));
   if (run.status === 'completed') {
     const findingIds = run.coordination.ordered_finding_ids.join(', ') || 'none';
+    const findingDisagreements = run.coordination.disagreements
+      .map(({ duplicate_key: key, incompatible_fields: fields }) => (
+        `${key} (${fields.join(', ')})`
+      ))
+      .join('; ') || 'none';
+    const guidanceDisagreements = run.coordination.guidance_disagreements
+      .map(({ concern }) => concern)
+      .join(', ') || 'none';
+    const supersessions = run.coordination.supersessions
+      .map(({ worker_id: workerId, region_id: regionId }) => (
+        `${workerId}:${regionId}`
+      ))
+      .join(', ') || 'none';
+    const contextLimits = [
+      ...run.workers.flatMap(({ findings }) => (
+        findings.flatMap(({ context_limits: limits }) => limits)
+      )),
+      ...run.review_plan.specialist_routing
+        .filter(({ capability }) => capability === 'unavailable')
+        .map(({ context_limit: limit }) => limit),
+    ];
     entries.push({
       kind: 'markdown-brief',
       reference: run.artifacts.markdown_brief,
@@ -731,6 +1054,10 @@ function retainedArtifactEntries(run, fingerprint) {
           + `..${run.ticket_outcome.immutable_range.head}`,
         `Status: ${run.status}`,
         `Ordered findings: ${findingIds}`,
+        `Finding disagreements: ${findingDisagreements}`,
+        `Guidance disagreements: ${guidanceDisagreements}`,
+        `Supersessions: ${supersessions}`,
+        `Context limits: ${[...new Set(contextLimits)].join('; ') || 'none'}`,
         '',
       ].join('\n'),
       worker: null,
@@ -819,7 +1146,7 @@ function validateRetainedArtifacts(run, resolveArtifact) {
 module.exports = {
   CONCERNS,
   LEVELS,
-  LENSES,
+  LENSES: BASE_LENSES,
   ReviewArtifactError,
   coordinateReview,
   retainReview,
