@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { spawnSync } = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -50,10 +51,16 @@ const COMPLETED_DISPATCH_ARTIFACTS = {
   'fixture://reviewed-ticket/B': 'reviewed-ticket-B.json',
   'fixture://reviewed-ticket/C': 'reviewed-ticket-C.json',
   'fixture://reviewed-ticket/D': 'reviewed-ticket-D.json',
+  'fixture://retained-reviewed-ticket/A': 'retained-reviewed-ticket-A.json',
+  'fixture://canonical-reviewed-ticket/A': 'canonical-reviewed-ticket.json',
 };
 
 function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+}
+
+function readDispatchFixture(fileName) {
+  return readJson(path.join(DISPATCH_FIXTURE_ROOT, fileName));
 }
 
 function resolveCompletedDispatchArtifact(reference) {
@@ -63,33 +70,38 @@ function resolveCompletedDispatchArtifact(reference) {
   ));
 }
 
-function minimalArtifact() {
-  return {
-    schema: 'dispatch-work-artifact/v1',
-    source_dag: {
-      identity: 'fixture://published-dag/ordinary-frontier',
-      published: true,
-      ready: true,
-      tickets: [],
-      dependencies: [],
-    },
-    authorization: {
-      explicit: true,
-      granted: true,
-      source: 'fixture://authorization/dispatch',
-    },
-    frontier_calculations: [],
-    ticket_lifecycles: [],
-    completion_events: [],
-    dependency_transitions: [],
-    synthesis: [],
-    final_state: {
-      status: 'completed',
-      open_tickets: [],
-      active_tickets: [],
-      completed_tickets: [],
-    },
+function validateResumedArtifact(
+  artifact,
+  resolveArtifact = resolveCompletedDispatchArtifact,
+) {
+  return validateDispatchArtifact(artifact, { resolveArtifact });
+}
+
+function refreshExecutionFingerprint(artifact) {
+  function canonicalize(value) {
+    if (Array.isArray(value)) return value.map(canonicalize);
+    if (!value || typeof value !== 'object') return value;
+    return Object.fromEntries(
+      Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]),
+    );
+  }
+  const inputs = {
+    execution_context: artifact.execution_context,
+    executor: artifact.executor,
   };
+  const digest = crypto.createHash('sha256')
+    .update(JSON.stringify(canonicalize(inputs)))
+    .digest('hex');
+  artifact.resume.execution_fingerprint.current = `sha256:${digest}`;
+  if (artifact.resume.requested) {
+    artifact.resume.execution_fingerprint.retained = `sha256:${digest}`;
+    artifact.resume.execution_fingerprint.retained_inputs =
+      structuredClone(inputs);
+  }
+}
+
+function minimalArtifact() {
+  return readDispatchFixture('completed-dispatch.json');
 }
 
 test('dispatch rejects absent explicit authorization before execution', () => {
@@ -113,6 +125,36 @@ test('dispatch requires a published ready DAG rather than a plan artifact', () =
       field,
     );
   }
+});
+
+test('dispatch requires the complete hardening evidence envelope', () => {
+  const requiredFields = [
+    'resume',
+    'execution_context',
+    'executor',
+    'collision_constraints',
+    'worktrees',
+    'pr_maintenance',
+    'unresolved_systematic_concerns',
+  ];
+  for (const field of requiredFields) {
+    const artifact = readDispatchFixture('completed-dispatch.json');
+    delete artifact[field];
+    assert.throws(
+      () => validateDispatchArtifact(artifact),
+      /retained dispatch evidence/,
+      field,
+    );
+  }
+
+  const incompleteExecutionContext =
+    readDispatchFixture('completed-dispatch.json');
+  incompleteExecutionContext.execution_context.canonical_dependencies.pop();
+  refreshExecutionFingerprint(incompleteExecutionContext);
+  assert.throws(
+    () => validateDispatchArtifact(incompleteExecutionContext),
+    /execution context/,
+  );
 });
 
 test('fixture Adapters normalize observed dispatch and reviewed-ticket evidence', async (t) => {
@@ -230,6 +272,19 @@ test('fixture Adapters normalize observed dispatch and reviewed-ticket evidence'
     resolveArtifact: resolveCompletedDispatchArtifact,
     artifactChecks,
   });
+
+  const duplicateReview = structuredClone(takeTicketResult);
+  duplicateReview.observations.toolUses.push({
+    name: 'code-review.invoke:A',
+    outcome: 'succeeded',
+  });
+  assert.throws(
+    () => gradeDispatchResult(duplicateReview, {
+      resolveArtifact: resolveCompletedDispatchArtifact,
+      artifactChecks,
+    }),
+    /duplicate per-ticket Code Review/,
+  );
 });
 
 function createPackageFixture(t, skillNames) {
@@ -493,6 +548,419 @@ test('only complete authoritative reviewed-ticket results advance the DAG', () =
   assert.throws(
     () => validateDispatchArtifact(artifact),
     /complete authoritative reviewed-ticket result/,
+  );
+});
+
+test('resume verifies fingerprints and skips only completed lifecycle work', () => {
+  const artifact = readDispatchFixture('resumed-dispatch.json');
+
+  assert.strictEqual(validateResumedArtifact(artifact), artifact);
+  assert.deepEqual(
+    artifact.resume.ticket_decisions,
+    [
+      {
+        ticket: 'A',
+        decision: 'skip-completed',
+        retained_result: 'fixture://retained-reviewed-ticket/A',
+      },
+      {
+        ticket: 'B',
+        decision: 'restart-incomplete',
+      },
+      {
+        ticket: 'C',
+        decision: 'preserve-terminal',
+      },
+      {
+        ticket: 'D',
+        decision: 'preserve-terminal',
+      },
+      {
+        ticket: 'E',
+        decision: 'preserve-terminal',
+      },
+    ],
+  );
+  assert.deepEqual(artifact.final_state.failed_tickets, ['C']);
+  assert.deepEqual(artifact.final_state.retryable_tickets, ['D']);
+  assert.deepEqual(artifact.final_state.human_decision_tickets, ['E']);
+
+  const changedDag = structuredClone(artifact);
+  changedDag.source_dag.identity = 'fixture://published-dag/resume-v2';
+  assert.throws(
+    () => validateResumedArtifact(changedDag),
+    /source DAG fingerprint/,
+  );
+
+  const changedFingerprintInputs = structuredClone(artifact);
+  changedFingerprintInputs.execution_context.repositories =
+    ['fixture://repository/other'];
+  assert.throws(
+    () => validateResumedArtifact(changedFingerprintInputs),
+    /execution fingerprint/,
+  );
+
+  const freshArtifact = readDispatchFixture('completed-dispatch.json');
+  freshArtifact.source_dag.identity =
+    'fixture://published-dag/ordinary-frontier-v2';
+  assert.throws(
+    () => validateDispatchArtifact(freshArtifact),
+    /source DAG fingerprint/,
+  );
+
+  assert.throws(
+    () => validateResumedArtifact(artifact, (reference) => {
+      const retained = resolveCompletedDispatchArtifact(reference);
+      retained.status = 'incomplete';
+      return retained;
+    }),
+    /complete authoritative reviewed-ticket/,
+  );
+
+  const unboundCanonical = structuredClone(artifact);
+  unboundCanonical.resume.ticket_decisions[0].retained_result =
+    'fixture://canonical-reviewed-ticket/A';
+  assert.throws(
+    () => validateResumedArtifact(unboundCanonical),
+    /exact skipped ticket/,
+  );
+
+  assert.throws(
+    () => validateResumedArtifact(artifact, (reference) => {
+      if (reference !== 'fixture://retained-reviewed-ticket/A') {
+        return resolveCompletedDispatchArtifact(reference);
+      }
+      const binding = readDispatchFixture('retained-reviewed-ticket-A.json');
+      binding.ticket = 'B';
+      binding.invocation.ticket = 'B';
+      binding.completion.ticket = 'B';
+      return binding;
+    }),
+    /exact skipped ticket/,
+  );
+
+  for (const { name, mutate } of [
+    {
+      name: 'stale source DAG',
+      mutate(candidate) {
+        candidate.resume.source_dag_fingerprint.current = 'sha256:changed-source';
+      },
+    },
+    {
+      name: 'mismatched execution inputs',
+      mutate(candidate) {
+        candidate.resume.execution_fingerprint.current =
+          'sha256:changed-execution';
+      },
+    },
+    {
+      name: 'partial retained evidence',
+      mutate(candidate) {
+        candidate.resume.evidence_status = 'partial';
+      },
+    },
+    {
+      name: 'malformed fingerprint',
+      mutate(candidate) {
+        candidate.resume.source_dag_fingerprint.retained = 'sha256:short';
+        candidate.resume.source_dag_fingerprint.current = 'sha256:short';
+      },
+    },
+    {
+      name: 'arbitrary matching digests',
+      mutate(candidate) {
+        const arbitrary = `sha256:${'c'.repeat(64)}`;
+        candidate.resume.source_dag_fingerprint.retained = arbitrary;
+        candidate.resume.source_dag_fingerprint.current = arbitrary;
+      },
+    },
+    {
+      name: 'incomplete ticket skipped',
+      mutate(candidate) {
+        candidate.resume.ticket_decisions[1].decision = 'skip-completed';
+        candidate.resume.ticket_decisions[1].retained_result =
+          'fixture://reviewed-ticket/B';
+      },
+    },
+  ]) {
+    const candidate = structuredClone(artifact);
+    mutate(candidate);
+    assert.throws(
+      () => validateResumedArtifact(candidate),
+      /(?:resume evidence|fingerprint)/,
+      name,
+    );
+  }
+});
+
+test('PR maintenance requires authorization at a bounded test seam', async (t) => {
+  const artifact = readDispatchFixture('resumed-dispatch.json');
+  assert.strictEqual(validateResumedArtifact(artifact), artifact);
+
+  const unauthorizedMutation = structuredClone(artifact);
+  unauthorizedMutation.pr_maintenance[0].attempted_mutations.push({
+    id: 'unauthorized-A-1',
+    action: 'refresh-pr',
+  });
+  assert.throws(
+    () => validateResumedArtifact(unauthorizedMutation),
+    /PR maintenance authorization/,
+  );
+  const ambiguousAuthorization = structuredClone(artifact);
+  delete ambiguousAuthorization.pr_maintenance[0].authorization.granted;
+  assert.throws(
+    () => validateResumedArtifact(ambiguousAuthorization),
+    /PR maintenance authorization/,
+  );
+
+  const outOfScopeMutation = structuredClone(artifact);
+  outOfScopeMutation.pr_maintenance[1].attempted_mutations[0].target =
+    'fixture://pr/99';
+  assert.throws(
+    () => validateResumedArtifact(outOfScopeMutation),
+    /PR maintenance authorization tuple/,
+  );
+
+  const unprovenCompletion = structuredClone(artifact);
+  unprovenCompletion.pr_maintenance[1].completed_mutations[0].outcome =
+    'failed';
+  assert.throws(
+    () => validateResumedArtifact(unprovenCompletion),
+    /completed PR mutation evidence/,
+  );
+
+  const crossPairedAuthorization = structuredClone(artifact);
+  const crossPairedMaintenance = crossPairedAuthorization.pr_maintenance[1];
+  crossPairedMaintenance.authorization.scope.tuples.push({
+    repository: 'fixture://repository/other',
+    action: 'close-pr',
+    target: 'fixture://pr/99',
+  });
+  crossPairedAuthorization.execution_context.repositories.push(
+    'fixture://repository/other',
+  );
+  for (const mutation of [
+    crossPairedMaintenance.attempted_mutations[0],
+    crossPairedMaintenance.completed_mutations[0],
+  ]) {
+    mutation.repository = 'fixture://repository/other';
+  }
+  refreshExecutionFingerprint(crossPairedAuthorization);
+  assert.throws(
+    () => validateResumedArtifact(crossPairedAuthorization),
+    /exact PR maintenance authorization tuple/,
+  );
+
+  const {
+    createPrMaintenanceAdapter,
+  } = require('./fixtures/dispatch-work/pr-maintenance-adapter');
+  const packageRoot = createPackageFixture(t, COMPLETE_DISPATCH_CLOSURE);
+  const invocation = {
+    requestId: 'pr-maintenance-authorization',
+    skill: 'dispatch-work',
+    prompt: 'Observe bounded PR maintenance authorization behavior.',
+    model: 'fixture-model',
+  };
+  const denied = await executeTest({
+    repositoryRoot: packageRoot,
+    adapter: createPrMaintenanceAdapter({ authorizationGranted: false }),
+    invocation,
+  });
+  const authorized = await executeTest({
+    repositoryRoot: packageRoot,
+    adapter: createPrMaintenanceAdapter({ authorizationGranted: true }),
+    invocation,
+  });
+
+  assert.deepEqual(denied.observations.attemptedMutations, []);
+  assert.match(denied.observations.responses[0].text, /authorization required/);
+  assert.deepEqual(authorized.observations.attemptedMutations, [{
+    operation: 'refresh-pr',
+    target: 'fixture://pr/42',
+    outcome: 'succeeded-in-sandbox',
+  }]);
+});
+
+test('collision scheduling preserves unrelated concurrency within executor capacity', () => {
+  const artifact = readDispatchFixture('collision-dispatch.json');
+
+  assert.strictEqual(validateDispatchArtifact(artifact), artifact);
+  assert.deepEqual(
+    artifact.frontier_calculations.map(({ eligible, selected }) => ({
+      eligible,
+      selected,
+    })),
+    [
+      { eligible: ['A', 'B', 'C'], selected: ['A', 'C'] },
+      { eligible: ['B'], selected: [] },
+      { eligible: ['B'], selected: ['B'] },
+      { eligible: [], selected: [] },
+    ],
+  );
+  assert.deepEqual(artifact.source_dag.dependencies, []);
+  assert.equal(artifact.executor.selected.scope, 'repository');
+  assert.equal(artifact.executor.selected.value, 2);
+
+  const collidingSelection = structuredClone(artifact);
+  collidingSelection.frontier_calculations[0].selected = ['A', 'B'];
+  collidingSelection.frontier_calculations[0].deferred = [{
+    ticket: 'C',
+    reason: 'capacity',
+    conflicts_with: [],
+  }];
+  assert.throws(
+    () => validateDispatchArtifact(collidingSelection),
+    /collision scheduling/,
+  );
+
+  const wrongPrecedence = structuredClone(artifact);
+  wrongPrecedence.executor.selected = {
+    scope: 'project',
+    value: 4,
+    source: 'fixture://config/project',
+  };
+  refreshExecutionFingerprint(wrongPrecedence);
+  assert.throws(
+    () => validateDispatchArtifact(wrongPrecedence),
+    /executor selection/,
+  );
+
+  const userConfigured = structuredClone(artifact);
+  userConfigured.executor.candidates.repository.value = null;
+  userConfigured.executor.candidates.project.value = null;
+  userConfigured.executor.selected = {
+    scope: 'user',
+    value: 8,
+    source: 'fixture://config/user',
+  };
+  refreshExecutionFingerprint(userConfigured);
+  assert.strictEqual(validateDispatchArtifact(userConfigured), userConfigured);
+});
+
+test('isolated worktrees preserve partial failure and systematic concerns', () => {
+  const artifact = readDispatchFixture('hardened-partial-dispatch.json');
+
+  assert.strictEqual(validateDispatchArtifact(artifact), artifact);
+  assert.deepEqual(artifact.final_state.completed_tickets, ['A', 'B', 'C']);
+  assert.deepEqual(artifact.final_state.retryable_tickets, ['F']);
+  assert.deepEqual(artifact.final_state.failed_tickets, ['D']);
+  assert.deepEqual(artifact.final_state.human_decision_tickets, ['E']);
+  assert.deepEqual(artifact.final_state.blocked_tickets, ['G']);
+  assert.deepEqual(
+    artifact.unresolved_systematic_concerns,
+    ['systematic-worktree-cleanup'],
+  );
+  assert.equal(artifact.worktrees[5].lifecycle_state, 'creation-failed');
+  assert.deepEqual(
+    artifact.worktrees[5].cleanup.diagnostic_artifacts,
+    ['artifact://diagnostics/worktree-F.json'],
+  );
+  assert.equal(
+    artifact.ticket_lifecycles.some(({ ticket }) => ticket === 'F'),
+    false,
+  );
+  for (const lifecycle of artifact.ticket_lifecycles) {
+    const worktree = artifact.worktrees.find(
+      ({ ticket }) => ticket === lifecycle.ticket,
+    );
+    assert.ok(worktree.created_sequence < lifecycle.started_sequence);
+    assert.equal(worktree.isolation_check.status, 'passed');
+  }
+
+  const sharedWorktree = structuredClone(artifact);
+  sharedWorktree.worktrees[1].path = sharedWorktree.worktrees[0].path;
+  assert.throws(
+    () => validateDispatchArtifact(sharedWorktree),
+    /worktree ownership/,
+  );
+
+  const missingBase = structuredClone(artifact);
+  delete missingBase.worktrees[0].base;
+  assert.throws(
+    () => validateDispatchArtifact(missingBase),
+    /worktree ownership.*base/,
+  );
+
+  const lateWorktree = structuredClone(artifact);
+  lateWorktree.worktrees[0].created_sequence =
+    lateWorktree.ticket_lifecycles[0].started_sequence;
+  assert.throws(
+    () => validateDispatchArtifact(lateWorktree),
+    /before its ticket lifecycle starts/,
+  );
+
+  const failedIsolation = structuredClone(artifact);
+  failedIsolation.worktrees[0].isolation_check.status = 'failed';
+  assert.throws(
+    () => validateDispatchArtifact(failedIsolation),
+    /worktree isolation/,
+  );
+
+  const discardedFailure = structuredClone(artifact);
+  discardedFailure.worktrees[3].lifecycle_state = 'removed';
+  discardedFailure.worktrees[3].cleanup = {
+    decision: 'remove-after-failure',
+    diagnostic_artifacts: [],
+  };
+  assert.throws(
+    () => validateDispatchArtifact(discardedFailure),
+    /failure diagnostics/,
+  );
+
+  const lostConcern = structuredClone(artifact);
+  lostConcern.unresolved_systematic_concerns = [];
+  assert.throws(
+    () => validateDispatchArtifact(lostConcern),
+    /systematic concern/,
+  );
+
+  const evidenceFreeConcern = structuredClone(artifact);
+  evidenceFreeConcern.synthesis[1].concerns[0].evidence.review_briefs = [];
+  assert.throws(
+    () => validateDispatchArtifact(evidenceFreeConcern),
+    /systematic concern.*evidence/,
+  );
+
+  const legacyStringConcern = structuredClone(artifact);
+  legacyStringConcern.synthesis[1].concerns[0] = 'unstructured concern';
+  assert.throws(
+    () => validateDispatchArtifact(legacyStringConcern),
+    /systematic concern disposition/,
+  );
+
+  const oneTicketConcern = structuredClone(artifact);
+  oneTicketConcern.synthesis[1].concerns[0].evidence = {
+    implementation_handoffs: ['artifact://implement/A.json'],
+    review_briefs: ['artifact://review/A.json'],
+  };
+  assert.throws(
+    () => validateDispatchArtifact(oneTicketConcern),
+    /at least two distinct ticket identities/,
+  );
+
+  const aliasedFutureTicketEvidence = structuredClone(artifact);
+  const ticketB = aliasedFutureTicketEvidence.ticket_lifecycles.find(
+    ({ ticket }) => ticket === 'B',
+  );
+  ticketB.result.implementation_handoff = 'artifact://implement/A.json';
+  aliasedFutureTicketEvidence.synthesis[1].inputs.implementation_handoffs =
+    ['artifact://implement/A.json'];
+  aliasedFutureTicketEvidence.synthesis[1].concerns = [];
+  aliasedFutureTicketEvidence.synthesis[1].recommendations = ['accept B'];
+  aliasedFutureTicketEvidence.unresolved_systematic_concerns = [];
+  aliasedFutureTicketEvidence.synthesis[0].concerns = [{
+    id: 'aliased-future-ticket',
+    scope: 'cross-ticket',
+    status: 'resolved',
+    disposition: 'accept',
+    evidence: {
+      implementation_handoffs: ['artifact://implement/A.json'],
+      review_briefs: ['artifact://review/A.json'],
+    },
+  }];
+  assert.throws(
+    () => validateDispatchArtifact(aliasedFutureTicketEvidence),
+    /duplicate synthesis evidence ownership/,
   );
 });
 
