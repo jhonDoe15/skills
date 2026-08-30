@@ -198,7 +198,9 @@ disposition. Preserve unresolved concerns across later frontier calculations.
 Every cross-ticket concern cites retained synthesis evidence associated with at
 least two distinct ticket identities. A later synthesis may cite its own inputs
 and earlier ordered synthesis inputs, but never unsynthesized or future
-evidence.
+evidence. Each implementation handoff and Review brief reference has exactly
+one ticket owner; reject aliased references before using them to establish
+cross-ticket evidence.
 Recommend one or more of:
 
 - acceptance;

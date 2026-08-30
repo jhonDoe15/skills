@@ -84,7 +84,7 @@
         "PR maintenance requires exact repository/action/target authorization tuples without Cartesian cross-pairing; denied authorization records a needed action with no mutation.",
         "Only complete authoritative reviewed-ticket results satisfy dependency edges.",
         "Independent work survives retryable, failed, and human-decision tickets while their dependents remain blocked.",
-        "Synthesis preserves unresolved systematic concerns citing evidence from at least two ticket identities without repeating per-ticket Code Review.",
+        "Synthesis rejects aliased evidence ownership and preserves unresolved systematic concerns citing current-or-prior synthesis evidence from at least two ticket identities without repeating per-ticket Code Review.",
         "All required state remains inspectable for deterministic offline replay."
       ]
     }

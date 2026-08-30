@@ -1090,8 +1090,19 @@ function validateSynthesis(artifact, lifecycles, completionEvents) {
   const unresolvedConcernIds = [];
   const ticketByEvidence = new Map();
   for (const [ticket, lifecycle] of lifecycles) {
-    ticketByEvidence.set(lifecycle.result.implementation_handoff, ticket);
-    ticketByEvidence.set(lifecycle.result.review_brief, ticket);
+    if (lifecycle.state !== 'completed') continue;
+    for (const reference of [
+      lifecycle.result.implementation_handoff,
+      lifecycle.result.review_brief,
+    ]) {
+      const existingOwner = ticketByEvidence.get(reference);
+      if (existingOwner && existingOwner !== ticket) {
+        throw new DispatchArtifactError(
+          `duplicate synthesis evidence ownership for "${reference}"`,
+        );
+      }
+      ticketByEvidence.set(reference, ticket);
+    }
   }
   const availableEvidence = {
     implementation_handoffs: new Set(),

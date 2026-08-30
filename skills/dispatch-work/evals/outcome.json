@@ -94,7 +94,7 @@
         "Every dependency transition cites a complete authoritative reviewed-ticket completion.",
         "PR maintenance is limited to exact separately authorized repository/action/target tuples without cross-pairing; denied authorization produces no attempted mutation at the bounded test Adapter.",
         "A failed frontier item blocks its dependents while unrelated work completes and retryable and human-decision states remain distinct.",
-        "Synthesis uses implementation handoff and Review brief references from at least two ticket identities for every systematic concern and does not repeat per-ticket review.",
+        "Synthesis rejects duplicate evidence ownership and uses only current-or-prior synthesized implementation handoff and Review brief references from at least two ticket identities for every systematic concern, without repeating per-ticket review.",
         "Generated campaign evidence remains uncommitted."
       ]
     }

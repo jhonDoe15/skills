@@ -937,6 +937,31 @@ test('isolated worktrees preserve partial failure and systematic concerns', () =
     () => validateDispatchArtifact(oneTicketConcern),
     /at least two distinct ticket identities/,
   );
+
+  const aliasedFutureTicketEvidence = structuredClone(artifact);
+  const ticketB = aliasedFutureTicketEvidence.ticket_lifecycles.find(
+    ({ ticket }) => ticket === 'B',
+  );
+  ticketB.result.implementation_handoff = 'artifact://implement/A.json';
+  aliasedFutureTicketEvidence.synthesis[1].inputs.implementation_handoffs =
+    ['artifact://implement/A.json'];
+  aliasedFutureTicketEvidence.synthesis[1].concerns = [];
+  aliasedFutureTicketEvidence.synthesis[1].recommendations = ['accept B'];
+  aliasedFutureTicketEvidence.unresolved_systematic_concerns = [];
+  aliasedFutureTicketEvidence.synthesis[0].concerns = [{
+    id: 'aliased-future-ticket',
+    scope: 'cross-ticket',
+    status: 'resolved',
+    disposition: 'accept',
+    evidence: {
+      implementation_handoffs: ['artifact://implement/A.json'],
+      review_briefs: ['artifact://review/A.json'],
+    },
+  }];
+  assert.throws(
+    () => validateDispatchArtifact(aliasedFutureTicketEvidence),
+    /duplicate synthesis evidence ownership/,
+  );
 });
 
 test('replay retains pre-satisfied state and non-complete terminal recovery', () => {
