@@ -1,0 +1,137 @@
+{
+  "schema": "code-review-hardening-cases/v2",
+  "cases": [
+    {
+      "id": "reject-unsupported-combined-worker",
+      "kind": "seeded",
+      "branches": ["mechanical-consolidation"],
+      "input": {
+        "scenario": "combined",
+        "changed_dimensions": ["behavior"]
+      },
+      "expected": {
+        "error": "combined worker requires unchanged consolidation evidence"
+      }
+    },
+    {
+      "id": "retain-unavailable-specialist-route",
+      "kind": "seeded",
+      "branches": ["dynamic-specialist-routing", "artifact-exposure"],
+      "input": {
+        "scenario": "unavailable-specialist",
+        "lens": "Security",
+        "category": "specialist",
+        "signal_reference": "issue://47/security-sensitive-change",
+        "context_limit": "No security specialist capability is installed."
+      },
+      "expected": {
+        "status": "completed",
+        "lenses": ["Domain", "Engineering/Design"],
+        "context_limits": ["No security specialist capability is installed."],
+        "retained_artifact_count": 8
+      }
+    },
+    {
+      "id": "preserve-worker-disagreement",
+      "kind": "seeded",
+      "branches": ["worker-disagreement"],
+      "input": {
+        "scenario": "disagreement",
+        "engineering_severity": "Minor",
+        "engineering_guidance_source": "repository://conflicting-rule"
+      },
+      "expected": {
+        "group_count": 0,
+        "finding_fields": ["severity"],
+        "guidance_concerns": ["intent-and-scope"],
+        "brief_includes": [
+          "domain-worker-finding severity=\"Major\"",
+          "engineering-worker-finding severity=\"Minor\"",
+          "repository://conflicting-rule"
+        ]
+      }
+    },
+    {
+      "id": "bound-worker-supersession",
+      "kind": "seeded",
+      "branches": ["worker-supersession", "review-region-suppression"],
+      "input": {
+        "scenario": "supersession",
+        "source_level": "Requirements & Expectations",
+        "suppressed_level": "Code Quality",
+        "unaffected_region": "unaffected-region"
+      },
+      "expected": {
+        "suppressed_disposition": "superseded",
+        "unaffected_statuses": ["examined", "examined", "examined"]
+      }
+    },
+    {
+      "id": "reject-uncalibrated-fix-confidence",
+      "kind": "seeded",
+      "branches": ["confidence-context-limits"],
+      "input": {
+        "scenario": "confidence",
+        "evidence_quality": "conflicting",
+        "finding_confidence": 99,
+        "fix_direction_confidence": 100
+      },
+      "expected": {
+        "error": "evidence quality must reduce Fix-direction confidence"
+      }
+    },
+    {
+      "id": "retain-partial-worker-failure",
+      "kind": "seeded",
+      "branches": ["partial-worker-failure", "artifact-exposure"],
+      "input": {
+        "scenario": "worker-failure",
+        "worker_id": "engineering-worker",
+        "retained_guidance_records": 3
+      },
+      "expected": {
+        "status": "incomplete",
+        "markdown_brief": null,
+        "retained_artifact_count": 7
+      }
+    },
+    {
+      "id": "ordinary-nontrivial-review-remains-separate",
+      "kind": "clean-negative",
+      "branches": ["ordinary-nontrivial-preservation"],
+      "input": {
+        "scenario": "ordinary"
+      },
+      "expected": {
+        "status": "completed",
+        "lenses": ["Domain", "Engineering/Design"],
+        "review_levels": [
+          "Requirements & Expectations",
+          "Engineering & Architecture",
+          "Code Quality"
+        ]
+      }
+    },
+    {
+      "id": "canonical-dependencies-remain-fail-closed",
+      "kind": "clean-negative",
+      "branches": ["production-dependency-boundary"],
+      "input": {
+        "scenario": "package-closure",
+        "closure_files": [
+          "skills/code-review/evals/package-closure.json",
+          "skills/review-worker/evals/package-closure.json",
+          "skills/review-coordinator/evals/package-closure.json"
+        ]
+      },
+      "expected": {
+        "missing_dependencies": [
+          "review-worker",
+          "review-coordinator",
+          "take-it-offline",
+          "engineering-guidance"
+        ]
+      }
+    }
+  ]
+}

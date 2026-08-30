@@ -29,11 +29,11 @@
       },
       {
         "id": "ordered-analysis",
-        "description": "Coherent Review regions are examined in required level order with explicit supersession."
+        "description": "Coherent Review regions are examined in required level order with worker-declared supersession bounded to findings and lower levels in one region."
       },
       {
         "id": "finding-records",
-        "description": "Supported findings contain every required evidence, confidence, impact, scope, direction, Context-limit, and acceptance field."
+        "description": "Supported findings contain every required evidence, evidence-quality and Context-limit confidence input, impact, scope, direction, and acceptance field."
       }
     ]
   },
@@ -50,6 +50,7 @@
         "test/fixtures/code-review/scenario/validation.json",
         "test/fixtures/code-review/scenario/diff.patch",
         "test/fixtures/code-review/scenario/seeded-defects.json",
+        "test/fixtures/code-review/hardening-cases.json",
         "test/fixtures/code-review/scenario/repository/src/discount.js",
         "test/fixtures/code-review/scenario/repository/test/discount.test.js"
       ],
@@ -63,12 +64,13 @@
       "expectations": [
         "The lens focuses but does not narrow the complete Ticket outcome.",
         "All nine Engineering Guidance concerns receive independent reasoned dispositions separate from findings.",
-        "Requirements & Expectations, Engineering & Architecture, and Code Quality are accounted for in order in every region.",
-        "Each finding records both confidence values, Context limits, cited evidence, impact, scope, fix direction, and acceptance evidence.",
+        "Requirements & Expectations, Engineering & Architecture, and Code Quality are accounted for in order in every region; supersession is worker-declared and bounded to one Review region.",
+        "Each finding records both confidence values, evidence-quality and Context-limit inputs, cited evidence, impact, scope, fix direction, and acceptance evidence.",
         "The worker neither coordinates another lens nor mutates the reviewed state.",
         "Blind model judgment and sampled human review assess semantic finding validity."
       ],
       "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr47-worker-confidence-and-region-suppression"},
         {"scope": "issue-42-code-review", "id": "rw-complete-input"},
         {"scope": "issue-42-code-review", "id": "rw-independent-guidance"},
         {"scope": "issue-42-code-review", "id": "rw-region-order"},
