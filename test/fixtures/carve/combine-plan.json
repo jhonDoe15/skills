@@ -26,14 +26,14 @@
     {
       "requirement_id": "REQ-1",
       "disposition": "covered",
-      "ticket_ids": ["T1", "T2"],
-      "reason": "The schema prerequisite and write path jointly deliver storage."
+      "ticket_ids": ["T1", "T5"],
+      "reason": "The schema prerequisite and combined API path jointly deliver storage."
     },
     {
       "requirement_id": "REQ-2",
       "disposition": "covered",
-      "ticket_ids": ["T2"],
-      "reason": "The vertical API ticket exposes the stored preference."
+      "ticket_ids": ["T5"],
+      "reason": "The combined API path returns the stored preference."
     },
     {
       "requirement_id": "REQ-3",
@@ -58,7 +58,7 @@
       "collisions": []
     },
     {
-      "id": "T2",
+      "id": "T5",
       "title": "Expose account time-zone preferences",
       "outcome": "Clients can save and read an account time-zone preference.",
       "seam": "account API",
@@ -77,7 +77,18 @@
       "collisions": []
     }
   ],
-  "lineage": [],
+  "lineage": [
+    {
+      "kind": "split",
+      "predecessor_ids": ["T2"],
+      "successor_ids": ["T3", "T4"]
+    },
+    {
+      "kind": "combine",
+      "predecessor_ids": ["T3", "T4"],
+      "successor_ids": ["T5"]
+    }
+  ],
   "decisions": [],
   "initial_frontier": ["T1"]
 }

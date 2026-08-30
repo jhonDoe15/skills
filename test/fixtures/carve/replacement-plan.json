@@ -26,14 +26,14 @@
     {
       "requirement_id": "REQ-1",
       "disposition": "covered",
-      "ticket_ids": ["T1", "T2"],
-      "reason": "The schema prerequisite and write path jointly deliver storage."
+      "ticket_ids": ["T1", "T6"],
+      "reason": "The schema prerequisite and replacement API path jointly deliver storage."
     },
     {
       "requirement_id": "REQ-2",
       "disposition": "covered",
-      "ticket_ids": ["T2"],
-      "reason": "The vertical API ticket exposes the stored preference."
+      "ticket_ids": ["T6"],
+      "reason": "The replacement API ticket exposes the stored preference."
     },
     {
       "requirement_id": "REQ-3",
@@ -58,15 +58,21 @@
       "collisions": []
     },
     {
-      "id": "T2",
-      "title": "Expose account time-zone preferences",
+      "id": "T6",
+      "title": "Expose and backfill account time-zone preferences",
       "outcome": "Clients can save and read an account time-zone preference.",
       "seam": "account API",
       "shape": "vertical",
-      "in_scope": ["Add API validation, persistence, and response serialization."],
+      "in_scope": [
+        "Add API validation, persistence, and response serialization.",
+        "Backfill existing account preferences."
+      ],
       "out_of_scope": ["Change notification scheduling."],
-      "acceptance": ["The account API round-trips a valid IANA time zone."],
-      "validation": ["Run the account API integration test."],
+      "acceptance": [
+        "The account API round-trips a valid IANA time zone.",
+        "Existing accounts receive the source-defined default preference."
+      ],
+      "validation": ["Run the account API and backfill integration tests."],
       "blockers": ["T1"],
       "consumes": [
         {
@@ -77,7 +83,13 @@
       "collisions": []
     }
   ],
-  "lineage": [],
+  "lineage": [
+    {
+      "kind": "replace",
+      "predecessor_ids": ["T2"],
+      "successor_ids": ["T6"]
+    }
+  ],
   "decisions": [],
   "initial_frontier": ["T1"]
 }

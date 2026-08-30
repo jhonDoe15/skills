@@ -26,14 +26,14 @@
     {
       "requirement_id": "REQ-1",
       "disposition": "covered",
-      "ticket_ids": ["T1", "T2"],
-      "reason": "The schema prerequisite and write path jointly deliver storage."
+      "ticket_ids": ["T1", "T3"],
+      "reason": "The schema prerequisite and API write path jointly deliver storage."
     },
     {
       "requirement_id": "REQ-2",
       "disposition": "covered",
-      "ticket_ids": ["T2"],
-      "reason": "The vertical API ticket exposes the stored preference."
+      "ticket_ids": ["T4"],
+      "reason": "The API read path returns the stored preference."
     },
     {
       "requirement_id": "REQ-3",
@@ -58,15 +58,34 @@
       "collisions": []
     },
     {
-      "id": "T2",
-      "title": "Expose account time-zone preferences",
-      "outcome": "Clients can save and read an account time-zone preference.",
-      "seam": "account API",
+      "id": "T3",
+      "title": "Save account time-zone preferences",
+      "outcome": "Clients can save an account time-zone preference.",
+      "seam": "account API write path",
       "shape": "vertical",
-      "in_scope": ["Add API validation, persistence, and response serialization."],
-      "out_of_scope": ["Change notification scheduling."],
-      "acceptance": ["The account API round-trips a valid IANA time zone."],
-      "validation": ["Run the account API integration test."],
+      "in_scope": ["Validate and persist time-zone preferences."],
+      "out_of_scope": ["Return the preference from account reads."],
+      "acceptance": ["The account API saves a valid IANA time zone."],
+      "validation": ["Run the account API write integration test."],
+      "blockers": ["T1"],
+      "consumes": [
+        {
+          "ticket_id": "T1",
+          "output": "The migrated account table with the optional time-zone column."
+        }
+      ],
+      "collisions": []
+    },
+    {
+      "id": "T4",
+      "title": "Read account time-zone preferences",
+      "outcome": "Clients can read an account time-zone preference.",
+      "seam": "account API read path",
+      "shape": "vertical",
+      "in_scope": ["Return the persisted time-zone preference."],
+      "out_of_scope": ["Validate or persist preference updates."],
+      "acceptance": ["The account API returns a stored IANA time zone."],
+      "validation": ["Run the account API read integration test."],
       "blockers": ["T1"],
       "consumes": [
         {
@@ -77,7 +96,13 @@
       "collisions": []
     }
   ],
-  "lineage": [],
+  "lineage": [
+    {
+      "kind": "split",
+      "predecessor_ids": ["T2"],
+      "successor_ids": ["T3", "T4"]
+    }
+  ],
   "decisions": [],
   "initial_frontier": ["T1"]
 }

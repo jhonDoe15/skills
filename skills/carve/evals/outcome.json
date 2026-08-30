@@ -1,6 +1,6 @@
 {
   "skill_name": "carve",
-  "version": 1,
+  "version": 3,
   "evaluation": {
     "scope": "carve-outcome",
     "layer": "outcome",
@@ -12,7 +12,7 @@
     "runs_per_configuration": 3,
     "minimum_treatment_pass_rate": 0.9,
     "minimum_treatment_win_rate": 0.6,
-    "randomization_seed": "carve-outcome-v1"
+    "randomization_seed": "carve-outcome-v3"
   },
   "signals": {},
   "global_required_signals": [],
@@ -23,12 +23,12 @@
     "minimum_dimension_score": 1,
     "dimensions": [
       {
-        "id": "ready-plan-quality",
-        "description": "Semantically assess exhaustive coverage, natural one-context ticket seams, observable vertical outcomes or genuine prerequisites, normal migration metadata, direct blockers, and frontier correctness. Quote or reference output evidence for every score."
+        "id": "plan-result-quality",
+        "description": "Semantically assess whether a ready result has exhaustive coverage, natural one-context ticket seams, strategy-appropriate migration metadata, direct blockers, and a correct frontier, or whether a needs-decision result states each unresolved choice and contains no publishable tickets. Quote or reference output evidence for every score."
       },
       {
         "id": "publication-integrity",
-        "description": "Semantically assess whether authorized publication creates every planned ticket and direct blocker, reads them back, reports partial failures exactly, and never implies dispatch authority. Quote or reference output evidence for every score."
+        "description": "Semantically assess whether authorized ready publication creates and reads back every planned ticket and direct blocker, while a needs-decision result refuses every tracker mutation; both branches report their state exactly and never imply dispatch authority. Quote or reference output evidence for every score."
       }
     ]
   },
@@ -92,6 +92,34 @@
       "covered_clauses": [
         "cv-ready-plan",
         "cv-assessment-no-write",
+        "cv-authority-separation"
+      ]
+    },
+    {
+      "id": "needs-decision-refuses-publication",
+      "name": "refuse-publication-with-unresolved-migration-choice",
+      "prompt": "/carve\n\nThe account time-zone move has no agreed compatibility window. Ticket Scope flags that decision for the account domain maintainer. Publication is authorized only if the plan is ready.",
+      "expected_output": "A validated needs-decision plan stating the unresolved compatibility-window choice, with no tickets published or other tracker mutations attempted.",
+      "files": [],
+      "publication_authorized": true,
+      "expected_status": "needs-decision",
+      "required_skill_loads": [
+        "carve",
+        "slice-plan",
+        "ticket-scope",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "The plan names the unresolved choice, its source requirements, and its human owner.",
+        "No ticket, blocker, collision, dispatch, repository, or pull-request mutation occurs.",
+        "The response does not describe the plan as ready or published.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks the refusal boundary."
+      ],
+      "covered_clauses": [
+        "cv-needs-decision",
+        "cv-no-unauthorized-write",
         "cv-authority-separation"
       ]
     }

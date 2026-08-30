@@ -1,6 +1,6 @@
 {
   "skill_name": "slice-plan",
-  "version": 1,
+  "version": 3,
   "evaluation": {
     "scope": "slice-plan-role",
     "layer": "role",
@@ -12,7 +12,7 @@
     "runs_per_configuration": 3,
     "minimum_treatment_pass_rate": 0.9,
     "minimum_treatment_win_rate": 0.6,
-    "randomization_seed": "slice-plan-role-v1"
+    "randomization_seed": "slice-plan-role-v3"
   },
   "signals": {},
   "global_required_signals": [],
@@ -28,7 +28,7 @@
       },
       {
         "id": "executable-dag",
-        "description": "Semantically assess whether stable identity, replacement lineage, direct concrete-output blockers, collision separation, normal migration metadata, and the initial frontier form an executable plan. Quote or reference output evidence for every score."
+        "description": "Semantically assess whether stable identity, explicit split/combine lineage, direct concrete-output blockers, collision separation, migration metadata, and the initial frontier form an executable plan. Quote or reference output evidence for every score."
       }
     ]
   },
@@ -63,6 +63,134 @@
         "sp-frontier",
         "sp-normal-migration",
         "sp-no-publication"
+      ]
+    },
+    {
+      "id": "stable-regeneration-lineage",
+      "name": "regenerate-split-and-combine-candidates",
+      "prompt": "Regenerate a prior Slice Plan after Ticket Scope first splits one account API candidate into independently verifiable read and write candidates, then combines two below-seam scheduler fragments. Preserve every unchanged candidate identity. Changed work must use new identities with explicit split and combine replacement lineage. Return the plan only.",
+      "expected_output": "A validated plan whose unchanged outcomes and seams retain identity, whose split and combine successors use new identities, and whose plan-level lineage accounts for every replaced candidate.",
+      "files": [],
+      "required_skill_loads": [
+        "slice-plan",
+        "ticket-scope",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "Unchanged candidates preserve identity across equivalent regeneration.",
+        "Split and combine records explicitly map predecessor and successor identities without reusing changed identities.",
+        "Equivalent direct edges yield the same frontier members regardless of ticket order.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks lineage against the prior plan."
+      ],
+      "covered_clauses": [
+        "sp-stable-lineage",
+        "sp-split-lineage",
+        "sp-combine-lineage",
+        "sp-frontier"
+      ]
+    },
+    {
+      "id": "one-to-one-replacement-lineage",
+      "name": "replace-changed-candidate-with-new-identity",
+      "prompt": "Regenerate a prior Slice Plan after the account API candidate gains a required backfill, additional acceptance, and broader validation while keeping the same outcome seam. Preserve unchanged candidate identities, assign the changed candidate a new identity, and record one-to-one replacement lineage. Return the plan only.",
+      "expected_output": "A validated plan that preserves unchanged identities, replaces the materially changed API candidate with a new identity, and records an explicit one-predecessor to one-successor lineage entry.",
+      "files": [],
+      "required_skill_loads": [
+        "slice-plan",
+        "ticket-scope",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "The candidate with changed scope, acceptance, and validation does not reuse its prior identity.",
+        "The one-to-one lineage entry connects the prior identity to exactly one current successor.",
+        "Unchanged candidates and the direct-edge frontier remain stable.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks that the replacement reflects material work change."
+      ],
+      "covered_clauses": [
+        "sp-stable-lineage",
+        "sp-replace-lineage",
+        "sp-frontier"
+      ]
+    },
+    {
+      "id": "genuine-prefactor",
+      "name": "prefactor-only-concrete-shared-output",
+      "prompt": "Create a prefactor Slice Plan for one verified time-zone value contract that the account API and scheduler both consume directly. Reject any convenience foundation or prerequisite without an independently verifiable concrete output. Return the plan only.",
+      "expected_output": "A validated prefactor plan with a concrete prerequisite consumed directly by multiple later tickets, with migration strategy separate from ticket shape.",
+      "files": [],
+      "required_skill_loads": [
+        "slice-plan",
+        "ticket-scope",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "The prefactor ticket has a concrete independently verifiable output.",
+        "Multiple later tickets directly consume that output.",
+        "The plan rejects shared convenience scaffolding and keeps prefactor strategy separate from prerequisite shape.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks that the prefactor is genuine."
+      ],
+      "covered_clauses": [
+        "sp-prefactor",
+        "sp-ticket-shape",
+        "sp-direct-dag"
+      ]
+    },
+    {
+      "id": "expand-contract-groups",
+      "name": "expand-migrate-groups-contract",
+      "prompt": "Create an expand-contract Slice Plan that expands a compatible time-zone representation, migrates account API and scheduler readers in independently mergeable groups, records the required integration point for any group that cannot stay green alone, and contracts only after every migration group completes.",
+      "expected_output": "A validated expand-contract plan with explicit expansion, migration groups and their completion tickets, required integration points, and contraction directly blocked by every group completion.",
+      "files": [],
+      "required_skill_loads": [
+        "slice-plan",
+        "ticket-scope",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "Expansion, migration groups, and contraction are represented separately from ticket shape.",
+        "Each migration group follows expansion, may contain internally ordered tickets, names its terminal completion tickets, and remains independently mergeable.",
+        "A group that cannot remain green alone names its required integration point.",
+        "Contraction depends directly on every migration-group completion ticket, not every internal ticket and not redundantly on expansion.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks migration safety and independence."
+      ],
+      "covered_clauses": [
+        "sp-expand-contract",
+        "sp-migration-groups",
+        "sp-direct-dag"
+      ]
+    },
+    {
+      "id": "graph-defects-and-collisions",
+      "name": "reject-invalid-graph-preserve-collision-frontier",
+      "prompt": "Pressure-test a Slice Plan containing overlapping mutable-file collisions plus proposed missing-target, cyclic, transitive, convenience-foundation, skeletal, and uncovered-requirement defects. Keep collisions as metadata, preserve unrelated frontier tickets, and return no ready plan until every graph defect is resolved.",
+      "expected_output": "A plan result that treats overlapping collisions as non-blocking metadata, keeps the direct-edge frontier stable, and refuses ready status for every named validation defect.",
+      "files": [],
+      "required_skill_loads": [
+        "slice-plan",
+        "ticket-scope",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "Collisions create no semantic dependency and remove no unrelated frontier member.",
+        "Missing targets, cycles, redundant transitive blockers, convenience foundations, skeletal tickets, and uncovered requirements each prevent ready status.",
+        "Validation evidence observes the plan artifact and resulting frontier rather than private helper behavior.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks that collision pressure did not distort dependencies."
+      ],
+      "covered_clauses": [
+        "sp-collisions",
+        "sp-frontier",
+        "sp-graph-validation",
+        "sp-coverage-ledger"
       ]
     }
   ]
