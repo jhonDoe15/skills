@@ -48,6 +48,8 @@
       "files": [
         "test/fixtures/dispatch-work/completed-dispatch.json",
         "test/fixtures/dispatch-work/resumed-dispatch.json",
+        "test/fixtures/dispatch-work/retained-reviewed-ticket-A.json",
+        "test/fixtures/dispatch-work/canonical-reviewed-ticket.json",
         "test/fixtures/dispatch-work/collision-dispatch.json",
         "test/fixtures/dispatch-work/hardened-partial-dispatch.json",
         "test/fixtures/dispatch-work/held-dispatch.json",
@@ -86,13 +88,13 @@
       "expectations": [
         "Treatment and No-Skill arms use matched fresh sessions over the same small repository and sandboxed boundaries.",
         "The treatment retains explicit authorization and published ready DAG identity.",
-        "Resume recomputes retained and current fingerprints, rejects stale, partial, or mismatched evidence, preserves terminal decisions, and skips only resolved complete authoritative lifecycle work.",
+        "Resume recomputes retained and current fingerprints, rejects stale, partial, or mismatched evidence, preserves terminal decisions, and skips only resolved complete authoritative lifecycle work bound to the exact ticket.",
         "Executor precedence, collision deferrals, and ordered worktree isolation evidence remain inspectable without changing DAG edges.",
         "A and C start concurrently; B starts after A completes and before C completes; D waits for both B and C.",
         "Every dependency transition cites a complete authoritative reviewed-ticket completion.",
-        "PR maintenance is limited to the separately authorized repository, action, and target; denied authorization produces no attempted mutation at the bounded test Adapter.",
+        "PR maintenance is limited to exact separately authorized repository/action/target tuples without cross-pairing; denied authorization produces no attempted mutation at the bounded test Adapter.",
         "A failed frontier item blocks its dependents while unrelated work completes and retryable and human-decision states remain distinct.",
-        "Synthesis uses implementation handoff and Review brief references, preserves systematic concerns, and does not repeat per-ticket review.",
+        "Synthesis uses implementation handoff and Review brief references from at least two ticket identities for every systematic concern and does not repeat per-ticket review.",
         "Generated campaign evidence remains uncommitted."
       ]
     }

@@ -54,7 +54,10 @@ and retain the mismatch and required recovery.
 For a compatible resume:
 
 - skip only a ticket whose retained result reference resolves to a complete
-  authoritative reviewed-ticket result;
+  authoritative reviewed-ticket result bound to that exact ticket; when the
+  canonical Take Ticket result lacks ticket identity, require a Dispatch
+  Work-owned binding that retains the ticket-specific invocation, completion,
+  and canonical result reference;
 - restart incomplete lifecycle work unless a retained retry point and owned
   worktree explicitly support continuation;
 - preserve failed, retryable, and human-decision states; and
@@ -174,8 +177,9 @@ cover the requested actions.
 
 Without that authorization, record the needed action and return it with zero
 attempted PR mutations. With authorization, invoke external `autopilot` only
-for the authorized repository, action, and target. Retain each attempt and
-completion with that scope, outcome, and evidence reference. A missing or
+for an exact authorized repository/action/target tuple; independently
+authorized values do not combine into additional tuples. Retain each attempt
+and completion with that tuple, outcome, and evidence reference. A missing or
 failed prerequisite leaves the ticket retryable or human-decision; it never
 grants mutation authority. Tests observe this branch only through bounded test
 Adapters and sandboxed fixtures.
@@ -191,6 +195,10 @@ Retain the synthesis sequence after those events.
 Detect concerns that emerge only across those inputs. Each concern retains its
 identity, cited implementation handoffs and Review briefs, status, and one
 disposition. Preserve unresolved concerns across later frontier calculations.
+Every cross-ticket concern cites retained synthesis evidence associated with at
+least two distinct ticket identities. A later synthesis may cite its own inputs
+and earlier ordered synthesis inputs, but never unsynthesized or future
+evidence.
 Recommend one or more of:
 
 - acceptance;

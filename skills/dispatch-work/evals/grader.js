@@ -271,32 +271,89 @@ function validateExecutionContext(context) {
   }
 }
 
+function validateCanonicalRetainedBinding(binding, decision, resolveArtifact) {
+  requireString(binding.ticket, 'retained reviewed-ticket binding ticket');
+  requireString(
+    binding.result_reference,
+    'retained reviewed-ticket binding result reference',
+  );
+  requireObject(
+    binding.invocation,
+    'retained reviewed-ticket binding invocation',
+  );
+  requireObject(
+    binding.completion,
+    'retained reviewed-ticket binding completion',
+  );
+  requireString(
+    binding.invocation.reference,
+    'retained reviewed-ticket binding invocation reference',
+  );
+  requireString(
+    binding.completion.reference,
+    'retained reviewed-ticket binding completion reference',
+  );
+  requireString(
+    binding.completion.result_reference,
+    'retained reviewed-ticket binding completion result reference',
+  );
+  if (binding.ticket !== decision.ticket
+    || binding.invocation.ticket !== decision.ticket
+    || binding.invocation.skill !== 'take-ticket'
+    || binding.invocation.status !== 'succeeded'
+    || binding.completion.ticket !== decision.ticket
+    || binding.completion.status !== 'complete'
+    || binding.completion.authority !== 'reviewed-ticket'
+    || binding.completion.result_reference !== binding.result_reference) {
+    throw new DispatchArtifactError(
+      'canonical retained result is not bound to the exact skipped ticket',
+    );
+  }
+  const result = resolveArtifact(binding.result_reference);
+  requireObject(result, 'resume evidence canonical take-ticket result');
+  try {
+    validateTakeTicketResult(result);
+    if (result.status === 'reviewed') return;
+  } catch {
+    // Normalize canonical Take Ticket validation failures below.
+  }
+  throw new DispatchArtifactError(
+    'resume evidence requires a complete authoritative reviewed-ticket result',
+  );
+}
+
 function validateRetainedReviewedTicket(decision, resolveArtifact) {
   if (typeof resolveArtifact !== 'function') {
     throw new DispatchArtifactError(
       'resume evidence requires a retained-result resolver',
     );
   }
-  const result = resolveArtifact(decision.retained_result);
-  requireObject(result, 'resume evidence retained reviewed-ticket result');
+  const retained = resolveArtifact(decision.retained_result);
+  requireObject(retained, 'resume evidence retained reviewed-ticket result');
+  if (retained.schema === 'dispatch-retained-reviewed-ticket/v1') {
+    validateCanonicalRetainedBinding(retained, decision, resolveArtifact);
+    return;
+  }
+  if (retained.schema === 'take-ticket-result/v1') {
+    throw new DispatchArtifactError(
+      'canonical retained result is not bound to the exact skipped ticket',
+    );
+  }
   try {
-    if (result.schema === 'take-ticket-result/v1') {
-      validateTakeTicketResult(result);
-      if (result.status === 'reviewed') return;
-    } else if (result.schema === 'fixture-reviewed-ticket/v1') {
-      validateFixtureReviewedTicket(result, {
+    if (retained.schema === 'fixture-reviewed-ticket/v1') {
+      validateFixtureReviewedTicket(retained, {
         ticket: decision.ticket,
-        started_sequence: result.invocation?.sequence,
-        completed_sequence: result.completion?.sequence,
+        started_sequence: retained.invocation?.sequence,
+        completed_sequence: retained.completion?.sequence,
         result: {
-          implementation_handoff: result.phases?.[0]?.artifact,
-          review_brief: result.phases?.[1]?.artifact,
+          implementation_handoff: retained.phases?.[0]?.artifact,
+          review_brief: retained.phases?.[1]?.artifact,
         },
       });
       return;
     }
   } catch {
-    // Normalize dependency and fixture validation failures below.
+    // Normalize fixture validation failures below.
   }
   throw new DispatchArtifactError(
     'resume evidence requires a complete authoritative reviewed-ticket result',
@@ -466,6 +523,18 @@ function validateMutationEvidence(mutation, field) {
   requireString(mutation.evidence, `${field}.evidence`);
 }
 
+function prMutationTupleKey({ repository, action, target }) {
+  return JSON.stringify([repository, action, target]);
+}
+
+function validatePrAuthorizationTuple(tuple, field) {
+  requireObject(tuple, field);
+  requireString(tuple.repository, `${field}.repository`);
+  requireString(tuple.action, `${field}.action`);
+  requireString(tuple.target, `${field}.target`);
+  return prMutationTupleKey(tuple);
+}
+
 function validatePrMaintenance(artifact, ticketIds) {
   requireArray(artifact.pr_maintenance, 'PR maintenance authorization');
   const maintenanceTickets = [];
@@ -502,28 +571,31 @@ function validatePrMaintenance(artifact, ticketIds) {
         `${field}.authorization.scope`,
       );
       const scope = maintenance.authorization.scope;
-      requireArray(scope.repositories, `${field}.authorization.scope.repositories`);
-      requireArray(scope.mutations, `${field}.authorization.scope.mutations`);
-      const allowedRepositories = new Set(scope.repositories);
-      if (scope.repositories.length === 0
-        || scope.repositories.some(
-          (repository) => !artifact.execution_context.repositories.includes(
-            repository,
-          ),
-        )) {
+      requireArray(scope.tuples, `${field}.authorization.scope.tuples`);
+      if (scope.tuples.length === 0) {
         throw new DispatchArtifactError(
           `${field} has an invalid PR maintenance authorization scope`,
         );
       }
-      const allowedMutations = new Set(scope.mutations.map(
-        (mutation, mutationIndex) => {
-          const mutationField = `${field}.authorization.scope.mutations[${mutationIndex}]`;
-          requireObject(mutation, mutationField);
-          requireString(mutation.action, `${mutationField}.action`);
-          requireString(mutation.target, `${mutationField}.target`);
-          return dependencyKey(mutation.action, mutation.target);
+      const allowedMutations = new Set(scope.tuples.map(
+        (tuple, tupleIndex) => {
+          const tupleField = `${field}.authorization.scope.tuples[${tupleIndex}]`;
+          const tupleKey = validatePrAuthorizationTuple(tuple, tupleField);
+          if (!artifact.execution_context.repositories.includes(
+            tuple.repository,
+          )) {
+            throw new DispatchArtifactError(
+              `${field} has an invalid PR maintenance authorization scope`,
+            );
+          }
+          return tupleKey;
         },
       ));
+      if (allowedMutations.size !== scope.tuples.length) {
+        throw new DispatchArtifactError(
+          `${field} contains duplicate PR maintenance authorization tuples`,
+        );
+      }
       const attempted = new Map();
       for (const [mutationIndex, mutation] of (
         maintenance.attempted_mutations.entries()
@@ -532,12 +604,9 @@ function validatePrMaintenance(artifact, ticketIds) {
           `${field}.attempted_mutations[${mutationIndex}]`;
         validateMutationEvidence(mutation, mutationField);
         if (mutation.outcome !== 'attempted'
-          || !allowedRepositories.has(mutation.repository)
-          || !allowedMutations.has(
-            dependencyKey(mutation.action, mutation.target),
-          )) {
+          || !allowedMutations.has(prMutationTupleKey(mutation))) {
           throw new DispatchArtifactError(
-            `${field} attempted a mutation outside PR maintenance authorization scope`,
+            `${field} attempted a mutation outside its exact PR maintenance authorization tuple`,
           );
         }
         if (attempted.has(mutation.id)) {
@@ -1019,11 +1088,28 @@ function validateSynthesis(artifact, lifecycles, completionEvents) {
   const synthesizedTickets = [];
   const systematicConcernIds = [];
   const unresolvedConcernIds = [];
+  const ticketByEvidence = new Map();
+  for (const [ticket, lifecycle] of lifecycles) {
+    ticketByEvidence.set(lifecycle.result.implementation_handoff, ticket);
+    ticketByEvidence.set(lifecycle.result.review_brief, ticket);
+  }
+  const availableEvidence = {
+    implementation_handoffs: new Set(),
+    review_briefs: new Set(),
+  };
+  const evidenceNames = Object.keys(availableEvidence);
+  let priorSynthesisSequence = 0;
   for (const [index, synthesis] of artifact.synthesis.entries()) {
     const field = `frontier synthesis[${index}]`;
     requireObject(synthesis, field);
     requireString(synthesis.frontier_id, `${field}.frontier_id`);
     requireSequence(synthesis.sequence, `${field}.sequence`);
+    if (synthesis.sequence <= priorSynthesisSequence) {
+      throw new DispatchArtifactError(
+        `${field} must preserve synthesis event ordering`,
+      );
+    }
+    priorSynthesisSequence = synthesis.sequence;
     requireArray(synthesis.tickets, `${field}.tickets`);
     requireObject(synthesis.inputs, `${field}.inputs`);
     requireArray(synthesis.concerns, `${field}.concerns`);
@@ -1066,6 +1152,11 @@ function validateSynthesis(artifact, lifecycles, completionEvents) {
       reviewBriefs,
       `${field}.inputs.review_briefs`,
     );
+    for (const evidenceName of evidenceNames) {
+      for (const reference of synthesis.inputs[evidenceName]) {
+        availableEvidence[evidenceName].add(reference);
+      }
+    }
     for (const [concernIndex, concern] of synthesis.concerns.entries()) {
       const concernField = `${field}.concerns[${concernIndex}]`;
       if (typeof concern === 'string') {
@@ -1085,22 +1176,28 @@ function validateSynthesis(artifact, lifecycles, completionEvents) {
         );
       }
       requireObject(concern.evidence, `${concernField}.evidence`);
-      for (const evidenceName of [
-        'implementation_handoffs',
-        'review_briefs',
-      ]) {
+      for (const evidenceName of evidenceNames) {
         requireArray(
           concern.evidence[evidenceName],
           `${concernField}.evidence.${evidenceName}`,
         );
         if (concern.evidence[evidenceName].length === 0
           || concern.evidence[evidenceName].some(
-          (reference) => !synthesis.inputs[evidenceName].includes(reference),
+            (reference) => !availableEvidence[evidenceName].has(reference),
           )) {
           throw new DispatchArtifactError(
             `${concernField} requires systematic concern evidence from synthesis inputs`,
           );
         }
+      }
+      const citedTickets = new Set([
+        ...concern.evidence.implementation_handoffs,
+        ...concern.evidence.review_briefs,
+      ].map((reference) => ticketByEvidence.get(reference)));
+      if (citedTickets.size < 2) {
+        throw new DispatchArtifactError(
+          `${concernField} must cite at least two distinct ticket identities`,
+        );
       }
       systematicConcernIds.push(concern.id);
       if (concern.status === 'unresolved') unresolvedConcernIds.push(concern.id);

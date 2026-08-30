@@ -150,7 +150,7 @@
       {
         "ticket": "A",
         "decision": "skip-completed",
-        "retained_result": "fixture://reviewed-ticket/A"
+        "retained_result": "fixture://retained-reviewed-ticket/A"
       },
       {
         "ticket": "B",
@@ -214,9 +214,9 @@
         "granted": true,
         "source": "fixture://authorization/pr-maintenance-B",
         "scope": {
-          "repositories": ["fixture://repository/dispatch"],
-          "mutations": [
+          "tuples": [
             {
+              "repository": "fixture://repository/dispatch",
               "action": "refresh-pr",
               "target": "fixture://pr/42"
             }

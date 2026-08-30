@@ -209,7 +209,7 @@
   "synthesis": [
     {
       "frontier_id": "frontier-1",
-      "sequence": 10,
+      "sequence": 5,
       "tickets": ["A"],
       "inputs": {
         "implementation_handoffs": ["artifact://implement/A.json"],

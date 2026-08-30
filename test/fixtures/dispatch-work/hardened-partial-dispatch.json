@@ -320,19 +320,8 @@
         "implementation_handoffs": ["artifact://implement/A.json"],
         "review_briefs": ["artifact://review/A.json"]
       },
-      "concerns": [
-        {
-          "id": "systematic-worktree-cleanup",
-          "scope": "cross-ticket",
-          "status": "unresolved",
-          "disposition": "human-decision",
-          "evidence": {
-            "implementation_handoffs": ["artifact://implement/A.json"],
-            "review_briefs": ["artifact://review/A.json"]
-          }
-        }
-      ],
-      "recommendations": ["human decision on systematic worktree cleanup"]
+      "concerns": [],
+      "recommendations": ["accept A"]
     },
     {
       "frontier_id": "frontier-partial-2",
@@ -342,8 +331,28 @@
         "implementation_handoffs": ["artifact://implement/B.json"],
         "review_briefs": ["artifact://review/B.json"]
       },
-      "concerns": [],
-      "recommendations": ["accept B"]
+      "concerns": [
+        {
+          "id": "systematic-worktree-cleanup",
+          "scope": "cross-ticket",
+          "status": "unresolved",
+          "disposition": "human-decision",
+          "evidence": {
+            "implementation_handoffs": [
+              "artifact://implement/A.json",
+              "artifact://implement/B.json"
+            ],
+            "review_briefs": [
+              "artifact://review/A.json",
+              "artifact://review/B.json"
+            ]
+          }
+        }
+      ],
+      "recommendations": [
+        "accept B",
+        "human decision on systematic worktree cleanup"
+      ]
     },
     {
       "frontier_id": "frontier-partial-3",

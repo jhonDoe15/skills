@@ -51,6 +51,8 @@ const COMPLETED_DISPATCH_ARTIFACTS = {
   'fixture://reviewed-ticket/B': 'reviewed-ticket-B.json',
   'fixture://reviewed-ticket/C': 'reviewed-ticket-C.json',
   'fixture://reviewed-ticket/D': 'reviewed-ticket-D.json',
+  'fixture://retained-reviewed-ticket/A': 'retained-reviewed-ticket-A.json',
+  'fixture://canonical-reviewed-ticket/A': 'canonical-reviewed-ticket.json',
 };
 
 function readJson(filePath) {
@@ -91,6 +93,11 @@ function refreshExecutionFingerprint(artifact) {
     .update(JSON.stringify(canonicalize(inputs)))
     .digest('hex');
   artifact.resume.execution_fingerprint.current = `sha256:${digest}`;
+  if (artifact.resume.requested) {
+    artifact.resume.execution_fingerprint.retained = `sha256:${digest}`;
+    artifact.resume.execution_fingerprint.retained_inputs =
+      structuredClone(inputs);
+  }
 }
 
 function minimalArtifact() {
@@ -554,7 +561,7 @@ test('resume verifies fingerprints and skips only completed lifecycle work', () 
       {
         ticket: 'A',
         decision: 'skip-completed',
-        retained_result: 'fixture://reviewed-ticket/A',
+        retained_result: 'fixture://retained-reviewed-ticket/A',
       },
       {
         ticket: 'B',
@@ -608,6 +615,28 @@ test('resume verifies fingerprints and skips only completed lifecycle work', () 
       return retained;
     }),
     /complete authoritative reviewed-ticket/,
+  );
+
+  const unboundCanonical = structuredClone(artifact);
+  unboundCanonical.resume.ticket_decisions[0].retained_result =
+    'fixture://canonical-reviewed-ticket/A';
+  assert.throws(
+    () => validateResumedArtifact(unboundCanonical),
+    /exact skipped ticket/,
+  );
+
+  assert.throws(
+    () => validateResumedArtifact(artifact, (reference) => {
+      if (reference !== 'fixture://retained-reviewed-ticket/A') {
+        return resolveCompletedDispatchArtifact(reference);
+      }
+      const binding = readDispatchFixture('retained-reviewed-ticket-A.json');
+      binding.ticket = 'B';
+      binding.invocation.ticket = 'B';
+      binding.completion.ticket = 'B';
+      return binding;
+    }),
+    /exact skipped ticket/,
   );
 
   for (const { name, mutate } of [
@@ -689,7 +718,7 @@ test('PR maintenance requires authorization at a bounded test seam', async (t) =
     'fixture://pr/99';
   assert.throws(
     () => validateResumedArtifact(outOfScopeMutation),
-    /PR maintenance authorization scope/,
+    /PR maintenance authorization tuple/,
   );
 
   const unprovenCompletion = structuredClone(artifact);
@@ -698,6 +727,28 @@ test('PR maintenance requires authorization at a bounded test seam', async (t) =
   assert.throws(
     () => validateResumedArtifact(unprovenCompletion),
     /completed PR mutation evidence/,
+  );
+
+  const crossPairedAuthorization = structuredClone(artifact);
+  const crossPairedMaintenance = crossPairedAuthorization.pr_maintenance[1];
+  crossPairedMaintenance.authorization.scope.tuples.push({
+    repository: 'fixture://repository/other',
+    action: 'close-pr',
+    target: 'fixture://pr/99',
+  });
+  crossPairedAuthorization.execution_context.repositories.push(
+    'fixture://repository/other',
+  );
+  for (const mutation of [
+    crossPairedMaintenance.attempted_mutations[0],
+    crossPairedMaintenance.completed_mutations[0],
+  ]) {
+    mutation.repository = 'fixture://repository/other';
+  }
+  refreshExecutionFingerprint(crossPairedAuthorization);
+  assert.throws(
+    () => validateResumedArtifact(crossPairedAuthorization),
+    /exact PR maintenance authorization tuple/,
   );
 
   const {
@@ -864,17 +915,27 @@ test('isolated worktrees preserve partial failure and systematic concerns', () =
   );
 
   const evidenceFreeConcern = structuredClone(artifact);
-  evidenceFreeConcern.synthesis[0].concerns[0].evidence.review_briefs = [];
+  evidenceFreeConcern.synthesis[1].concerns[0].evidence.review_briefs = [];
   assert.throws(
     () => validateDispatchArtifact(evidenceFreeConcern),
     /systematic concern.*evidence/,
   );
 
   const legacyStringConcern = structuredClone(artifact);
-  legacyStringConcern.synthesis[0].concerns[0] = 'unstructured concern';
+  legacyStringConcern.synthesis[1].concerns[0] = 'unstructured concern';
   assert.throws(
     () => validateDispatchArtifact(legacyStringConcern),
     /systematic concern disposition/,
+  );
+
+  const oneTicketConcern = structuredClone(artifact);
+  oneTicketConcern.synthesis[1].concerns[0].evidence = {
+    implementation_handoffs: ['artifact://implement/A.json'],
+    review_briefs: ['artifact://review/A.json'],
+  };
+  assert.throws(
+    () => validateDispatchArtifact(oneTicketConcern),
+    /at least two distinct ticket identities/,
   );
 });
 
