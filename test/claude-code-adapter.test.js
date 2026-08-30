@@ -14,6 +14,7 @@ const {
 const {
   createClaudeCodeAdapter,
 } = require('../suite/adapters/claude-code');
+const { validateHostDiscovery } = require('../suite/release');
 
 const REQUESTED_MODEL = 'requested-test-model';
 const RESOLVED_MODEL = 'resolved-test-model-20260825';
@@ -399,7 +400,7 @@ test('Claude Code Adapter stages and discovers the complete release package', as
   const execution = readCommandLog(fakeClaude.logPath).at(-1);
 
   assert.deepEqual(execution.skills, [...expectedSkills].sort());
-  assert.deepEqual(result.observations.hostAvailableSkills.names, expectedSkills);
+  assert.deepEqual(validateHostDiscovery(result), expectedSkills);
   assert.deepEqual(result.observations.routing.resolvedSkills, [
     'writing-foundation',
     'agent-writing',

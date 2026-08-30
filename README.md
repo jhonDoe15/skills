@@ -97,6 +97,16 @@ The package-only precondition is:
 npm run check:package
 ```
 
+To reject collisions from a caller-scoped inventory:
+
+```bash
+node scripts/check-package.js --installation-inventory inventory.json
+```
+
+The JSON file is an array of `{ "name": "...", "source": "..." }` records from
+the target host's configured project and user discovery roots. The check
+reports every conflicting owner and predecessor, then exits nonzero.
+
 It verifies the 1.0.0 identity, exact 19-Skill inventory, package-wide
 dependency closure, and component coverage for every declared runtime edge.
 Missing suite-owned dependencies fail with the exact canonical name. Collision

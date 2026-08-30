@@ -1,16 +1,22 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
 const {
-  findInstallCollisions,
   loadCanonicalSuite,
+} = require('../suite');
+const {
+  findInstallCollisions,
+  validateHostDiscovery,
+  validateInstallCollisions,
   validatePackageClosure,
   validateReleasePackage,
-} = require('../suite');
+} = require('../suite/release');
 const {
   validateEvaluationDefinition,
 } = require('../suite/evaluation');
@@ -53,7 +59,7 @@ test('package closure names every missing suite-owned Skill exactly', () => {
 
 test('collision validation uses only supplied installation inventories', () => {
   const suite = loadCanonicalSuite(repositoryRoot);
-  const collisions = findInstallCollisions(suite, [
+  const installedDefinitions = [
     {
       name: 'agent-writing',
       source: 'package:skills/agent-writing',
@@ -70,7 +76,8 @@ test('collision validation uses only supplied installation inventories', () => {
       name: 'unrelated-skill',
       source: 'user:~/.claude/skills/unrelated-skill',
     },
-  ]);
+  ];
+  const collisions = findInstallCollisions(suite, installedDefinitions);
 
   assert.deepEqual(collisions, [
     {
@@ -88,6 +95,42 @@ test('collision validation uses only supplied installation inventories', () => {
       sources: ['user:~/.claude/skills/lean'],
     },
   ]);
+  assert.throws(
+    () => validateInstallCollisions(suite, installedDefinitions),
+    (error) => {
+      assert.match(error.message, /canonical-name-collision "agent-writing"/);
+      assert.match(error.message, /conflicting-predecessor "lean"/);
+      assert.deepEqual(error.collisions, collisions);
+      return true;
+    },
+  );
+});
+
+test('package checker rejects a supplied collision inventory', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'package-collisions-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const inventoryPath = path.join(directory, 'inventory.json');
+  fs.writeFileSync(inventoryPath, JSON.stringify([
+    { name: 'agent-writing', source: 'project:.cursor/skills/agent-writing' },
+  ]));
+
+  const result = spawnSync(
+    process.execPath,
+    [
+      'scripts/check-package.js',
+      '--installation-inventory',
+      inventoryPath,
+    ],
+    {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+    },
+  );
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /canonical-name-collision "agent-writing"/);
+  assert.match(result.stderr, /package:skills\/agent-writing/);
+  assert.match(result.stderr, /project:\.cursor\/skills\/agent-writing/);
 });
 
 test('central metadata pins prerequisites and adapted upstream sources', () => {
@@ -176,4 +219,71 @@ test('Skill Evaluation ships a valid owner-local role case', () => {
     validateEvaluationDefinition(definition, repositoryRoot),
     definition,
   );
+});
+
+test('release host gate requires exact observed package discovery', () => {
+  function observedDiscovery(names) {
+    return {
+      names,
+      provenance: { statusSource: 'observed' },
+    };
+  }
+
+  const result = {
+    observations: {
+      packageSkills: ['agent-writing', 'writing-foundation'],
+      hostAvailableSkills: observedDiscovery([
+        'agent-writing',
+        'writing-foundation',
+      ]),
+    },
+  };
+
+  assert.deepEqual(
+    validateHostDiscovery(result),
+    result.observations.packageSkills,
+  );
+
+  const invalidDiscoveries = [
+    [null, /host did not report packaged Skill discovery/],
+    [
+      {
+        names: ['agent-writing', 'writing-foundation'],
+        provenance: { statusSource: 'inferred' },
+      },
+      /host Skill discovery must be observed/,
+    ],
+    [
+      observedDiscovery(['agent-writing']),
+      /host did not discover packaged Skill "writing-foundation"/,
+    ],
+    [
+      observedDiscovery([
+        'agent-writing',
+        'writing-foundation',
+        'unrelated-skill',
+      ]),
+      /host discovered unexpected packaged Skill "unrelated-skill"/,
+    ],
+    [
+      observedDiscovery([
+        'agent-writing',
+        'writing-foundation',
+        'writing-foundation',
+      ]),
+      /host packaged Skill discovery contains duplicates/,
+    ],
+  ];
+
+  for (const [hostAvailableSkills, expectedError] of invalidDiscoveries) {
+    assert.throws(
+      () => validateHostDiscovery({
+        observations: {
+          ...result.observations,
+          hostAvailableSkills,
+        },
+      }),
+      expectedError,
+    );
+  }
 });
