@@ -8,7 +8,7 @@ const test = require('node:test');
 
 const { executeProduction, loadCanonicalSuite } = require('../suite');
 const { createCursorAdapter } = require('../suite/adapters/cursor');
-const { validateHostDiscovery } = require('../suite/release');
+const { validateReleaseHostDiscovery } = require('../suite/release');
 const {
   AGENT_WRITING_SKILL,
   createTracerPackage,
@@ -340,7 +340,10 @@ test('Cursor Adapter stages the complete release package', async () => {
     .sort();
 
   assert.deepEqual(stagedSkills, [...expectedSkills].sort());
-  assert.deepEqual(validateHostDiscovery(result), expectedSkills);
+  assert.deepEqual(
+    validateReleaseHostDiscovery(canonicalRepositoryRoot, result),
+    expectedSkills,
+  );
   assert.deepEqual(result.observations.routing.resolvedSkills, [
     'writing-foundation',
     'agent-writing',

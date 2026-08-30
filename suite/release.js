@@ -214,10 +214,23 @@ function validateHostDiscovery(result) {
   return packageSkills;
 }
 
+function validateReleaseHostDiscovery(repositoryRoot, result) {
+  const release = validateReleasePackage(repositoryRoot);
+  const packageSkills = result?.observations?.packageSkills;
+  if (JSON.stringify(packageSkills) !== JSON.stringify(release.skills)) {
+    throw new SuiteContractError(
+      'host result must contain the exact release package inventory',
+    );
+  }
+  validateHostDiscovery(result);
+  return release.skills;
+}
+
 module.exports = {
   findInstallCollisions,
   validateHostDiscovery,
   validateInstallCollisions,
   validatePackageClosure,
+  validateReleaseHostDiscovery,
   validateReleasePackage,
 };
