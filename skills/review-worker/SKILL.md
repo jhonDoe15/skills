@@ -60,9 +60,10 @@ complete lower-level coverage. Do not silently omit a region or level, and never
 use a finding from another region or worker as the source.
 
 Use the assigned lens to focus the work, not to narrow the input. Follow relevant
-evidence into repository history or surrounding code when needed. Route a
-specialist concern when an available specialist capability is required; keep a
-missing capability as a Context limit.
+evidence into repository history or surrounding code when needed. Report a newly
+discovered specialist need and its evidence to the Code Review caller. Record a
+missing capability as a Context limit. The worker does not dispatch another
+Review worker or change the caller's routing decision.
 
 ## Write complete findings
 

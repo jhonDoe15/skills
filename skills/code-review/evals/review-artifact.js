@@ -207,6 +207,9 @@ function validateReviewPlan(plan) {
     fail('review_plan.consolidation.mode must be separate or combined');
   }
   requireArray(plan.consolidation.evidence, 'review_plan.consolidation.evidence');
+  for (const [index, record] of plan.consolidation.evidence.entries()) {
+    requireObject(record, `review_plan.consolidation.evidence[${index}]`);
+  }
   const dimensions = plan.consolidation.evidence.map(({ dimension }) => dimension);
   requireExactMembers(
     dimensions,
@@ -215,7 +218,6 @@ function validateReviewPlan(plan) {
   );
   for (const [index, record] of plan.consolidation.evidence.entries()) {
     const field = `review_plan.consolidation.evidence[${index}]`;
-    requireObject(record, field);
     if (typeof record.unchanged !== 'boolean') {
       fail(`${field}.unchanged must be a boolean`);
     }
@@ -228,6 +230,9 @@ function validateReviewPlan(plan) {
     fail('combined worker requires unchanged consolidation evidence');
   }
   requireArray(plan.specialist_routing, 'review_plan.specialist_routing');
+  for (const [index, route] of plan.specialist_routing.entries()) {
+    requireObject(route, `review_plan.specialist_routing[${index}]`);
+  }
   const routedLenses = plan.specialist_routing.map(({ lens }) => lens);
   requireUniqueStrings(
     routedLenses,
@@ -243,7 +248,6 @@ function validateReviewPlan(plan) {
   const unavailableLenses = [];
   for (const [index, route] of plan.specialist_routing.entries()) {
     const field = `review_plan.specialist_routing[${index}]`;
-    requireObject(route, field);
     requireString(route.lens, `${field}.lens`);
     if (!['technology', 'specialist'].includes(route.category)) {
       fail(`${field}.category must be technology or specialist`);
@@ -386,10 +390,14 @@ function validateConfidenceInputs(finding, field) {
     && finding.fix_direction_confidence === 100) {
     fail(`${field} Context limit must reduce Fix-direction confidence`);
   }
-  if (inputs.evidence_quality.some(({ quality }) => (
+  const evidenceIsLimited = inputs.evidence_quality.some(({ quality }) => (
     quality === 'limited' || quality === 'conflicting'
-  )) && finding.finding_confidence === 100) {
+  ));
+  if (evidenceIsLimited && finding.finding_confidence === 100) {
     fail(`${field} limited evidence quality must reduce Finding confidence`);
+  }
+  if (evidenceIsLimited && finding.fix_direction_confidence === 100) {
+    fail(`${field} evidence quality must reduce Fix-direction confidence`);
   }
 }
 
@@ -1020,6 +1028,11 @@ function retainedArtifactEntries(run, fingerprint) {
   ));
   if (run.status === 'completed') {
     const findingIds = run.coordination.ordered_finding_ids.join(', ') || 'none';
+    const dispositionByFinding = new Map(
+      run.coordination.dispositions.map(
+        ({ finding_id: findingId, disposition }) => [findingId, disposition],
+      ),
+    );
     const findingsById = new Map(run.workers.flatMap(({ findings }) => (
       findings.map((finding) => [finding.id, finding])
     )));
@@ -1064,6 +1077,31 @@ function retainedArtifactEntries(run, fingerprint) {
         .filter(({ capability }) => capability === 'unavailable')
         .map(({ context_limit: limit }) => limit),
     ];
+    const findingSections = run.workers.flatMap((worker) => (
+      worker.findings.flatMap((finding) => [
+        `### Finding: ${finding.id}`,
+        `Worker: ${worker.id} (${worker.lens})`,
+        `Disposition: ${dispositionByFinding.get(finding.id)}`,
+        `Review level: ${finding.review_level}`,
+        `Severity: ${finding.severity}`,
+        `Finding confidence: ${finding.finding_confidence}`,
+        `Fix-direction confidence: ${finding.fix_direction_confidence}`,
+        `Conclusion: ${finding.conclusion}`,
+        `Evidence: ${canonicalJson(finding.evidence)}`,
+        `Impact: ${finding.impact}`,
+        `Affected scope: ${finding.affected_scope.join(', ')}`,
+        `Context limits: ${finding.context_limits.join('; ') || 'none'}`,
+        `Fix direction: ${finding.highest_actionable_fix_direction}`,
+        `Acceptance evidence: ${finding.acceptance_evidence.join('; ')}`,
+        '',
+      ])
+    ));
+    const coverageSections = run.workers.flatMap((worker) => [
+      `### Coverage: ${worker.id} (${worker.lens})`,
+      `Guidance: ${canonicalJson(worker.guidance_coverage)}`,
+      `Review regions: ${canonicalJson(worker.regions)}`,
+      '',
+    ]);
     entries.push({
       kind: 'markdown-brief',
       reference: run.artifacts.markdown_brief,
@@ -1076,6 +1114,12 @@ function retainedArtifactEntries(run, fingerprint) {
           + `..${run.ticket_outcome.immutable_range.head}`,
         `Status: ${run.status}`,
         `Ordered findings: ${findingIds}`,
+        '',
+        '## Findings',
+        ...findingSections,
+        '## Coverage',
+        ...coverageSections,
+        '## Coordination',
         `Finding disagreements: ${findingDisagreements}`,
         `Finding disagreement details: ${findingDisagreementDetails}`,
         `Guidance disagreements: ${guidanceDisagreements}`,
@@ -1168,9 +1212,9 @@ function validateRetainedArtifacts(run, resolveArtifact) {
 }
 
 module.exports = {
+  BASE_LENSES,
   CONCERNS,
   LEVELS,
-  LENSES: BASE_LENSES,
   ReviewArtifactError,
   coordinateReview,
   retainReview,

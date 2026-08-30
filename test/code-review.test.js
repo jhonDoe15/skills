@@ -12,13 +12,15 @@ const {
 } = require('../suite');
 const { executeTest } = require('../suite/testing');
 const { gradeCodeReviewResult } = require('../skills/code-review/evals/grader');
+const reviewArtifact = require('../skills/code-review/evals/review-artifact');
 const {
+  ReviewArtifactError,
   coordinateReview,
   retainReview,
   sha256,
   validateRetainedArtifacts,
   validateReviewRun,
-} = require('../skills/code-review/evals/review-artifact');
+} = reviewArtifact;
 
 const repositoryRoot = path.resolve(__dirname, '..');
 const concernIds = [
@@ -96,6 +98,8 @@ test('production Skills define the whole-ticket multi-lens review contract', () 
   assert.match(worker, /confidence inputs/i);
   assert.match(worker, /unaffected.*lower-level coverage/is);
   assert.match(worker, /underlying problem.*conclusion identity/is);
+  assert.match(worker, /report.*specialist.*need.*caller/is);
+  assert.match(worker, /does not dispatch.*Review worker/is);
 
   assert.match(coordinator, /validates? structure/i);
   assert.match(coordinator, /groups? compatible duplicates/i);
@@ -280,6 +284,14 @@ test('structural coordinator completes two lenses and rejects one lens', () => {
   );
 });
 
+test('artifact module names only its fixed base lenses', () => {
+  assert.deepEqual(
+    reviewArtifact.BASE_LENSES,
+    ['Domain', 'Engineering/Design'],
+  );
+  assert.equal(reviewArtifact.LENSES, undefined);
+});
+
 test('mechanical evidence permits one combined worker without weakening review structure', () => {
   const input = reviewInput();
   input.review_plan = reviewPlan('combined');
@@ -388,6 +400,27 @@ test('change signals route available specialists and retain unavailable capabili
     () => coordinateReview(imitated),
     /unavailable specialist must not have a Review worker/,
   );
+});
+
+test('malformed review-plan records retain ReviewArtifactError identity', () => {
+  for (const mutate of [
+    (input) => {
+      input.review_plan.consolidation.evidence[0] = null;
+    },
+    (input) => {
+      input.review_plan.specialist_routing.push(null);
+    },
+  ]) {
+    const input = reviewInput();
+    mutate(input);
+    assert.throws(
+      () => coordinateReview(input),
+      (error) => (
+        error instanceof ReviewArtifactError
+        && /must be an object/.test(error.message)
+      ),
+    );
+  }
 });
 
 function createPackageRoot(t, skillNames) {
@@ -942,6 +975,29 @@ test('coordination groups exact guidance and preserves finding and authority dis
   );
   assert.match(brief, /domain-worker-finding severity="Major"/);
   assert.match(brief, /engineering-worker-finding severity="Minor"/);
+  assert.match(
+    brief,
+    /Conclusion: domain-worker concluded that two lenses are required\./,
+  );
+  assert.match(
+    brief,
+    /Evidence: .*The completeness state accepts one worker\./,
+  );
+  assert.match(
+    brief,
+    /Impact: A partial review could be presented as complete\./,
+  );
+  assert.match(
+    brief,
+    /Fix direction: Require both independent lens results before completion\./,
+  );
+  assert.match(
+    brief,
+    /Acceptance evidence: A one-lens fixture fails structural validation\./,
+  );
+  assert.match(brief, /Coverage: domain-worker \(Domain\)/);
+  assert.match(brief, /intent-and-scope.*applicable-now/);
+  assert.match(brief, /review-artifact.*Code Quality.*examined/);
   assert.match(brief, /Guidance disagreements: intent-and-scope/);
   assert.match(brief, /repository:\/\/conflicting-rule/);
 });
@@ -1039,6 +1095,18 @@ test('confidence records evidence quality and explicit Context-limit effects', (
     () => coordinateReview(unaffectedScore),
     /Context limit must reduce Fix-direction confidence/,
   );
+
+  for (const quality of ['limited', 'conflicting']) {
+    const weakDirection = reviewInput();
+    const weakFinding = weakDirection.workers[0].findings[0];
+    weakFinding.confidence_inputs.evidence_quality[0].quality = quality;
+    weakFinding.finding_confidence = 99;
+    weakFinding.fix_direction_confidence = 100;
+    assert.throws(
+      () => coordinateReview(weakDirection),
+      /evidence quality must reduce Fix-direction confidence/,
+    );
+  }
 });
 
 test('contract coverage uses reciprocal scoped clause and case references', () => {
@@ -1319,7 +1387,196 @@ test('role and outcome cases reference one committed nontrivial review scenario'
   assert.match(diff, /subtotal >= 100/);
 });
 
-test('committed seeded and clean-negative cases cover every hardening branch', () => {
+function runHardeningCase({ input: caseInput, expected }) {
+  const { scenario } = caseInput;
+
+  if (scenario === 'combined') {
+    const input = reviewInput();
+    input.review_plan = reviewPlan('combined');
+    for (const dimension of caseInput.changed_dimensions) {
+      input.review_plan.consolidation.evidence.find(
+        (record) => record.dimension === dimension,
+      ).unchanged = false;
+    }
+    input.workers = [worker('combined-worker', 'Combined')];
+    input.artifacts.worker_candidate_streams = [
+      'artifact://combined/findings.jsonl',
+    ];
+    input.artifacts.worker_concern_coverage = [
+      'artifact://combined/coverage.json',
+    ];
+    assert.throws(() => coordinateReview(input), new RegExp(expected.error));
+    return;
+  }
+
+  if (scenario === 'unavailable-specialist') {
+    const input = reviewInput();
+    input.review_plan.specialist_routing.push({
+      lens: caseInput.lens,
+      category: caseInput.category,
+      signal_references: [caseInput.signal_reference],
+      capability: 'unavailable',
+      worker_id: null,
+      context_limit: caseInput.context_limit,
+    });
+    const retained = retainReview(coordinateReview(input));
+    assert.equal(retained.run.status, expected.status);
+    assert.deepEqual(
+      retained.run.coordination.coverage_union.lenses,
+      expected.lenses,
+    );
+    assert.deepEqual(
+      retained.run.review_plan.specialist_routing.map(
+        ({ context_limit: contextLimit }) => contextLimit,
+      ),
+      expected.context_limits,
+    );
+    assert.equal(
+      retained.run.retained_artifacts.length,
+      expected.retained_artifact_count,
+    );
+    return;
+  }
+
+  if (scenario === 'disagreement') {
+    const input = reviewInput();
+    input.workers[1].findings[0].severity = caseInput.engineering_severity;
+    input.workers[1].guidance_coverage[0].sources = [
+      caseInput.engineering_guidance_source,
+    ];
+    const retained = retainReview(coordinateReview(input));
+    assert.equal(retained.run.coordination.groups.length, expected.group_count);
+    assert.deepEqual(
+      retained.run.coordination.disagreements[0].incompatible_fields,
+      expected.finding_fields,
+    );
+    assert.deepEqual(
+      retained.run.coordination.guidance_disagreements.map(
+        ({ concern }) => concern,
+      ),
+      expected.guidance_concerns,
+    );
+    const brief = retained.bodies.get(retained.run.artifacts.markdown_brief);
+    for (const text of expected.brief_includes) assert.ok(brief.includes(text));
+    return;
+  }
+
+  if (scenario === 'supersession') {
+    const input = reviewInput();
+    const domainWorker = input.workers[0];
+    domainWorker.findings[0].review_level = caseInput.source_level;
+    const suppressedFinding = {
+      ...structuredClone(domainWorker.findings[0]),
+      id: 'matrix-lower-finding',
+      review_level: caseInput.suppressed_level,
+      severity: 'Minor',
+      duplicate_key: 'matrix-lower-problem',
+      conclusion_key: 'matrix-lower-conclusion',
+    };
+    domainWorker.findings.push(suppressedFinding);
+    domainWorker.regions[0].analysis[1].status = 'superseded';
+    domainWorker.regions[0].analysis[2].status = 'superseded';
+    domainWorker.regions[0].supersession = {
+      source_finding_id: domainWorker.findings[0].id,
+      suppressed_finding_ids: [suppressedFinding.id],
+      reason: 'The source finding materially replaces this Review region.',
+    };
+    domainWorker.regions.push({
+      id: caseInput.unaffected_region,
+      affected_scope: ['skills/review-worker'],
+      analysis: levels.map((level) => ({
+        level,
+        status: 'examined',
+        evidence: ['diff://base..head/unaffected-region'],
+      })),
+      supersession: null,
+    });
+    const run = coordinateReview(input);
+    assert.equal(
+      run.coordination.dispositions.find(
+        ({ finding_id: findingId }) => findingId === suppressedFinding.id,
+      ).disposition,
+      expected.suppressed_disposition,
+    );
+    assert.deepEqual(
+      run.workers[0].regions.find(
+        ({ id }) => id === caseInput.unaffected_region,
+      ).analysis.map(({ status }) => status),
+      expected.unaffected_statuses,
+    );
+    return;
+  }
+
+  if (scenario === 'confidence') {
+    const input = reviewInput();
+    const finding = input.workers[0].findings[0];
+    finding.confidence_inputs.evidence_quality[0].quality =
+      caseInput.evidence_quality;
+    finding.finding_confidence = caseInput.finding_confidence;
+    finding.fix_direction_confidence =
+      caseInput.fix_direction_confidence;
+    assert.throws(() => coordinateReview(input), new RegExp(expected.error));
+    return;
+  }
+
+  if (scenario === 'worker-failure') {
+    const input = reviewInput();
+    const failedWorker = input.workers.find(
+      ({ id }) => id === caseInput.worker_id,
+    );
+    failedWorker.status = 'failed';
+    failedWorker.failure = {
+      stage: 'region-analysis',
+      code: 'worker-interrupted',
+      message: 'Worker stopped after partial analysis.',
+      evidence: ['artifact://worker/partial.json'],
+    };
+    failedWorker.guidance_coverage = failedWorker.guidance_coverage.slice(
+      0,
+      caseInput.retained_guidance_records,
+    );
+    failedWorker.findings = [];
+    input.artifacts.markdown_brief = null;
+    const retained = retainReview(coordinateReview(input));
+    assert.equal(retained.run.status, expected.status);
+    assert.equal(retained.run.artifacts.markdown_brief, expected.markdown_brief);
+    assert.equal(
+      retained.run.retained_artifacts.length,
+      expected.retained_artifact_count,
+    );
+    return;
+  }
+
+  if (scenario === 'ordinary') {
+    const run = coordinateReview(reviewInput());
+    assert.equal(run.status, expected.status);
+    assert.deepEqual(run.coordination.coverage_union.lenses, expected.lenses);
+    assert.deepEqual(
+      run.workers[0].regions[0].analysis.map(({ level }) => level),
+      expected.review_levels,
+    );
+    return;
+  }
+
+  if (scenario === 'package-closure') {
+    const missingDependencies = new Set();
+    for (const relativePath of caseInput.closure_files) {
+      for (const closureCase of readJson(relativePath).cases) {
+        missingDependencies.add(closureCase.missing_dependency);
+        assert.equal(
+          closureCase.expected_failure.message,
+          `Missing internal dependency "${closureCase.missing_dependency}"`,
+        );
+      }
+    }
+    assert.deepEqual([...missingDependencies], expected.missing_dependencies);
+    return;
+  }
+
+  assert.fail(`unknown hardening scenario ${scenario}`);
+}
+
+test('committed seeded and clean-negative cases replay every hardening branch', () => {
   const relativePath = 'test/fixtures/code-review/hardening-cases.json';
   const fixture = readJson(relativePath);
   const expectedBranches = [
@@ -1334,7 +1591,7 @@ test('committed seeded and clean-negative cases cover every hardening branch', (
     'ordinary-nontrivial-preservation',
     'production-dependency-boundary',
   ];
-  assert.equal(fixture.schema, 'code-review-hardening-cases/v1');
+  assert.equal(fixture.schema, 'code-review-hardening-cases/v2');
   assert.deepEqual(
     new Set(fixture.cases.flatMap(({ branches }) => branches)),
     new Set(expectedBranches),
@@ -1342,9 +1599,10 @@ test('committed seeded and clean-negative cases cover every hardening branch', (
   assert.equal(fixture.cases.some(({ kind }) => kind === 'seeded'), true);
   assert.equal(fixture.cases.some(({ kind }) => kind === 'clean-negative'), true);
   assert.equal(
-    fixture.cases.every(({ assertions }) => assertions.length > 0),
+    fixture.cases.every(({ input, expected }) => input && expected),
     true,
   );
+  for (const caseDefinition of fixture.cases) runHardeningCase(caseDefinition);
 
   const definitions = [
     require('../skills/code-review/evals').loadDefinitions(repositoryRoot)[0],
