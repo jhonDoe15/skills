@@ -31,7 +31,7 @@
       },
       {
         "id": "retained-state",
-        "description": "Retains source, authorization, calculations, lifecycles, completions, dependencies, synthesis, and final dispatch state."
+        "description": "Retains recomputable fingerprints, executor and collision decisions, ordered isolated worktree evidence, scoped PR authorization, partial failures, synthesis, and frontier advancement."
       }
     ]
   },
@@ -43,8 +43,14 @@
       "expected_output": "Independent initial tickets start concurrently; each completion immediately updates dependencies and starts newly eligible work without waiting for unrelated active tickets.",
       "files": [
         "test/fixtures/dispatch-work/completed-dispatch.json",
+        "test/fixtures/dispatch-work/resumed-dispatch.json",
+        "test/fixtures/dispatch-work/retained-reviewed-ticket-A.json",
+        "test/fixtures/dispatch-work/canonical-reviewed-ticket.json",
+        "test/fixtures/dispatch-work/collision-dispatch.json",
+        "test/fixtures/dispatch-work/hardened-partial-dispatch.json",
         "test/fixtures/dispatch-work/held-dispatch.json",
         "test/fixtures/dispatch-work/mixed-frontier-dispatch.json",
+        "test/fixtures/dispatch-work/pr-maintenance-adapter.js",
         "test/fixtures/dispatch-work/sandbox/tracker.json",
         "test/fixtures/dispatch-work/sandbox/pr.json",
         "test/fixtures/dispatch-work/sandbox/ci.json",
@@ -72,8 +78,13 @@
       "expectations": [
         "Execution begins only from retained explicit authorization and a published ready DAG identity.",
         "Independent eligible tickets start concurrently and newly unblocked tickets start as completion events arrive.",
+        "Compatible retained state resumes only after source and execution fingerprints recompute from retained inputs, and only resolved complete authoritative reviewed-ticket work bound to the exact skipped ticket is skipped.",
+        "Executor capacity and collision metadata delay only conflicting starts without changing DAG eligibility or edges.",
+        "Every active ticket has an isolated owned worktree created before lifecycle start with leak-check evidence; failed allocation and lifecycle evidence remains diagnosable.",
+        "PR maintenance requires exact repository/action/target authorization tuples without Cartesian cross-pairing; denied authorization records a needed action with no mutation.",
         "Only complete authoritative reviewed-ticket results satisfy dependency edges.",
-        "Synthesis consumes compact implementation handoffs and Review briefs without repeating per-ticket Code Review.",
+        "Independent work survives retryable, failed, and human-decision tickets while their dependents remain blocked.",
+        "Synthesis rejects aliased evidence ownership and preserves unresolved systematic concerns citing current-or-prior synthesis evidence from at least two ticket identities without repeating per-ticket Code Review.",
         "All required state remains inspectable for deterministic offline replay."
       ]
     }

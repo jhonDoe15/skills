@@ -1,0 +1,382 @@
+{
+  "schema": "dispatch-work-artifact/v1",
+  "authorization": {
+    "explicit": true,
+    "granted": true,
+    "source": "fixture://authorization/partial"
+  },
+  "execution_context": {
+    "repositories": ["fixture://repository/dispatch"],
+    "trackers": ["fixture://tracker/dispatch"],
+    "canonical_dependencies": ["take-ticket", "take-it-offline"],
+    "immutable_base": "1111111111111111111111111111111111111111"
+  },
+  "resume": {
+    "requested": false,
+    "decision": "fresh",
+    "source_dag_fingerprint": {
+      "current": "sha256:bcad4b35ee4d5bc5bfc55b725573962c3756895858834dae61ddc36e5e84b31e",
+      "current_inputs": ["$.source_dag", "$.collision_constraints"]
+    },
+    "execution_fingerprint": {
+      "current": "sha256:087f182ed846be6b2279a0f679bc3768141187ac1b4a695947f588d799dd47a3",
+      "current_inputs": ["$.execution_context", "$.executor"]
+    }
+  },
+  "source_dag": {
+    "identity": "fixture://published-dag/partial-hardening-v1",
+    "published": true,
+    "ready": true,
+    "tickets": [
+      { "id": "A", "dependencies": [], "initial_state": "open" },
+      { "id": "B", "dependencies": ["A"], "initial_state": "open" },
+      { "id": "C", "dependencies": ["B"], "initial_state": "open" },
+      { "id": "D", "dependencies": [], "initial_state": "open" },
+      { "id": "E", "dependencies": [], "initial_state": "open" },
+      { "id": "F", "dependencies": [], "initial_state": "open" },
+      { "id": "G", "dependencies": ["D"], "initial_state": "open" }
+    ],
+    "dependencies": [
+      { "ticket": "B", "depends_on": "A", "initial_state": "open" },
+      { "ticket": "C", "depends_on": "B", "initial_state": "open" },
+      { "ticket": "G", "depends_on": "D", "initial_state": "open" }
+    ]
+  },
+  "executor": {
+    "precedence": ["repository", "project", "user", "bundled-default"],
+    "candidates": {
+      "repository": {
+        "value": 4,
+        "source": "fixture://config/repository"
+      },
+      "project": {
+        "value": null,
+        "source": "fixture://config/project"
+      },
+      "user": {
+        "value": null,
+        "source": "fixture://config/user"
+      },
+      "bundled-default": {
+        "value": 1,
+        "source": "fixture://config/bundled-default"
+      }
+    },
+    "selected": {
+      "scope": "repository",
+      "value": 4,
+      "source": "fixture://config/repository"
+    }
+  },
+  "collision_constraints": [],
+  "frontier_calculations": [
+    {
+      "id": "frontier-partial-1",
+      "sequence": 1,
+      "eligible": ["A", "D", "E", "F"],
+      "selected": ["A", "D", "E", "F"],
+      "active": [],
+      "deferred": []
+    },
+    {
+      "id": "frontier-partial-2",
+      "sequence": 8,
+      "eligible": ["B"],
+      "selected": ["B"],
+      "active": ["D", "E"],
+      "deferred": []
+    },
+    {
+      "id": "frontier-partial-3",
+      "sequence": 13,
+      "eligible": ["C"],
+      "selected": ["C"],
+      "active": ["D", "E"],
+      "deferred": []
+    },
+    {
+      "id": "frontier-partial-4",
+      "sequence": 18,
+      "eligible": [],
+      "selected": [],
+      "active": [],
+      "deferred": []
+    }
+  ],
+  "ticket_lifecycles": [
+    {
+      "ticket": "A",
+      "state": "completed",
+      "frontier_calculation": "frontier-partial-1",
+      "started_sequence": 3,
+      "completed_sequence": 6,
+      "result": {
+        "status": "complete",
+        "authority": "reviewed-ticket",
+        "implementation_handoff": "artifact://implement/A.json",
+        "review_brief": "artifact://review/A.json"
+      }
+    },
+    {
+      "ticket": "B",
+      "state": "completed",
+      "frontier_calculation": "frontier-partial-2",
+      "started_sequence": 10,
+      "completed_sequence": 11,
+      "result": {
+        "status": "complete",
+        "authority": "reviewed-ticket",
+        "implementation_handoff": "artifact://implement/B.json",
+        "review_brief": "artifact://review/B.json"
+      }
+    },
+    {
+      "ticket": "C",
+      "state": "completed",
+      "frontier_calculation": "frontier-partial-3",
+      "started_sequence": 15,
+      "completed_sequence": 16,
+      "result": {
+        "status": "complete",
+        "authority": "reviewed-ticket",
+        "implementation_handoff": "artifact://implement/C.json",
+        "review_brief": "artifact://review/C.json"
+      }
+    },
+    {
+      "ticket": "D",
+      "state": "failed",
+      "frontier_calculation": "frontier-partial-1",
+      "started_sequence": 4,
+      "terminal_sequence": 15,
+      "result": {
+        "status": "failed",
+        "recovery_action": "Repair ticket D from its retained worktree."
+      }
+    },
+    {
+      "ticket": "E",
+      "state": "human-decision",
+      "frontier_calculation": "frontier-partial-1",
+      "started_sequence": 5,
+      "terminal_sequence": 16,
+      "result": {
+        "status": "human-decision",
+        "recovery_action": "Resolve ticket E's ownership decision."
+      }
+    }
+  ],
+  "worktrees": [
+    {
+      "ticket": "A",
+      "owner": "dispatch-partial:A",
+      "path": "fixture://worktree/A",
+      "base": "1111111111111111111111111111111111111111",
+      "created_sequence": 2,
+      "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/A"
+      },
+      "lifecycle_state": "removed",
+      "cleanup": {
+        "decision": "remove-after-completion",
+        "diagnostic_artifacts": []
+      }
+    },
+    {
+      "ticket": "B",
+      "owner": "dispatch-partial:B",
+      "path": "fixture://worktree/B",
+      "base": "1111111111111111111111111111111111111111",
+      "created_sequence": 9,
+      "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/B"
+      },
+      "lifecycle_state": "removed",
+      "cleanup": {
+        "decision": "remove-after-completion",
+        "diagnostic_artifacts": []
+      }
+    },
+    {
+      "ticket": "C",
+      "owner": "dispatch-partial:C",
+      "path": "fixture://worktree/C",
+      "base": "1111111111111111111111111111111111111111",
+      "created_sequence": 14,
+      "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/C"
+      },
+      "lifecycle_state": "removed",
+      "cleanup": {
+        "decision": "remove-after-completion",
+        "diagnostic_artifacts": []
+      }
+    },
+    {
+      "ticket": "D",
+      "owner": "dispatch-partial:D",
+      "path": "fixture://worktree/D",
+      "base": "1111111111111111111111111111111111111111",
+      "created_sequence": 3,
+      "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/D"
+      },
+      "lifecycle_state": "retained-for-diagnosis",
+      "cleanup": {
+        "decision": "retain-after-failure",
+        "diagnostic_artifacts": ["artifact://diagnostics/D.json"]
+      }
+    },
+    {
+      "ticket": "E",
+      "owner": "dispatch-partial:E",
+      "path": "fixture://worktree/E",
+      "base": "1111111111111111111111111111111111111111",
+      "created_sequence": 4,
+      "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/E"
+      },
+      "lifecycle_state": "retained-for-diagnosis",
+      "cleanup": {
+        "decision": "retain-for-human-decision",
+        "diagnostic_artifacts": ["artifact://diagnostics/E.json"]
+      }
+    },
+    {
+      "ticket": "F",
+      "owner": "dispatch-partial:F",
+      "path": "fixture://worktree/F",
+      "base": "1111111111111111111111111111111111111111",
+      "frontier_calculation": "frontier-partial-1",
+      "created_sequence": 5,
+      "creation_result": "failed",
+      "isolation_check": {
+        "status": "not-created",
+        "evidence": "artifact://diagnostics/worktree-F.json"
+      },
+      "lifecycle_state": "creation-failed",
+      "recovery_action": "Retry isolated worktree creation for ticket F.",
+      "cleanup": {
+        "decision": "retain-creation-failure",
+        "diagnostic_artifacts": ["artifact://diagnostics/worktree-F.json"]
+      }
+    }
+  ],
+  "pr_maintenance": [],
+  "completion_events": [
+    {
+      "sequence": 6,
+      "ticket": "A",
+      "result_status": "complete",
+      "authority": "reviewed-ticket"
+    },
+    {
+      "sequence": 11,
+      "ticket": "B",
+      "result_status": "complete",
+      "authority": "reviewed-ticket"
+    },
+    {
+      "sequence": 16,
+      "ticket": "C",
+      "result_status": "complete",
+      "authority": "reviewed-ticket"
+    }
+  ],
+  "dependency_transitions": [
+    {
+      "sequence": 7,
+      "ticket": "B",
+      "dependency": "A",
+      "from": "open",
+      "to": "satisfied",
+      "completion_sequence": 6
+    },
+    {
+      "sequence": 12,
+      "ticket": "C",
+      "dependency": "B",
+      "from": "open",
+      "to": "satisfied",
+      "completion_sequence": 11
+    }
+  ],
+  "synthesis": [
+    {
+      "frontier_id": "frontier-partial-1",
+      "sequence": 19,
+      "tickets": ["A"],
+      "inputs": {
+        "implementation_handoffs": ["artifact://implement/A.json"],
+        "review_briefs": ["artifact://review/A.json"]
+      },
+      "concerns": [],
+      "recommendations": ["accept A"]
+    },
+    {
+      "frontier_id": "frontier-partial-2",
+      "sequence": 20,
+      "tickets": ["B"],
+      "inputs": {
+        "implementation_handoffs": ["artifact://implement/B.json"],
+        "review_briefs": ["artifact://review/B.json"]
+      },
+      "concerns": [
+        {
+          "id": "systematic-worktree-cleanup",
+          "scope": "cross-ticket",
+          "status": "unresolved",
+          "disposition": "human-decision",
+          "evidence": {
+            "implementation_handoffs": [
+              "artifact://implement/A.json",
+              "artifact://implement/B.json"
+            ],
+            "review_briefs": [
+              "artifact://review/A.json",
+              "artifact://review/B.json"
+            ]
+          }
+        }
+      ],
+      "recommendations": [
+        "accept B",
+        "human decision on systematic worktree cleanup"
+      ]
+    },
+    {
+      "frontier_id": "frontier-partial-3",
+      "sequence": 21,
+      "tickets": ["C"],
+      "inputs": {
+        "implementation_handoffs": ["artifact://implement/C.json"],
+        "review_briefs": ["artifact://review/C.json"]
+      },
+      "concerns": [],
+      "recommendations": ["accept C"]
+    }
+  ],
+  "unresolved_systematic_concerns": ["systematic-worktree-cleanup"],
+  "final_state": {
+    "status": "failed",
+    "open_tickets": [],
+    "active_tickets": [],
+    "completed_tickets": ["A", "B", "C"],
+    "retryable_tickets": ["F"],
+    "human_decision_tickets": ["E"],
+    "held_tickets": [],
+    "blocked_tickets": ["G"],
+    "failed_tickets": ["D"],
+    "first_recovery_action": "Retry isolated worktree creation for ticket F."
+  }
+}

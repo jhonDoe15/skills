@@ -25,11 +25,11 @@
     "dimensions": [
       {
         "id": "structural-validation",
-        "description": "The coordinator rejects incomplete lenses, malformed findings, mismatched inputs, and incomplete artifacts."
+        "description": "The coordinator rejects unsupported consolidation, missing routed lenses, malformed findings, mismatched inputs, and incomplete artifacts."
       },
       {
         "id": "conclusion-preservation",
-        "description": "Compatible duplicates, sorting, supersession, and coverage union retain worker conclusions and disagreements."
+        "description": "Compatible finding duplicates, exact guidance duplicates, sorting, worker-declared supersession, and coverage union retain worker conclusions and every disagreement."
       },
       {
         "id": "coordination-boundary",
@@ -50,6 +50,7 @@
         "test/fixtures/code-review/scenario/validation.json",
         "test/fixtures/code-review/scenario/diff.patch",
         "test/fixtures/code-review/scenario/seeded-defects.json",
+        "test/fixtures/code-review/hardening-cases.json",
         "test/fixtures/code-review/scenario/repository/src/discount.js",
         "test/fixtures/code-review/scenario/repository/test/discount.test.js"
       ],
@@ -60,14 +61,15 @@
         "writing-foundation"
       ],
       "expectations": [
-        "The coordinator validates two distinct lens identities, matching whole-ticket inputs, complete concern coverage, ordered regions, finding fields, and artifact references.",
-        "Compatible duplicate grouping keeps every source identity and conclusion.",
+        "The coordinator validates the planned consolidated or separate base lenses, any routed specialist lenses, matching whole-ticket inputs, complete concern coverage, ordered regions, finding fields, and artifact references.",
+        "Compatible duplicate grouping keeps every source identity and conclusion; exact guidance duplicates group separately.",
         "Sorting follows Review level, severity, and stable identity; coverage union loses no worker, lens, region, level, or concern.",
-        "Only worker-declared supersession is applied and disagreements remain visible.",
+        "Only worker-declared, region-bounded supersession is applied and conclusion, authority, severity, confidence, and fix-direction disagreements remain visible.",
         "The coordinator does not inspect for new issues, change conclusions, plan fixes, or mutate reviewed state.",
         "Blind model judgment and sampled human review assess semantic grouping and preservation."
       ],
       "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr47-coordination-fidelity"},
         {"scope": "issue-42-code-review", "id": "rc-validation"},
         {"scope": "issue-42-code-review", "id": "rc-grouping"},
         {"scope": "issue-42-code-review", "id": "rc-sorting"},

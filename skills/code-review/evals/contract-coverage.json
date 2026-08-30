@@ -3,6 +3,36 @@
   "scope": "issue-42-code-review",
   "clauses": [
     {
+      "id": "cr47-consolidation-and-specialist-routing",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-role", "id": "ordinary-whole-ticket-review"},
+        {"scope": "code-review-outcome", "id": "nontrivial-ticket-outcome"}
+      ]
+    },
+    {
+      "id": "cr47-artifact-exposure-and-partial-failure",
+      "owner": "code-review",
+      "cases": [
+        {"scope": "code-review-role", "id": "ordinary-whole-ticket-review"},
+        {"scope": "code-review-outcome", "id": "nontrivial-ticket-outcome"}
+      ]
+    },
+    {
+      "id": "cr47-worker-confidence-and-region-suppression",
+      "owner": "review-worker",
+      "cases": [
+        {"scope": "review-worker-role", "id": "whole-ticket-worker-analysis"}
+      ]
+    },
+    {
+      "id": "cr47-coordination-fidelity",
+      "owner": "review-coordinator",
+      "cases": [
+        {"scope": "review-coordinator-role", "id": "structural-review-coordination"}
+      ]
+    },
+    {
       "id": "cr-complete-ticket-input",
       "owner": "code-review",
       "cases": [

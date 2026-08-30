@@ -6,7 +6,7 @@
   "invocation": {
     "ticket": "A",
     "skill": "take-ticket",
-    "sequence": 2,
+    "sequence": 3,
     "status": "succeeded"
   },
   "completion": {

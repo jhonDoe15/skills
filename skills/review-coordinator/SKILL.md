@@ -11,10 +11,10 @@ is the only owned behavior.
 
 ## Required input
 
-Require the run manifest, immutable diff package, complete Domain worker output,
-complete Engineering/Design worker output, both concern coverage artifacts, and
-the destination for retained artifacts. Each worker must name the same Ticket
-outcome references and immutable range.
+Require the run manifest, immutable diff package, consolidation evidence,
+specialist-routing decisions, every planned worker output and concern coverage
+artifact, and the destination for retained artifacts. Each worker must name the
+same Ticket outcome references and immutable range.
 
 ## Required dependency
 
@@ -30,7 +30,8 @@ Do not copy its behavior or use a test Adapter in production.
 Before aggregation, validate:
 
 - exactly one Domain and one Engineering/Design worker with distinct identities
-  and lens provenance;
+  and lens provenance, unless complete consolidation evidence permits one
+  Combined worker, plus every available specialist worker selected by signals;
 - complete and matching Ticket outcome references and immutable range identity;
 - all nine Engineering Guidance concern dispositions from each worker, stored
   separately from findings;
@@ -47,13 +48,19 @@ check by its canonical identity, and do not produce a Markdown Review brief.
 ## Group compatible duplicates
 
 Group findings only when workers identify the same underlying problem and their
+declared conclusions, levels, severities, confidence inputs, Context limits,
 affected scopes, impacts, and highest actionable fix directions are compatible.
 Keep every source finding identity and conclusion unchanged. Record why the
-findings were grouped. Keep disagreements separate and visible.
+findings were grouped. Keep incompatible conclusions, authority, severity, and
+other worker disagreements separate and visible.
+
+Group only exact duplicate guidance records. Preserve every distinct record for
+the same concern as a guidance disagreement; the coordinator neither chooses an
+authority nor rewrites its disposition.
 
 Apply only worker-declared supersession. Record each superseded finding or
-region, its declaring worker, and its higher-level source. The coordinator does
-not invent supersession.
+region, its declaring worker, affected Review region, and higher-level source.
+The coordinator does not invent, extend, or infer supersession.
 
 ## Sort and union
 
@@ -91,7 +98,7 @@ pull-request, branch, dependency, or release state.
 
 ## Completion
 
-Complete only when both worker outputs pass every structural check, every source
-finding has one coordination disposition, coverage is unioned without loss, and
-the final Markdown brief and completeness state reference all retained
-artifacts.
+Complete only when every planned worker output passes every structural check,
+every source finding has one coordination disposition, coverage and
+disagreements are retained without loss, and the final Markdown brief and
+completeness state reference all retained artifacts.

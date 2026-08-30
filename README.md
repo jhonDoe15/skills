@@ -7,7 +7,7 @@ Agent Skills including these documented planning surfaces:
 - **`slice-plan`** — private set-level decomposition loaded by Carve.
 - **`/carve`** — explicitly invoked to turn authoritative requirements into a
   ready ticket DAG or a needs-decision plan.
-- **`pr-carver`** — model-invoked PR size and structure guidance for parallel and stacked pull requests.
+- **`pr-carver`** — model-invoked, read-only topology guidance for existing branches and pull requests.
 - **`/dispatch-work`** — explicitly invoked to run an authorized published ticket DAG through moving parallel Take Ticket frontiers.
 - **`/incident-investigation`** — explicitly invoked, investigation-only guidance for evidence-led production incident and hard-to-localize bug analysis.
 
@@ -91,13 +91,14 @@ Invoke `/carve` explicitly when an authoritative requirement source exists.
 Carve publishes only a validated ready plan and only with separate explicit
 authorization.
 
-## `pr-carver` — size and structure PRs
+## `pr-carver` — assess PR topology
 
-PR Carver independently measures additions and deletions and raises size-watch
-bands at 500 and 1000 changed lines. It uses ticket-scope to recommend
-independent PRs first, then GitHub native stacked PRs, ordinary stacked Git
-PRs, or one PR when splitting adds no value. Keeping a Band 3 PR as one unit
-requires confirmation; branch and PR mutations always require authorization.
+PR Carver uses Ticket Scope to identify natural mergeable units, then recommends
+topology from concrete prerequisite edges and normal, prefactor, or
+expand-contract migration treatment. Shared-resource collisions remain
+serialization metadata rather than dependency edges. Assessment is read-only;
+every later branch or pull-request mutation requires separate authorization for
+the named operation and target.
 
 ## `/dispatch-work` — run the tracker
 
