@@ -5,9 +5,23 @@
     "granted": true,
     "source": "fixture://authorization/partial"
   },
+  "execution_context": {
+    "repositories": ["fixture://repository/dispatch"],
+    "trackers": ["fixture://tracker/dispatch"],
+    "canonical_dependencies": ["take-ticket", "take-it-offline"],
+    "immutable_base": "1111111111111111111111111111111111111111"
+  },
   "resume": {
     "requested": false,
-    "decision": "fresh"
+    "decision": "fresh",
+    "source_dag_fingerprint": {
+      "current": "sha256:bcad4b35ee4d5bc5bfc55b725573962c3756895858834dae61ddc36e5e84b31e",
+      "current_inputs": ["$.source_dag", "$.collision_constraints"]
+    },
+    "execution_fingerprint": {
+      "current": "sha256:087f182ed846be6b2279a0f679bc3768141187ac1b4a695947f588d799dd47a3",
+      "current_inputs": ["$.execution_context", "$.executor"]
+    }
   },
   "source_dag": {
     "identity": "fixture://published-dag/partial-hardening-v1",
@@ -74,7 +88,7 @@
     },
     {
       "id": "frontier-partial-3",
-      "sequence": 12,
+      "sequence": 13,
       "eligible": ["C"],
       "selected": ["C"],
       "active": ["D", "E"],
@@ -94,7 +108,7 @@
       "ticket": "A",
       "state": "completed",
       "frontier_calculation": "frontier-partial-1",
-      "started_sequence": 2,
+      "started_sequence": 3,
       "completed_sequence": 6,
       "result": {
         "status": "complete",
@@ -107,8 +121,8 @@
       "ticket": "B",
       "state": "completed",
       "frontier_calculation": "frontier-partial-2",
-      "started_sequence": 9,
-      "completed_sequence": 10,
+      "started_sequence": 10,
+      "completed_sequence": 11,
       "result": {
         "status": "complete",
         "authority": "reviewed-ticket",
@@ -120,8 +134,8 @@
       "ticket": "C",
       "state": "completed",
       "frontier_calculation": "frontier-partial-3",
-      "started_sequence": 13,
-      "completed_sequence": 14,
+      "started_sequence": 15,
+      "completed_sequence": 16,
       "result": {
         "status": "complete",
         "authority": "reviewed-ticket",
@@ -133,7 +147,7 @@
       "ticket": "D",
       "state": "failed",
       "frontier_calculation": "frontier-partial-1",
-      "started_sequence": 3,
+      "started_sequence": 4,
       "terminal_sequence": 15,
       "result": {
         "status": "failed",
@@ -144,7 +158,7 @@
       "ticket": "E",
       "state": "human-decision",
       "frontier_calculation": "frontier-partial-1",
-      "started_sequence": 4,
+      "started_sequence": 5,
       "terminal_sequence": 16,
       "result": {
         "status": "human-decision",
@@ -160,6 +174,10 @@
       "base": "1111111111111111111111111111111111111111",
       "created_sequence": 2,
       "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/A"
+      },
       "lifecycle_state": "removed",
       "cleanup": {
         "decision": "remove-after-completion",
@@ -173,6 +191,10 @@
       "base": "1111111111111111111111111111111111111111",
       "created_sequence": 9,
       "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/B"
+      },
       "lifecycle_state": "removed",
       "cleanup": {
         "decision": "remove-after-completion",
@@ -184,8 +206,12 @@
       "owner": "dispatch-partial:C",
       "path": "fixture://worktree/C",
       "base": "1111111111111111111111111111111111111111",
-      "created_sequence": 13,
+      "created_sequence": 14,
       "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/C"
+      },
       "lifecycle_state": "removed",
       "cleanup": {
         "decision": "remove-after-completion",
@@ -199,6 +225,10 @@
       "base": "1111111111111111111111111111111111111111",
       "created_sequence": 3,
       "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/D"
+      },
       "lifecycle_state": "retained-for-diagnosis",
       "cleanup": {
         "decision": "retain-after-failure",
@@ -212,6 +242,10 @@
       "base": "1111111111111111111111111111111111111111",
       "created_sequence": 4,
       "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/E"
+      },
       "lifecycle_state": "retained-for-diagnosis",
       "cleanup": {
         "decision": "retain-for-human-decision",
@@ -226,6 +260,10 @@
       "frontier_calculation": "frontier-partial-1",
       "created_sequence": 5,
       "creation_result": "failed",
+      "isolation_check": {
+        "status": "not-created",
+        "evidence": "artifact://diagnostics/worktree-F.json"
+      },
       "lifecycle_state": "creation-failed",
       "recovery_action": "Retry isolated worktree creation for ticket F.",
       "cleanup": {
@@ -243,13 +281,13 @@
       "authority": "reviewed-ticket"
     },
     {
-      "sequence": 10,
+      "sequence": 11,
       "ticket": "B",
       "result_status": "complete",
       "authority": "reviewed-ticket"
     },
     {
-      "sequence": 14,
+      "sequence": 16,
       "ticket": "C",
       "result_status": "complete",
       "authority": "reviewed-ticket"
@@ -265,12 +303,12 @@
       "completion_sequence": 6
     },
     {
-      "sequence": 11,
+      "sequence": 12,
       "ticket": "C",
       "dependency": "B",
       "from": "open",
       "to": "satisfied",
-      "completion_sequence": 10
+      "completion_sequence": 11
     }
   ],
   "synthesis": [

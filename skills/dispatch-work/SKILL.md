@@ -37,13 +37,14 @@ Code Review path in production.
 
 ## Fingerprint and resume
 
-Before starting work, retain a source-DAG fingerprint and an execution
-fingerprint. The source fingerprint covers the published identity, ticket
-state, direct dependency edges, and collision metadata. The execution
-fingerprint covers immutable bases, repository and tracker boundaries, resolved
-canonical dependencies, and executor configuration inputs. Retain the
-fingerprint inputs with their digests so an offline replay can verify the
-decision.
+Before starting work, retain SHA-256 source-DAG and execution fingerprints.
+Canonicalize object keys before hashing so offline replay is deterministic. The
+source fingerprint covers the published identity, ticket state, direct
+dependency edges, and collision metadata. The execution fingerprint covers
+immutable bases, repository and tracker boundaries, resolved canonical
+dependencies, and executor configuration inputs. Retain direct pointers to the
+current inputs, the current digest, and, for resume, the retained input snapshot
+and digest so offline replay can recompute both sides of the decision.
 
 Start fresh when no retained state was supplied. Resume only when retained
 evidence is complete and both retained fingerprints match the current inputs.
@@ -52,8 +53,8 @@ and retain the mismatch and required recovery.
 
 For a compatible resume:
 
-- skip only a ticket with a retained complete authoritative reviewed-ticket
-  result;
+- skip only a ticket whose retained result reference resolves to a complete
+  authoritative reviewed-ticket result;
 - restart incomplete lifecycle work unless a retained retry point and owned
   worktree explicitly support continuation;
 - preserve failed, retryable, and human-decision states; and
@@ -126,11 +127,13 @@ lifecycle state. Reject reused ownership, a dirty or mismatched base, and any
 path already owned by another ticket.
 
 Give Take Ticket only that worktree. A ticket cannot read or write another
-ticket's worktree. On complete reviewed work, record cleanup and remove the
-worktree when repository policy permits. On creation, lifecycle, or cleanup
-failure, retain the worktree or failed allocation record plus diagnostic
-artifacts and the next recovery action. Cleanup must preserve the evidence
-needed to explain partial work.
+ticket's worktree. Record a passing isolation check and its evidence before the
+lifecycle starts; creation and lifecycle start must have distinct ordered
+events. On complete reviewed work, record cleanup and remove the worktree when
+repository policy permits. On creation, lifecycle, or cleanup failure, retain
+the worktree or failed allocation record plus diagnostic artifacts and the next
+recovery action. Cleanup must preserve the evidence needed to explain partial
+work.
 
 ## Run the moving frontier
 
@@ -170,11 +173,12 @@ maintenance, require a separate explicit authorization whose scope and source
 cover the requested actions.
 
 Without that authorization, record the needed action and return it with zero
-attempted PR mutations. With authorization, invoke external `autopilot` inside
-the authorized ticket and repository boundary. Retain every attempted action
-and whether it completed. A missing or failed prerequisite leaves the ticket
-retryable or human-decision; it never grants mutation authority. Tests observe
-this branch only through bounded test Adapters and sandboxed fixtures.
+attempted PR mutations. With authorization, invoke external `autopilot` only
+for the authorized repository, action, and target. Retain each attempt and
+completion with that scope, outcome, and evidence reference. A missing or
+failed prerequisite leaves the ticket retryable or human-decision; it never
+grants mutation authority. Tests observe this branch only through bounded test
+Adapters and sandboxed fixtures.
 
 ## Synthesize completed frontiers
 

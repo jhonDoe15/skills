@@ -21,9 +21,23 @@
     "granted": true,
     "source": "fixture://authorization/dispatch-ordinary-frontier"
   },
+  "execution_context": {
+    "repositories": ["fixture://repository/dispatch"],
+    "trackers": ["fixture://tracker/dispatch"],
+    "canonical_dependencies": ["take-ticket", "take-it-offline"],
+    "immutable_base": "1111111111111111111111111111111111111111"
+  },
   "resume": {
     "requested": false,
-    "decision": "fresh"
+    "decision": "fresh",
+    "source_dag_fingerprint": {
+      "current": "sha256:aa7593e5340d5f3cfc969ad316d62d84f8614c12df47276a1cdb1d108a4d047f",
+      "current_inputs": ["$.source_dag", "$.collision_constraints"]
+    },
+    "execution_fingerprint": {
+      "current": "sha256:05354a6118a3ca55a9f67f67ce3260512f7cff3d4e1572b234fa242d50ec9f9b",
+      "current_inputs": ["$.execution_context", "$.executor"]
+    }
   },
   "executor": {
     "precedence": ["repository", "project", "user", "bundled-default"],
@@ -79,7 +93,7 @@
     },
     {
       "id": "frontier-4",
-      "sequence": 15,
+      "sequence": 16,
       "eligible": [],
       "selected": [],
       "active": [],
@@ -91,7 +105,7 @@
       "ticket": "A",
       "state": "completed",
       "frontier_calculation": "frontier-1",
-      "started_sequence": 2,
+      "started_sequence": 3,
       "completed_sequence": 4,
       "result": {
         "status": "complete",
@@ -104,7 +118,7 @@
       "ticket": "B",
       "state": "completed",
       "frontier_calculation": "frontier-2",
-      "started_sequence": 7,
+      "started_sequence": 8,
       "completed_sequence": 10,
       "result": {
         "status": "complete",
@@ -117,7 +131,7 @@
       "ticket": "C",
       "state": "completed",
       "frontier_calculation": "frontier-1",
-      "started_sequence": 3,
+      "started_sequence": 4,
       "completed_sequence": 8,
       "result": {
         "status": "complete",
@@ -130,8 +144,8 @@
       "ticket": "D",
       "state": "completed",
       "frontier_calculation": "frontier-3",
-      "started_sequence": 13,
-      "completed_sequence": 14,
+      "started_sequence": 14,
+      "completed_sequence": 15,
       "result": {
         "status": "complete",
         "authority": "reviewed-ticket",
@@ -148,6 +162,10 @@
       "base": "1111111111111111111111111111111111111111",
       "created_sequence": 2,
       "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/completed/A"
+      },
       "lifecycle_state": "removed",
       "cleanup": {
         "decision": "remove-after-completion",
@@ -161,6 +179,10 @@
       "base": "1111111111111111111111111111111111111111",
       "created_sequence": 7,
       "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/completed/B"
+      },
       "lifecycle_state": "removed",
       "cleanup": {
         "decision": "remove-after-completion",
@@ -174,6 +196,10 @@
       "base": "1111111111111111111111111111111111111111",
       "created_sequence": 3,
       "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/completed/C"
+      },
       "lifecycle_state": "removed",
       "cleanup": {
         "decision": "remove-after-completion",
@@ -187,6 +213,10 @@
       "base": "1111111111111111111111111111111111111111",
       "created_sequence": 13,
       "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/completed/D"
+      },
       "lifecycle_state": "removed",
       "cleanup": {
         "decision": "remove-after-completion",
@@ -215,7 +245,7 @@
       "authority": "reviewed-ticket"
     },
     {
-      "sequence": 14,
+      "sequence": 15,
       "ticket": "D",
       "result_status": "complete",
       "authority": "reviewed-ticket"
@@ -263,7 +293,22 @@
         ]
       },
       "concerns": [
-        "A and C both change the same follow-up verification surface."
+        {
+          "id": "shared-verification-surface",
+          "scope": "cross-ticket",
+          "status": "resolved",
+          "disposition": "accept",
+          "evidence": {
+            "implementation_handoffs": [
+              "artifact://implement/A.json",
+              "artifact://implement/C.json"
+            ],
+            "review_briefs": [
+              "artifact://review/A.json",
+              "artifact://review/C.json"
+            ]
+          }
+        }
       ],
       "recommendations": [
         "accept A",
@@ -283,7 +328,7 @@
     },
     {
       "frontier_id": "frontier-3",
-      "sequence": 15,
+      "sequence": 16,
       "tickets": ["D"],
       "inputs": {
         "implementation_handoffs": ["artifact://implement/D.json"],

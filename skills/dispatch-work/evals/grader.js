@@ -1,11 +1,42 @@
 'use strict';
 
-const INCOMPLETE_LIFECYCLE_STATES = [
-  'held',
-  'failed',
-  'retryable',
-  'human-decision',
-];
+const crypto = require('node:crypto');
+const {
+  validateTakeTicketResult,
+} = require('../../take-ticket/evals/lifecycle');
+
+const TERMINAL_STATE_POLICY = Object.freeze({
+  completed: { bucket: 'completed_tickets' },
+  held: { bucket: 'held_tickets', finalStatusRank: 4 },
+  failed: {
+    bucket: 'failed_tickets',
+    finalStatusRank: 1,
+    preserveOnResume: true,
+  },
+  retryable: {
+    bucket: 'retryable_tickets',
+    finalStatusRank: 3,
+    preserveOnResume: true,
+  },
+  'human-decision': {
+    bucket: 'human_decision_tickets',
+    finalStatusRank: 2,
+    preserveOnResume: true,
+  },
+});
+const INCOMPLETE_LIFECYCLE_STATES = Object.freeze(
+  Object.keys(TERMINAL_STATE_POLICY).filter((state) => state !== 'completed'),
+);
+const RETAINED_TERMINAL_STATES = Object.freeze(
+  Object.entries(TERMINAL_STATE_POLICY)
+    .filter(([, policy]) => policy.preserveOnResume)
+    .map(([state]) => state),
+);
+const INITIAL_TICKET_STATES = Object.freeze([
+  'open',
+  'completed',
+  ...RETAINED_TERMINAL_STATES,
+]);
 
 class DispatchArtifactError extends Error {
   constructor(message) {
@@ -57,6 +88,69 @@ function dependencyKey(ticket, dependency) {
   return `${ticket}\0${dependency}`;
 }
 
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]),
+  );
+}
+
+function canonicalJson(value) {
+  return JSON.stringify(canonicalize(value));
+}
+
+function sha256Fingerprint(value) {
+  return `sha256:${crypto.createHash('sha256')
+    .update(canonicalJson(value))
+    .digest('hex')}`;
+}
+
+function sourceFingerprintInputs(artifact) {
+  return {
+    source_dag: artifact.source_dag,
+    collision_constraints: artifact.collision_constraints,
+  };
+}
+
+function executionFingerprintInputs(artifact) {
+  return {
+    execution_context: artifact.execution_context,
+    executor: artifact.executor,
+  };
+}
+
+function validateFingerprint(
+  record,
+  field,
+  expectedInputs,
+  expectedReferences,
+  requireRetained,
+) {
+  requireObject(record, field);
+  assertSameMembers(
+    record.current_inputs,
+    expectedReferences,
+    `${field}.current_inputs`,
+  );
+  requireString(record.current, `${field}.current`);
+  if (record.current !== sha256Fingerprint(expectedInputs)) {
+    throw new DispatchArtifactError(
+      `${field} does not verify its current inputs`,
+    );
+  }
+  if (!requireRetained) return;
+  requireObject(record.retained_inputs, `${field}.retained_inputs`);
+  requireString(record.retained, `${field}.retained`);
+  if (record.retained !== sha256Fingerprint(record.retained_inputs)
+    || record.decision !== 'compatible'
+    || record.retained !== record.current) {
+    throw new DispatchArtifactError(
+      `${field} retained inputs are stale or mismatched`,
+    );
+  }
+}
+
 function assertAcyclic(tickets) {
   const dependencies = new Map(
     tickets.map(({ id, dependencies: required }) => [id, required]),
@@ -87,12 +181,12 @@ function validateSourceDag(sourceDag) {
     requireString(ticket.id, `source DAG tickets[${index}].id`);
     requireArray(ticket.dependencies, `source DAG tickets[${index}].dependencies`);
     assertUnique(ticket.dependencies, `source DAG tickets[${index}].dependencies`);
-    if (!['open', 'completed', 'failed'].includes(ticket.initial_state)) {
+    if (!INITIAL_TICKET_STATES.includes(ticket.initial_state)) {
       throw new DispatchArtifactError(
         `source DAG tickets[${index}].initial_state is invalid`,
       );
     }
-    if (ticket.initial_state === 'failed') {
+    if (RETAINED_TERMINAL_STATES.includes(ticket.initial_state)) {
       requireObject(
         ticket.initial_recovery,
         `source DAG tickets[${index}].initial_recovery`,
@@ -150,8 +244,86 @@ function validateSourceDag(sourceDag) {
   return { ticketIds, ticketStates };
 }
 
-function validateResumeEvidence(artifact, ticketIds, ticketStates) {
+function validateExecutionContext(context) {
+  requireObject(context, 'execution context');
+  for (const name of ['repositories', 'trackers']) {
+    requireArray(context[name], `execution context ${name}`);
+    if (context[name].length === 0) {
+      throw new DispatchArtifactError(
+        `execution context ${name} must retain a boundary`,
+      );
+    }
+    for (const [index, value] of context[name].entries()) {
+      requireString(value, `execution context ${name}[${index}]`);
+    }
+    assertUnique(context[name], `execution context ${name}`);
+  }
+  assertSameMembers(
+    context.canonical_dependencies,
+    ['take-ticket', 'take-it-offline'],
+    'execution context canonical dependencies',
+  );
+  requireString(context.immutable_base, 'execution context immutable base');
+  if (!/^[a-f0-9]{40}$/.test(context.immutable_base)) {
+    throw new DispatchArtifactError(
+      'execution context immutable base must be immutable',
+    );
+  }
+}
+
+function validateRetainedReviewedTicket(decision, resolveArtifact) {
+  if (typeof resolveArtifact !== 'function') {
+    throw new DispatchArtifactError(
+      'resume evidence requires a retained-result resolver',
+    );
+  }
+  const result = resolveArtifact(decision.retained_result);
+  requireObject(result, 'resume evidence retained reviewed-ticket result');
+  try {
+    if (result.schema === 'take-ticket-result/v1') {
+      validateTakeTicketResult(result);
+      if (result.status === 'reviewed') return;
+    } else if (result.schema === 'fixture-reviewed-ticket/v1') {
+      validateFixtureReviewedTicket(result, {
+        ticket: decision.ticket,
+        started_sequence: result.invocation?.sequence,
+        completed_sequence: result.completion?.sequence,
+        result: {
+          implementation_handoff: result.phases?.[0]?.artifact,
+          review_brief: result.phases?.[1]?.artifact,
+        },
+      });
+      return;
+    }
+  } catch {
+    // Normalize dependency and fixture validation failures below.
+  }
+  throw new DispatchArtifactError(
+    'resume evidence requires a complete authoritative reviewed-ticket result',
+  );
+}
+
+function validateResumeEvidence(
+  artifact,
+  ticketIds,
+  ticketStates,
+  resolveArtifact,
+) {
   requireObject(artifact.resume, 'resume evidence');
+  validateFingerprint(
+    artifact.resume.source_dag_fingerprint,
+    'source DAG fingerprint',
+    sourceFingerprintInputs(artifact),
+    ['$.source_dag', '$.collision_constraints'],
+    artifact.resume.requested === true,
+  );
+  validateFingerprint(
+    artifact.resume.execution_fingerprint,
+    'execution fingerprint',
+    executionFingerprintInputs(artifact),
+    ['$.execution_context', '$.executor'],
+    artifact.resume.requested === true,
+  );
   if (artifact.resume.requested === false) {
     if (artifact.resume.decision !== 'fresh') {
       throw new DispatchArtifactError(
@@ -168,25 +340,6 @@ function validateResumeEvidence(artifact, ticketIds, ticketStates) {
   requireString(artifact.resume.retained_state, 'resume evidence retained state');
   if (artifact.resume.evidence_status !== 'complete') {
     throw new DispatchArtifactError('resume evidence must be complete');
-  }
-  for (const name of ['source_dag_fingerprint', 'execution_fingerprint']) {
-    const fingerprint = artifact.resume[name];
-    requireObject(fingerprint, `resume evidence ${name}`);
-    requireString(fingerprint.retained, `resume evidence ${name}.retained`);
-    requireString(fingerprint.current, `resume evidence ${name}.current`);
-    if (![fingerprint.retained, fingerprint.current].every(
-      (value) => /^sha256:[a-f0-9]{64}$/.test(value),
-    )) {
-      throw new DispatchArtifactError(
-        `resume evidence ${name} must retain SHA-256 fingerprints`,
-      );
-    }
-    if (fingerprint.decision !== 'compatible'
-      || fingerprint.retained !== fingerprint.current) {
-      throw new DispatchArtifactError(
-        `resume evidence ${name} is stale or mismatched`,
-      );
-    }
   }
   requireArray(artifact.resume.ticket_decisions, 'resume evidence ticket decisions');
   const decidedTickets = artifact.resume.ticket_decisions.map(
@@ -208,10 +361,19 @@ function validateResumeEvidence(artifact, ticketIds, ticketStates) {
         );
       }
       requireString(decision.retained_result, `${field}.retained_result`);
+      validateRetainedReviewedTicket(decision, resolveArtifact);
     } else if (decision.decision === 'restart-incomplete') {
       if (ticketStates.get(decision.ticket) !== 'open') {
         throw new DispatchArtifactError(
           `${field} cannot restart terminal lifecycle work`,
+        );
+      }
+    } else if (decision.decision === 'preserve-terminal') {
+      if (!RETAINED_TERMINAL_STATES.includes(
+        ticketStates.get(decision.ticket),
+      )) {
+        throw new DispatchArtifactError(
+          `${field} cannot preserve non-terminal lifecycle work`,
         );
       }
     } else {
@@ -221,7 +383,6 @@ function validateResumeEvidence(artifact, ticketIds, ticketStates) {
 }
 
 function validateExecutorSelection(artifact) {
-  if (artifact.executor === undefined) return Number.POSITIVE_INFINITY;
   requireObject(artifact.executor, 'executor selection');
   const precedence = ['repository', 'project', 'user', 'bundled-default'];
   if (!Array.isArray(artifact.executor.precedence)
@@ -265,7 +426,6 @@ function validateExecutorSelection(artifact) {
 }
 
 function validateCollisionConstraints(artifact, ticketIds) {
-  if (artifact.collision_constraints === undefined) return new Set();
   requireArray(artifact.collision_constraints, 'collision constraints');
   const collisionPairs = new Set();
   const identities = [];
@@ -297,8 +457,16 @@ function validateCollisionConstraints(artifact, ticketIds) {
   return collisionPairs;
 }
 
+function validateMutationEvidence(mutation, field) {
+  requireObject(mutation, field);
+  requireString(mutation.id, `${field}.id`);
+  requireString(mutation.action, `${field}.action`);
+  requireString(mutation.target, `${field}.target`);
+  requireString(mutation.repository, `${field}.repository`);
+  requireString(mutation.evidence, `${field}.evidence`);
+}
+
 function validatePrMaintenance(artifact, ticketIds) {
-  if (artifact.pr_maintenance === undefined) return;
   requireArray(artifact.pr_maintenance, 'PR maintenance authorization');
   const maintenanceTickets = [];
   for (const [index, maintenance] of artifact.pr_maintenance.entries()) {
@@ -329,35 +497,75 @@ function validatePrMaintenance(artifact, ticketIds) {
         );
       }
     } else {
+      requireObject(
+        maintenance.authorization.scope,
+        `${field}.authorization.scope`,
+      );
+      const scope = maintenance.authorization.scope;
+      requireArray(scope.repositories, `${field}.authorization.scope.repositories`);
+      requireArray(scope.mutations, `${field}.authorization.scope.mutations`);
+      const allowedRepositories = new Set(scope.repositories);
+      if (scope.repositories.length === 0
+        || scope.repositories.some(
+          (repository) => !artifact.execution_context.repositories.includes(
+            repository,
+          ),
+        )) {
+        throw new DispatchArtifactError(
+          `${field} has an invalid PR maintenance authorization scope`,
+        );
+      }
+      const allowedMutations = new Set(scope.mutations.map(
+        (mutation, mutationIndex) => {
+          const mutationField = `${field}.authorization.scope.mutations[${mutationIndex}]`;
+          requireObject(mutation, mutationField);
+          requireString(mutation.action, `${mutationField}.action`);
+          requireString(mutation.target, `${mutationField}.target`);
+          return dependencyKey(mutation.action, mutation.target);
+        },
+      ));
       const attempted = new Map();
       for (const [mutationIndex, mutation] of (
         maintenance.attempted_mutations.entries()
       )) {
         const mutationField =
           `${field}.attempted_mutations[${mutationIndex}]`;
-        requireObject(mutation, mutationField);
-        requireString(mutation.id, `${mutationField}.id`);
-        requireString(mutation.action, `${mutationField}.action`);
+        validateMutationEvidence(mutation, mutationField);
+        if (mutation.outcome !== 'attempted'
+          || !allowedRepositories.has(mutation.repository)
+          || !allowedMutations.has(
+            dependencyKey(mutation.action, mutation.target),
+          )) {
+          throw new DispatchArtifactError(
+            `${field} attempted a mutation outside PR maintenance authorization scope`,
+          );
+        }
         if (attempted.has(mutation.id)) {
           throw new DispatchArtifactError(
             `${field} contains duplicate attempted mutations`,
           );
         }
-        attempted.set(mutation.id, mutation.action);
+        attempted.set(mutation.id, mutation);
       }
+      const completed = new Set();
       for (const [mutationIndex, mutation] of (
         maintenance.completed_mutations.entries()
       )) {
         const mutationField =
           `${field}.completed_mutations[${mutationIndex}]`;
-        requireObject(mutation, mutationField);
-        requireString(mutation.id, `${mutationField}.id`);
-        requireString(mutation.action, `${mutationField}.action`);
-        if (attempted.get(mutation.id) !== mutation.action) {
+        validateMutationEvidence(mutation, mutationField);
+        const attempt = attempted.get(mutation.id);
+        if (mutation.outcome !== 'completed'
+          || !attempt
+          || attempt.action !== mutation.action
+          || attempt.target !== mutation.target
+          || attempt.repository !== mutation.repository
+          || completed.has(mutation.id)) {
           throw new DispatchArtifactError(
-            `${field} completed a PR mutation that was not attempted`,
+            `${field} has invalid completed PR mutation evidence`,
           );
         }
+        completed.add(mutation.id);
       }
     }
     maintenanceTickets.push(maintenance.ticket);
@@ -383,11 +591,15 @@ function completedTicketIds(lifecycles) {
 
 function calculateFinalStatus(expected, ticketCount) {
   if (expected.completed_tickets.length === ticketCount) return 'completed';
-  if (expected.failed_tickets.length > 0) return 'failed';
-  if (expected.human_decision_tickets.length > 0) return 'human-decision';
-  if (expected.retryable_tickets.length > 0) return 'retryable';
-  if (expected.held_tickets.length > 0) return 'held';
-  return 'blocked';
+  return Object.entries(TERMINAL_STATE_POLICY)
+    .filter(([, policy]) => (
+      policy.finalStatusRank
+      && expected[policy.bucket].length > 0
+    ))
+    .sort(([, left], [, right]) => (
+      left.finalStatusRank - right.finalStatusRank
+    ))
+    .map(([state]) => state)[0] ?? 'blocked';
 }
 
 function validateTicketLifecycles(artifact, ticketIds, ticketStates) {
@@ -477,8 +689,14 @@ function validateWorktreeOwnership(artifact, lifecycles, ticketIds) {
     );
     const lifecycle = lifecycles.get(worktree.ticket);
     if (worktree.creation_result === 'failed') {
+      requireObject(worktree.isolation_check, `${field}.isolation_check`);
+      requireString(
+        worktree.isolation_check.evidence,
+        `${field}.isolation_check.evidence`,
+      );
       if (lifecycle
         || worktree.lifecycle_state !== 'creation-failed'
+        || worktree.isolation_check.status !== 'not-created'
         || worktree.cleanup.diagnostic_artifacts.length === 0) {
         throw new DispatchArtifactError(
           `${field} must retain an isolated worktree creation failure`,
@@ -495,11 +713,21 @@ function validateWorktreeOwnership(artifact, lifecycles, ticketIds) {
         action: worktree.recovery_action,
       });
     } else if (!lifecycle
-      || worktree.created_sequence > lifecycle.started_sequence) {
+      || worktree.created_sequence >= lifecycle.started_sequence) {
       throw new DispatchArtifactError(
         `${field} must exist before its ticket lifecycle starts`,
       );
     } else {
+      requireObject(worktree.isolation_check, `${field}.isolation_check`);
+      requireString(
+        worktree.isolation_check.evidence,
+        `${field}.isolation_check.evidence`,
+      );
+      if (worktree.isolation_check.status !== 'passed') {
+        throw new DispatchArtifactError(
+          `${field} lacks passing worktree isolation evidence`,
+        );
+      }
       createdTickets.push(worktree.ticket);
       if (lifecycle.state === 'completed'
         && worktree.lifecycle_state !== 'removed') {
@@ -710,34 +938,31 @@ function validateFrontiers(
         `${field} violates executor capacity or collision scheduling`,
       );
     }
-    if (artifact.executor !== undefined
-      || artifact.collision_constraints !== undefined) {
-      requireArray(calculation.deferred, `${field}.deferred`);
-      const deferredTickets = eligible.filter(
-        (ticket) => !selected.includes(ticket),
-      );
-      assertSameMembers(
-        calculation.deferred.map(({ ticket }) => ticket),
-        deferredTickets,
-        `${field}.deferred tickets`,
-      );
-      for (const deferred of calculation.deferred) {
-        requireObject(deferred, `${field}.deferred entry`);
-        const conflicts = [...active, ...selected].filter((ticket) => (
-          ticketsCollide(deferred.ticket, ticket, collisionPairs)
-        ));
-        const expectedReason = conflicts.length > 0 ? 'collision' : 'capacity';
-        if (deferred.reason !== expectedReason) {
-          throw new DispatchArtifactError(
-            `${field} has an invalid collision scheduling deferral`,
-          );
-        }
-        assertSameMembers(
-          deferred.conflicts_with,
-          conflicts,
-          `${field}.deferred conflicts`,
+    requireArray(calculation.deferred, `${field}.deferred`);
+    const deferredTickets = eligible.filter(
+      (ticket) => !selected.includes(ticket),
+    );
+    assertSameMembers(
+      calculation.deferred.map(({ ticket }) => ticket),
+      deferredTickets,
+      `${field}.deferred tickets`,
+    );
+    for (const deferred of calculation.deferred) {
+      requireObject(deferred, `${field}.deferred entry`);
+      const conflicts = [...active, ...selected].filter((ticket) => (
+        ticketsCollide(deferred.ticket, ticket, collisionPairs)
+      ));
+      const expectedReason = conflicts.length > 0 ? 'collision' : 'capacity';
+      if (deferred.reason !== expectedReason) {
+        throw new DispatchArtifactError(
+          `${field} has an invalid collision scheduling deferral`,
         );
       }
+      assertSameMembers(
+        deferred.conflicts_with,
+        conflicts,
+        `${field}.deferred conflicts`,
+      );
     }
     const nextSequence = artifact.frontier_calculations[index + 1]?.sequence
       ?? Number.POSITIVE_INFINITY;
@@ -842,8 +1067,12 @@ function validateSynthesis(artifact, lifecycles, completionEvents) {
       `${field}.inputs.review_briefs`,
     );
     for (const [concernIndex, concern] of synthesis.concerns.entries()) {
-      if (typeof concern === 'string') continue;
       const concernField = `${field}.concerns[${concernIndex}]`;
+      if (typeof concern === 'string') {
+        throw new DispatchArtifactError(
+          `${concernField} is not a systematic concern disposition`,
+        );
+      }
       requireObject(concern, concernField);
       requireString(concern.id, `${concernField}.id`);
       if (concern.scope !== 'cross-ticket'
@@ -971,13 +1200,8 @@ function validateFinalState(
     human_decision_tickets: [],
   };
   for (const [ticket, state] of terminalState) {
-    if (state === 'completed') expected.completed_tickets.push(ticket);
-    if (state === 'held') expected.held_tickets.push(ticket);
-    if (state === 'failed') expected.failed_tickets.push(ticket);
-    if (state === 'retryable') expected.retryable_tickets.push(ticket);
-    if (state === 'human-decision') {
-      expected.human_decision_tickets.push(ticket);
-    }
+    const bucket = TERMINAL_STATE_POLICY[state]?.bucket;
+    if (bucket) expected[bucket].push(ticket);
   }
   for (const [field, values] of Object.entries(expected)) {
     assertSameMembers(
@@ -1026,10 +1250,16 @@ function validateFinalState(
   }
   const recoveryActions = [
     ...sourceDag.tickets
-      .filter(({ initial_state: state }) => state === 'failed')
-      .map(({ id: ticket, initial_recovery: recovery }) => ({
+      .filter(({ initial_state: state }) => (
+        RETAINED_TERMINAL_STATES.includes(state)
+      ))
+      .map(({
+        id: ticket,
+        initial_state: state,
+        initial_recovery: recovery,
+      }) => ({
         ticket,
-        state: 'failed',
+        state,
         sequence: recovery.sequence,
         action: recovery.action,
       })),
@@ -1138,6 +1368,11 @@ function validateFixtureReviewedTicket(reviewedTicket, lifecycle) {
 }
 
 function validateTakeTicketToolUses(toolUses, selectedTickets) {
+  if (toolUses.some(({ name }) => /^code-review(?:[.:]|$)/.test(name))) {
+    throw new DispatchArtifactError(
+      'dispatch evidence contains a duplicate per-ticket Code Review',
+    );
+  }
   const takeTicketTools = toolUses.filter(({ name }) => (
     /^take-ticket(?:[.:]|$)/.test(name)
   ));
@@ -1410,13 +1645,14 @@ function gradeTakeItOfflineResult(result, { resolveArtifact, artifactChecks }) {
   };
 }
 
-function validateDispatchArtifact(artifact) {
+function validateDispatchArtifact(artifact, { resolveArtifact } = {}) {
   requireObject(artifact, 'dispatch artifact');
   if (artifact.schema !== 'dispatch-work-artifact/v1') {
     throw new DispatchArtifactError('unsupported dispatch artifact schema');
   }
   for (const field of [
     'resume',
+    'execution_context',
     'executor',
     'collision_constraints',
     'worktrees',
@@ -1441,7 +1677,13 @@ function validateDispatchArtifact(artifact) {
     throw new DispatchArtifactError('published ready DAG is required');
   }
   const { ticketIds, ticketStates } = validateSourceDag(artifact.source_dag);
-  validateResumeEvidence(artifact, ticketIds, ticketStates);
+  validateExecutionContext(artifact.execution_context);
+  validateResumeEvidence(
+    artifact,
+    ticketIds,
+    ticketStates,
+    resolveArtifact,
+  );
   const executorCapacity = validateExecutorSelection(artifact);
   const collisionPairs = validateCollisionConstraints(artifact, ticketIds);
   validatePrMaintenance(artifact, ticketIds);
