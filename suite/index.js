@@ -7,6 +7,11 @@ const {
 } = require('./pre-execution-inventory');
 
 const CONTRACT_FILE = path.join('suite', 'canonical-suite.json');
+const EXPECTED_IDENTITY = {
+  name: 'skills',
+  version: '1.0.0',
+  stage: 'release-candidate',
+};
 const VALID_CLASSIFICATIONS = new Set(['audience', 'primary', 'private']);
 const EXPECTED_INVENTORY = [
   ['agent-writing', 'primary'],
@@ -57,6 +62,13 @@ const EXPECTED_EXTERNALS = [
   ['split-to-prs', ['pr-carver']],
   ['tdd', ['implement']],
 ];
+const EXPECTED_PREDECESSORS = [
+  ['lean', 'to-humans'],
+  ['unslop', 'to-humans'],
+  ['writing-for-agents', 'agent-writing'],
+  ['writing-great-skills', 'skill-writing'],
+  ['handoff', 'take-it-offline'],
+];
 const VALID_SKILL_OPERATIONS = new Set(['select', 'load']);
 const VALID_SKILL_STATUSES = new Set([
   'started',
@@ -91,6 +103,10 @@ function assertUnique(values, field) {
     }
     seen.add(value);
   }
+}
+
+function canonicalSkillNames(suite) {
+  return suite.inventory.map(({ name }) => name);
 }
 
 function buildDependencyMap(skillNames, edges) {
@@ -182,6 +198,26 @@ function validateExternalPrerequisites(suite) {
     if (skillNames.has(entry.name)) {
       throw new SuiteContractError(`external prerequisite "${entry.name}" is suite-owned`);
     }
+    if (!entry.source
+      || typeof entry.source.url !== 'string'
+      || !entry.source.url.startsWith('https://')
+      || typeof entry.source.locator !== 'string'
+      || entry.source.locator.length === 0) {
+      throw new SuiteContractError(
+        `external prerequisite "${entry.name}" requires a source`,
+      );
+    }
+    if (typeof entry.testedRevision !== 'string'
+      || !/^sha256:[a-f0-9]{64}$/.test(entry.testedRevision)) {
+      throw new SuiteContractError(
+        `external prerequisite "${entry.name}" requires a tested revision`,
+      );
+    }
+    if (typeof entry.license !== 'string' || entry.license.length === 0) {
+      throw new SuiteContractError(
+        `external prerequisite "${entry.name}" requires a license`,
+      );
+    }
     requireArray(entry.consumers, `external prerequisite "${entry.name}" consumers`);
     assertUnique(entry.consumers, `external prerequisite "${entry.name}" consumers`);
     for (const consumer of entry.consumers) {
@@ -202,13 +238,104 @@ function validateExternalPrerequisites(suite) {
   }
 }
 
+function validateIdentity(suite) {
+  if (JSON.stringify(suite.identity) !== JSON.stringify(EXPECTED_IDENTITY)) {
+    throw new SuiteContractError(
+      'package identity must be skills version 1.0.0 release-candidate',
+    );
+  }
+}
+
+function validatePredecessors(suite) {
+  requireArray(suite.predecessors, 'predecessors');
+  const entries = suite.predecessors.map((entry) => {
+    if (!entry
+      || typeof entry.name !== 'string'
+      || typeof entry.replacement !== 'string') {
+      throw new SuiteContractError('predecessors require a name and replacement');
+    }
+    return [entry.name, entry.replacement];
+  });
+  assertUnique(entries.map(([name]) => name), 'predecessors');
+  if (JSON.stringify(entries) !== JSON.stringify(EXPECTED_PREDECESSORS)) {
+    throw new SuiteContractError('predecessors must contain the exact migration set');
+  }
+  const inventory = new Set(canonicalSkillNames(suite));
+  for (const [name, replacement] of entries) {
+    if (inventory.has(name)) {
+      throw new SuiteContractError(`predecessor "${name}" cannot remain in inventory`);
+    }
+    if (!inventory.has(replacement)) {
+      throw new SuiteContractError(
+        `predecessor "${name}" has unknown replacement "${replacement}"`,
+      );
+    }
+  }
+}
+
+function validateAdaptedUpstream(suite) {
+  requireArray(suite.adaptedUpstream, 'adaptedUpstream');
+  if (suite.adaptedUpstream.length === 0) {
+    throw new SuiteContractError('adaptedUpstream must record adapted contributions');
+  }
+  const inventory = new Set(canonicalSkillNames(suite));
+  const revisions = [];
+  for (const contribution of suite.adaptedUpstream) {
+    if (!contribution?.source
+      || typeof contribution.source.name !== 'string'
+      || contribution.source.name.length === 0
+      || typeof contribution.source.url !== 'string'
+      || !contribution.source.url.startsWith('https://github.com/')) {
+      throw new SuiteContractError('adapted upstream contribution requires a source');
+    }
+    if (typeof contribution.pinnedRevision !== 'string'
+      || !/^[a-f0-9]{40}$/.test(contribution.pinnedRevision)) {
+      throw new SuiteContractError(
+        `adapted upstream "${contribution.source.name}" requires a pinned revision`,
+      );
+    }
+    if (typeof contribution.license !== 'string'
+      || contribution.license.length === 0) {
+      throw new SuiteContractError(
+        `adapted upstream "${contribution.source.name}" requires a license`,
+      );
+    }
+    requireArray(
+      contribution.modules,
+      `adapted upstream "${contribution.source.name}" modules`,
+    );
+    if (contribution.modules.length === 0) {
+      throw new SuiteContractError(
+        `adapted upstream "${contribution.source.name}" requires affected modules`,
+      );
+    }
+    assertUnique(
+      contribution.modules,
+      `adapted upstream "${contribution.source.name}" modules`,
+    );
+    for (const moduleName of contribution.modules) {
+      if (!inventory.has(moduleName)) {
+        throw new SuiteContractError(
+          `adapted upstream "${contribution.source.name}" has unknown module `
+            + `"${moduleName}"`,
+        );
+      }
+    }
+    revisions.push(`${contribution.source.url}@${contribution.pinnedRevision}`);
+  }
+  assertUnique(revisions, 'adaptedUpstream');
+}
+
 function validateCanonicalSuite(suite) {
   if (!suite || suite.skillsSourceRoot !== 'skills') {
     throw new SuiteContractError('skillsSourceRoot must be the canonical "skills" directory');
   }
+  validateIdentity(suite);
   validateInventory(suite);
+  validatePredecessors(suite);
   validateRuntimeGraph(suite);
   validateExternalPrerequisites(suite);
+  validateAdaptedUpstream(suite);
   return suite;
 }
 
@@ -348,6 +475,151 @@ function discoverCanonicalPackage(repositoryRoot) {
         .filter(({ name }) => discovered.has(name))
         .map(({ name }) => Object.freeze(discovered.get(name))),
     ),
+  });
+}
+
+function validatePackageClosure(suite, packageDefinition) {
+  const installed = packageDefinition.skills.map(({ name }) => name);
+  assertUnique(installed, 'package Skills');
+  const installedSet = new Set(installed);
+  const packageSkills = canonicalSkillNames(suite);
+  for (const name of packageSkills) {
+    if (!installedSet.has(name)) {
+      throw new SuiteContractError(`missing suite-owned Skill "${name}"`);
+    }
+  }
+  return packageSkills;
+}
+
+function findInstallCollisions(suite, installedDefinitions) {
+  requireArray(installedDefinitions, 'installedDefinitions');
+  const byName = new Map();
+  for (const definition of installedDefinitions) {
+    if (!definition
+      || typeof definition.name !== 'string'
+      || definition.name.length === 0
+      || typeof definition.source !== 'string'
+      || definition.source.length === 0) {
+      throw new SuiteContractError(
+        'installed definitions require a name and source',
+      );
+    }
+    const sources = byName.get(definition.name) || [];
+    sources.push(definition.source);
+    byName.set(definition.name, sources);
+  }
+
+  const collisions = [];
+  for (const { name } of suite.inventory) {
+    const sources = byName.get(name) || [];
+    if (sources.length > 1) {
+      collisions.push({
+        kind: 'canonical-name-collision',
+        name,
+        sources,
+      });
+    }
+  }
+  for (const { name, replacement } of suite.predecessors) {
+    const sources = byName.get(name) || [];
+    if (sources.length > 0) {
+      collisions.push({
+        kind: 'conflicting-predecessor',
+        name,
+        replacement,
+        sources,
+      });
+    }
+  }
+  return collisions;
+}
+
+function componentEdges(repositoryRoot, suite) {
+  const found = new Set();
+  for (const { name } of suite.inventory) {
+    const evaluationsRoot = path.join(
+      repositoryRoot,
+      suite.skillsSourceRoot,
+      name,
+      'evals',
+    );
+    if (!fs.existsSync(evaluationsRoot)) continue;
+    for (const entry of fs.readdirSync(evaluationsRoot, { withFileTypes: true })) {
+      if (!entry.isFile() || path.extname(entry.name) !== '.json') continue;
+      const definition = JSON.parse(
+        fs.readFileSync(path.join(evaluationsRoot, entry.name), 'utf8'),
+      );
+      const consumer = definition.evaluation?.skill || definition.skill_name;
+      for (const evaluationCase of definition.evals || []) {
+        if (evaluationCase.ablated_dependency) {
+          found.add(`${consumer}->${evaluationCase.ablated_dependency}`);
+        }
+      }
+    }
+  }
+  const unknown = [...found].find((edge) => !EXPECTED_EDGES.includes(edge));
+  if (unknown) {
+    throw new SuiteContractError(`component evaluation has unknown edge "${unknown}"`);
+  }
+  const missing = EXPECTED_EDGES.find((edge) => !found.has(edge));
+  if (missing) {
+    throw new SuiteContractError(`missing component evaluation for "${missing}"`);
+  }
+  return [...EXPECTED_EDGES];
+}
+
+function readJsonFile(repositoryRoot, ...segments) {
+  return JSON.parse(
+    fs.readFileSync(path.join(repositoryRoot, ...segments), 'utf8'),
+  );
+}
+
+function validateReleaseMetadata(repositoryRoot, suite) {
+  const packageMetadata = readJsonFile(repositoryRoot, 'package.json');
+  const plugin = readJsonFile(
+    repositoryRoot,
+    '.claude-plugin',
+    'plugin.json',
+  );
+  const marketplace = readJsonFile(
+    repositoryRoot,
+    '.claude-plugin',
+    'marketplace.json',
+  );
+  for (const [source, identity] of [
+    ['package.json', packageMetadata],
+    ['Claude plugin', plugin],
+  ]) {
+    if (identity.name !== suite.identity.name
+      || identity.version !== suite.identity.version) {
+      throw new SuiteContractError(`${source} must match canonical package identity`);
+    }
+  }
+  if (plugin.skills !== `./${suite.skillsSourceRoot}`) {
+    throw new SuiteContractError('Claude plugin must expose the canonical Skill source');
+  }
+  if (!Array.isArray(marketplace.plugins)
+    || marketplace.plugins.length !== 1
+    || marketplace.plugins[0].name !== suite.identity.name
+    || marketplace.plugins[0].source !== '.') {
+    throw new SuiteContractError('marketplace must expose one canonical package');
+  }
+}
+
+function validateReleasePackage(repositoryRoot) {
+  const suite = loadCanonicalSuite(repositoryRoot);
+  const packageDefinition = discoverCanonicalPackage(repositoryRoot);
+  const skills = validatePackageClosure(suite, packageDefinition);
+  const runtimeEdges = suite.runtimeEdges.map(
+    ({ consumer, dependency }) => `${consumer}->${dependency}`,
+  );
+  const coveredEdges = componentEdges(repositoryRoot, suite);
+  validateReleaseMetadata(repositoryRoot, suite);
+  return Object.freeze({
+    identity: Object.freeze({ ...suite.identity }),
+    skills: Object.freeze(skills),
+    runtimeEdges: Object.freeze(runtimeEdges),
+    componentEdges: Object.freeze(coveredEdges),
   });
 }
 
@@ -795,7 +1067,10 @@ module.exports = {
   defineProductionAdapter,
   discoverCanonicalPackage,
   executeProduction,
+  findInstallCollisions,
   loadCanonicalSuite,
+  validatePackageClosure,
+  validateReleasePackage,
   resolvePackageDependencies: resolveDependencies,
   validateAdapterResult,
   validateInvocation,

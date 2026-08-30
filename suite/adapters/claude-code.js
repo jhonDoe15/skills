@@ -88,13 +88,13 @@ function validateOptions({
   }
 }
 
-function createIsolatedProject(skillsRoot, resolvedSkills) {
+function createIsolatedProject(skillsRoot, packageSkills) {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-code-adapter-'));
   const projectSkillsRoot = path.join(project, '.claude', 'skills');
   fs.mkdirSync(projectSkillsRoot, { recursive: true });
 
   try {
-    for (const skillName of resolvedSkills) {
+    for (const skillName of packageSkills) {
       const source = path.join(skillsRoot, skillName);
       const definition = path.join(source, 'SKILL.md');
       if (!fs.existsSync(definition)
@@ -835,7 +835,9 @@ function observations(context, invocation, evidence = {}) {
     packageSkills: context.packageSkills,
     hostAvailableSkills: evidence.catalogObserved
       ? {
-        names: [...(evidence.availableSkills || [])],
+        names: context.packageSkills.filter((name) => (
+          evidence.availableSkills?.has(name)
+        )),
         provenance: eventProvenance({
           mechanism: 'stream-json-init',
           eventType: 'system.init',
@@ -958,7 +960,7 @@ function createClaudeCodeAdapter({
 
       try {
         try {
-          project = createIsolatedProject(skillsRoot, context.resolvedSkills);
+          project = createIsolatedProject(skillsRoot, context.packageSkills);
         } catch (error) {
           const detail = error instanceof ClaudeProjectSetupError
             ? error.message
@@ -976,7 +978,7 @@ function createClaudeCodeAdapter({
         const observer = installClaudeSkillObserver(project);
         const inventory = buildPreExecutionInventory({
           projectRoot: project,
-          skillNames: context.resolvedSkills,
+          skillNames: context.packageSkills,
           relativePathFor: (name) => `.claude/skills/${name}/SKILL.md`,
         });
         const environment = createSanitizedEnvironment(observer.logPath);
@@ -1090,7 +1092,7 @@ function createClaudeCodeAdapter({
         }
 
         const unavailableSkill = evidence.catalogObserved
-          ? context.resolvedSkills.find((skillName) => (
+          ? context.packageSkills.find((skillName) => (
             !evidence.availableSkills.has(skillName)
           ))
           : null;
@@ -1098,7 +1100,7 @@ function createClaudeCodeAdapter({
           return fail(
             'execution',
             'claude-skill-unavailable',
-            `Claude Code did not discover Skill "${unavailableSkill}"`,
+            `Claude Code did not discover packaged Skill "${unavailableSkill}"`,
           );
         }
 

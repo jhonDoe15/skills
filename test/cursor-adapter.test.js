@@ -6,7 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const { executeProduction } = require('../suite');
+const { executeProduction, loadCanonicalSuite } = require('../suite');
 const { createCursorAdapter } = require('../suite/adapters/cursor');
 const {
   AGENT_WRITING_SKILL,
@@ -237,7 +237,16 @@ test('Cursor Adapter executes the tracer in a pristine project and normalizes ev
     requestedSkill: 'agent-writing',
     resolvedSkills: ['writing-foundation', 'agent-writing'],
   });
-  assert.equal(result.observations.hostAvailableSkills, null);
+  assert.deepEqual(result.observations.hostAvailableSkills, {
+    names: ['agent-writing', 'writing-foundation'],
+    provenance: {
+      host: 'cursor',
+      mechanism: 'project-skill-inventory',
+      eventType: 'pre-execution-inventory',
+      observerVersion: '@cursor/sdk@1.0.28',
+      statusSource: 'observed',
+    },
+  });
   assert.deepEqual(result.observations.packageSkills, [
     'agent-writing',
     'writing-foundation',
@@ -308,6 +317,33 @@ test('Cursor Adapter executes the tracer in a pristine project and normalizes ev
     tracerCase.gateOrder,
     ['deterministic', 'qualitative'],
   );
+});
+
+test('Cursor Adapter stages the complete release package', async () => {
+  const observation = {};
+  const adapter = createCursorAdapter({
+    repositoryRoot: canonicalRepositoryRoot,
+    sdk: createSuccessfulSdk(observation),
+  });
+  const expectedSkills = loadCanonicalSuite(canonicalRepositoryRoot)
+    .inventory.map(({ name }) => name);
+
+  const result = await executeProduction({
+    repositoryRoot: canonicalRepositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  });
+  const stagedSkills = observation.projectFilesAtCreate
+    .filter((file) => /^\.cursor\/skills\/[^/]+\/SKILL\.md$/.test(file))
+    .map((file) => file.split('/')[2])
+    .sort();
+
+  assert.deepEqual(stagedSkills, [...expectedSkills].sort());
+  assert.deepEqual(result.observations.hostAvailableSkills.names, expectedSkills);
+  assert.deepEqual(result.observations.routing.resolvedSkills, [
+    'writing-foundation',
+    'agent-writing',
+  ]);
 });
 
 test('Cursor Adapter reports run identifiers before streaming', async (t) => {

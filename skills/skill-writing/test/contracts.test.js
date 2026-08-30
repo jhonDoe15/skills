@@ -82,10 +82,17 @@ function readEvaluationDefinition(owner, fileName) {
   return value;
 }
 
-test('package fixtures never synthesize absent production Skills', (t) => {
-  assert.throws(
-    () => createPackageFixture(t, ['skill-evaluation']),
-    /production Skill "skill-evaluation" does not exist/,
+test('package fixtures use the real Skill Evaluation Module', (t) => {
+  const fixtureRoot = createPackageFixture(t, ['skill-evaluation']);
+
+  assert.equal(
+    fs.existsSync(path.join(
+      fixtureRoot,
+      'skills',
+      'skill-evaluation',
+      'SKILL.md',
+    )),
+    true,
   );
 });
 

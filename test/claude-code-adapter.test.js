@@ -9,6 +9,7 @@ const test = require('node:test');
 const {
   discoverCanonicalPackage,
   executeProduction,
+  loadCanonicalSuite,
 } = require('../suite');
 const {
   createClaudeCodeAdapter,
@@ -174,7 +175,7 @@ function invocation(model = REQUESTED_MODEL) {
   };
 }
 
-function successEvents() {
+function successEvents(catalog = ['agent-writing', 'writing-foundation']) {
   const artifact = [
     '# Deploy status instruction',
     '',
@@ -193,7 +194,7 @@ function successEvents() {
       type: 'system',
       subtype: 'init',
       model: RESOLVED_MODEL,
-      skills: ['agent-writing', 'writing-foundation'],
+      skills: catalog,
     },
     {
       type: 'assistant',
@@ -375,6 +376,34 @@ test('Claude Code Adapter executes the host-local Agent Writing tracer', async (
     ),
     ['--max-budget-usd', '0.25'],
   );
+});
+
+test('Claude Code Adapter stages and discovers the complete release package', async (t) => {
+  const expectedSkills = loadCanonicalSuite(repositoryRoot)
+    .inventory.map(({ name }) => name);
+  const fakeClaude = createFakeClaude(t, {
+    events: successEvents(expectedSkills),
+    observerEvents: successfulObserverEvents(),
+  });
+  const adapter = createClaudeCodeAdapter({
+    skillsRoot: path.join(repositoryRoot, 'skills'),
+    command: fakeClaude.commandPath,
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: invocation(),
+  });
+  const execution = readCommandLog(fakeClaude.logPath).at(-1);
+
+  assert.deepEqual(execution.skills, [...expectedSkills].sort());
+  assert.deepEqual(result.observations.hostAvailableSkills.names, expectedSkills);
+  assert.deepEqual(result.observations.routing.resolvedSkills, [
+    'writing-foundation',
+    'agent-writing',
+  ]);
 });
 
 test('Claude Code Adapter suppresses controllable ambient host state', async (t) => {
@@ -699,7 +728,7 @@ test('Claude Code Adapter returns setup failure before session startup', async (
   assert.deepEqual(result.failure, {
     stage: 'setup',
     code: 'project-setup-failed',
-    message: 'Failed to prepare Claude Code project: missing Skill source "writing-foundation"',
+    message: 'Failed to prepare Claude Code project: missing Skill source "agent-writing"',
   });
   assert.deepEqual(result.observations.responses, []);
   assert.deepEqual(result.observations.toolUses, []);
