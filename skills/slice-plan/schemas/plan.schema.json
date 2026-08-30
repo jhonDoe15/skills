@@ -50,6 +50,7 @@
             "required": [
               "id",
               "ticket_ids",
+              "completion_ticket_ids",
               "independently_mergeable",
               "green_independently",
               "integration_point"
@@ -59,6 +60,9 @@
                 "$ref": "#/$defs/nonEmptyString"
               },
               "ticket_ids": {
+                "$ref": "#/$defs/nonEmptyUniqueStrings"
+              },
+              "completion_ticket_ids": {
                 "$ref": "#/$defs/nonEmptyUniqueStrings"
               },
               "independently_mergeable": {

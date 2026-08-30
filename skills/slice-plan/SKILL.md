@@ -87,9 +87,11 @@ metadata.
   has an independently verifiable concrete output consumed directly by
   multiple later tickets. Reject a convenience foundation.
 - **Expand-contract** names one expansion prerequisite, one or more
-  independently mergeable migration groups, and one contraction ticket. Every
-  migration-group ticket directly consumes expansion output. Contraction
-  depends directly on every migration-group ticket that must finish first, not
+  independently mergeable migration groups, and one contraction ticket. Each
+  group records all member tickets and the terminal completion tickets that
+  prove the group is finished. Group roots consume expansion output; later
+  members may consume earlier group output. Contraction depends directly on
+  every group completion ticket, not every internal ticket and not
   transitively on expansion. Record the required integration point for a group
   that cannot keep the system green independently.
 

@@ -211,7 +211,7 @@ function gradeCarveResult({
     .map(({ text }) => text)
     .join('\n\n');
   checks.push(check(
-    'response references ready plan artifact',
+    'response references plan artifact',
     artifact.reference !== null && response.includes(artifact.reference),
     artifact.reference || 'no plan reference',
   ));

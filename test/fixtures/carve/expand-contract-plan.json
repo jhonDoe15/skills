@@ -8,7 +8,8 @@
     "migration_groups": [
       {
         "id": "api-readers",
-        "ticket_ids": ["M1"],
+        "ticket_ids": ["M1", "M1B"],
+        "completion_ticket_ids": ["M1B"],
         "independently_mergeable": true,
         "green_independently": true,
         "integration_point": null
@@ -16,6 +17,7 @@
       {
         "id": "scheduler-readers",
         "ticket_ids": ["M2"],
+        "completion_ticket_ids": ["M2"],
         "independently_mergeable": true,
         "green_independently": false,
         "integration_point": "Integrate the scheduler compatibility adapter before enabling its new reads."
@@ -47,7 +49,7 @@
     {
       "requirement_id": "REQ-2",
       "disposition": "covered",
-      "ticket_ids": ["M1", "M2"],
+      "ticket_ids": ["M1", "M1B", "M2"],
       "reason": "The API and scheduler migration groups are independently mergeable."
     },
     {
@@ -92,6 +94,25 @@
       "collisions": []
     },
     {
+      "id": "M1B",
+      "title": "Complete account API reader migration",
+      "outcome": "All account API readers use the replacement time-zone representation.",
+      "seam": "account API read completion",
+      "shape": "vertical",
+      "in_scope": ["Move the remaining account API readers to the replacement representation."],
+      "out_of_scope": ["Migrate scheduler reads or remove legacy storage."],
+      "acceptance": ["Every account API reader remains green on the replacement representation."],
+      "validation": ["Run the complete account API reader integration suite."],
+      "blockers": ["M1"],
+      "consumes": [
+        {
+          "ticket_id": "M1",
+          "output": "The first account API readers migrated to the replacement representation."
+        }
+      ],
+      "collisions": []
+    },
+    {
       "id": "M2",
       "title": "Migrate scheduler readers",
       "outcome": "The scheduler reads the replacement time-zone representation.",
@@ -120,11 +141,11 @@
       "out_of_scope": ["Change migrated reader behavior."],
       "acceptance": ["No runtime reader uses the legacy representation."],
       "validation": ["Run full time-zone integration tests."],
-      "blockers": ["M1", "M2"],
+      "blockers": ["M1B", "M2"],
       "consumes": [
         {
-          "ticket_id": "M1",
-          "output": "Account API reads migrated to the replacement representation."
+          "ticket_id": "M1B",
+          "output": "All account API reads migrated to the replacement representation."
         },
         {
           "ticket_id": "M2",

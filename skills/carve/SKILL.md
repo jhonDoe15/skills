@@ -1,6 +1,6 @@
 ---
 name: carve
-description: Use only when explicitly invoked by canonical name to turn settled requirements into a complete ready ticket DAG, with optional authorized publication.
+description: Use only when explicitly invoked by canonical name to turn authoritative requirements into a ready ticket DAG or needs-decision plan, with optional authorized publication of ready plans.
 disable-model-invocation: true
 ---
 

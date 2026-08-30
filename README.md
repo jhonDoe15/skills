@@ -5,7 +5,8 @@ Agent Skills including these documented planning surfaces:
 - **Lean** — model-invoked writing guidance for response density and shape.
 - **`ticket-scope`** — private per-candidate judgment loaded by Slice Plan and PR Carver.
 - **`slice-plan`** — private set-level decomposition loaded by Carve.
-- **`/carve`** — explicitly invoked to turn settled requirements into a ready ticket DAG.
+- **`/carve`** — explicitly invoked to turn authoritative requirements into a
+  ready ticket DAG or a needs-decision plan.
 - **`pr-carver`** — model-invoked PR size and structure guidance for parallel and stacked pull requests.
 - **`/dispatch-work`** — explicitly invoked to run an authorized published ticket DAG through moving parallel Take Ticket frontiers.
 - **`/incident-investigation`** — explicitly invoked, investigation-only guidance for evidence-led production incident and hard-to-localize bug analysis.
@@ -79,15 +80,16 @@ a separately landing PR.
 
 ## `/carve` — size the work
 
-Carve turns settled source requirements into a complete ready ticket DAG. It
-loads Slice Plan for set-level decomposition; Slice Plan loads Ticket Scope for
-each bounded candidate judgment. Work that does not fit is split; an open
-design choice or risk boundary is flagged for a human. Related pieces record
-dependencies and shared-resource collisions so later execution can
-parallelise safely.
+Carve turns authoritative requirements into either a complete ready ticket DAG
+or a needs-decision plan that states unresolved human choices and publishes
+nothing. It loads Slice Plan for set-level decomposition; Slice Plan loads
+Ticket Scope for each bounded candidate judgment. Work that does not fit is
+split. Related pieces record direct dependencies and non-blocking
+shared-resource collisions so later execution can parallelise safely.
 
-Invoke `/carve` explicitly after requirements and material design decisions are
-settled. Carve publishes only with separate explicit authorization.
+Invoke `/carve` explicitly when an authoritative requirement source exists.
+Carve publishes only a validated ready plan and only with separate explicit
+authorization.
 
 ## `pr-carver` — size and structure PRs
 

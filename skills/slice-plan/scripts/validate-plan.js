@@ -171,12 +171,17 @@ function validateMigrationMetadata(migration) {
     requireExactFields(group, [
       'id',
       'ticket_ids',
+      'completion_ticket_ids',
       'independently_mergeable',
       'green_independently',
       'integration_point',
     ], field);
     requireString(group.id, `${field}.id`);
     validateStringArray(group.ticket_ids, `${field}.ticket_ids`);
+    validateStringArray(
+      group.completion_ticket_ids,
+      `${field}.completion_ticket_ids`,
+    );
     if (typeof group.independently_mergeable !== 'boolean') {
       fail(`${field}.independently_mergeable must be a boolean`);
     }
@@ -251,7 +256,19 @@ function validateExpandContractMigration(plan, ticketsById) {
     fail(`expansion ticket "${expansionId}" must have prerequisite shape`);
   }
 
-  const groupTicketIds = [];
+  function dependsOn(ticketId, dependencyId, visited = new Set()) {
+    if (ticketId === dependencyId) return true;
+    if (visited.has(ticketId)) return false;
+    const ticket = ticketsById.get(ticketId);
+    if (!ticket) return false;
+    visited.add(ticketId);
+    return ticket.blockers.some(
+      (blockerId) => dependsOn(blockerId, dependencyId, visited),
+    );
+  }
+
+  const allGroupTicketIds = [];
+  const allCompletionTicketIds = [];
   for (const group of migration.migration_groups) {
     if (!group.independently_mergeable) {
       fail(`migration group "${group.id}" must be independently mergeable`);
@@ -261,23 +278,51 @@ function validateExpandContractMigration(plan, ticketsById) {
         `migration group "${group.id}" must record its required integration point`,
       );
     }
+    const groupTicketIdSet = new Set(group.ticket_ids);
+    for (const completionId of group.completion_ticket_ids) {
+      if (!groupTicketIdSet.has(completionId)) {
+        fail(
+          `migration group "${group.id}" completion ticket "${completionId}" is not in the group`,
+        );
+      }
+      allCompletionTicketIds.push(completionId);
+    }
     for (const ticketId of group.ticket_ids) {
       const ticket = ticketsById.get(ticketId);
       if (!ticket) {
         fail(`migration group "${group.id}" names unknown ticket "${ticketId}"`);
       }
-      if (!ticket.blockers.includes(expansionId)) {
+      const externalBlocker = ticket.blockers.find(
+        (blockerId) => (
+          blockerId !== expansionId && !groupTicketIdSet.has(blockerId)
+        ),
+      );
+      if (externalBlocker) {
         fail(
-          `migration group ticket "${ticketId}" must depend on expansion "${expansionId}"`,
+          `migration group "${group.id}" ticket "${ticketId}" depends outside its group`,
         );
       }
-      groupTicketIds.push(ticketId);
+      if (!dependsOn(ticketId, expansionId)) {
+        fail(
+          `migration group ticket "${ticketId}" must follow expansion "${expansionId}"`,
+        );
+      }
+      const coveredByCompletion = group.completion_ticket_ids.some(
+        (completionId) => dependsOn(completionId, ticketId),
+      );
+      if (!coveredByCompletion) {
+        fail(
+          `migration group "${group.id}" completion tickets do not cover "${ticketId}"`,
+        );
+      }
+      allGroupTicketIds.push(ticketId);
     }
   }
-  assertUnique(groupTicketIds, 'migration group tickets');
-  if (!haveSameMembers(contraction.blockers, groupTicketIds)) {
+  assertUnique(allGroupTicketIds, 'migration group tickets');
+  assertUnique(allCompletionTicketIds, 'migration group completion tickets');
+  if (!haveSameMembers(contraction.blockers, allCompletionTicketIds)) {
     fail(
-      `contraction ticket "${contractionId}" must depend directly on every migration group ticket`,
+      `contraction ticket "${contractionId}" must depend directly on every migration group completion ticket`,
     );
   }
 }
@@ -561,7 +606,7 @@ function validatePlan(plan) {
   });
   plan.tickets.forEach(validateTicket);
   assertUnique(plan.tickets.map(({ id }) => id), 'tickets');
-  const ticketIdentities = plan.tickets.map(ticketIdentity);
+  const ticketIdentities = plan.tickets.map(ticketCandidateKey);
   if (new Set(ticketIdentities).size !== ticketIdentities.length) {
     fail('tickets contain duplicate outcome and seam');
   }
@@ -571,7 +616,6 @@ function validatePlan(plan) {
     )) {
       fail('migration_strategy must be "normal", "prefactor", or "expand-contract"');
     }
-    validateMigration(plan);
   } else {
     if (plan.migration_strategy !== null || plan.migration !== null) {
       fail('needs-decision plan must not invent a migration strategy');
@@ -586,13 +630,32 @@ function validatePlan(plan) {
   validatePrerequisites(plan);
   assertAcyclic(plan.tickets);
   assertTransitivelyMinimal(plan.tickets);
+  if (plan.status === 'ready') validateMigration(plan);
   validateCoverage(plan);
   validateFrontier(plan);
   return plan;
 }
 
-function ticketIdentity(ticket) {
+function ticketCandidateKey(ticket) {
   return JSON.stringify([ticket.outcome, ticket.seam]);
+}
+
+function ticketWorkKey(ticket) {
+  const consumes = ticket.consumes
+    .map(({ ticket_id: ticketId, output }) => [ticketId, output])
+    .sort(([leftId, leftOutput], [rightId, rightOutput]) => (
+      leftId.localeCompare(rightId) || leftOutput.localeCompare(rightOutput)
+    ));
+  return JSON.stringify({
+    outcome: ticket.outcome,
+    seam: ticket.seam,
+    shape: ticket.shape,
+    in_scope: [...ticket.in_scope].sort(),
+    out_of_scope: [...ticket.out_of_scope].sort(),
+    acceptance: [...ticket.acceptance].sort(),
+    validation: [...ticket.validation].sort(),
+    consumes,
+  });
 }
 
 function lineageRecordKey(record) {
@@ -613,21 +676,21 @@ function validateRegeneration(previousPlan, nextPlan) {
     previousPlan.tickets.map((ticket) => [ticket.id, ticket]),
   );
   const nextById = new Map(nextPlan.tickets.map((ticket) => [ticket.id, ticket]));
-  const previousByIdentity = new Map(
-    previousPlan.tickets.map((ticket) => [ticketIdentity(ticket), ticket]),
+  const previousByWorkKey = new Map(
+    previousPlan.tickets.map((ticket) => [ticketWorkKey(ticket), ticket]),
   );
-  const nextByIdentity = new Map(
-    nextPlan.tickets.map((ticket) => [ticketIdentity(ticket), ticket]),
+  const nextByWorkKey = new Map(
+    nextPlan.tickets.map((ticket) => [ticketWorkKey(ticket), ticket]),
   );
 
   for (const [id, previousTicket] of previousById) {
     const nextTicket = nextById.get(id);
-    if (nextTicket && ticketIdentity(previousTicket) !== ticketIdentity(nextTicket)) {
+    if (nextTicket && ticketWorkKey(previousTicket) !== ticketWorkKey(nextTicket)) {
       fail(`regeneration reuses identity "${id}" for changed work`);
     }
   }
-  for (const [identity, previousTicket] of previousByIdentity) {
-    const nextTicket = nextByIdentity.get(identity);
+  for (const [workKey, previousTicket] of previousByWorkKey) {
+    const nextTicket = nextByWorkKey.get(workKey);
     if (nextTicket && nextTicket.id !== previousTicket.id) {
       fail(
         `unchanged candidate "${previousTicket.id}" must preserve its identity`,

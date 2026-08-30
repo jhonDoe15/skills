@@ -42,6 +42,12 @@ const combinePlanPath = path.join(
   'carve',
   'combine-plan.json',
 );
+const replacementPlanPath = path.join(
+  __dirname,
+  'fixtures',
+  'carve',
+  'replacement-plan.json',
+);
 const prefactorPlanPath = path.join(
   __dirname,
   'fixtures',
@@ -245,6 +251,22 @@ test('canonical package contains the complete ordinary Carve planning roles', (t
   assert.equal(names.includes('ticket-scope'), true);
 });
 
+test('public Carve descriptions include ready and needs-decision results', () => {
+  const readme = fs.readFileSync(path.join(repositoryRoot, 'README.md'), 'utf8');
+  const skill = fs.readFileSync(path.join(
+    repositoryRoot,
+    'skills',
+    'carve',
+    'SKILL.md',
+  ), 'utf8');
+
+  assert.match(readme, /authoritative requirements[\s\S]+needs-decision plan/);
+  assert.match(
+    skill,
+    /description:.*authoritative requirements.*needs-decision plan/,
+  );
+});
+
 test('canonical graph exposes only the settled Carve planning runtime edges', () => {
   const suite = loadCanonicalSuite(repositoryRoot);
   const planningEdges = suite.runtimeEdges.filter(({ consumer }) => (
@@ -333,7 +355,7 @@ test('plan validation rejects blockers without concrete consumed output', (t) =>
   assert.match(result.stderr, /blockers and consumes must identify the same direct tickets/);
 });
 
-test('regeneration preserves stable identities and explicit split/combine lineage', (t) => {
+test('regeneration preserves stable identities and explicit replacement lineage', (t) => {
   const {
     validatePlan,
     validateRegeneration,
@@ -342,6 +364,7 @@ test('regeneration preserves stable identities and explicit split/combine lineag
   const unchanged = structuredClone(original);
   const split = readJson(splitPlanPath);
   const combined = readJson(combinePlanPath);
+  const replacement = readJson(replacementPlanPath);
 
   assert.strictEqual(validateRegeneration(original, unchanged), unchanged);
   assert.strictEqual(validateRegeneration(original, split), split);
@@ -350,6 +373,7 @@ test('regeneration preserves stable identities and explicit split/combine lineag
     'ready',
   );
   assert.strictEqual(validateRegeneration(split, combined), combined);
+  assert.strictEqual(validateRegeneration(original, replacement), replacement);
   assert.strictEqual(validatePlan(split), split);
   assert.strictEqual(validatePlan(combined), combined);
   const result = runValidator(t, split, { previousPlan: original });
@@ -362,6 +386,35 @@ test('regeneration preserves stable identities and explicit split/combine lineag
     () => validateRegeneration(original, reused),
     /reuses identity "T2" for changed work/,
   );
+  const changedWorkMutations = [
+    ['in-scope behavior', (plan) => {
+      plan.tickets[1].in_scope.push('Backfill existing preferences.');
+    }],
+    ['out-of-scope boundary', (plan) => {
+      plan.tickets[1].out_of_scope.push('Change scheduler defaults.');
+    }],
+    ['acceptance contract', (plan) => {
+      plan.tickets[1].acceptance.push('Existing preferences remain readable.');
+    }],
+    ['validation contract', (plan) => {
+      plan.tickets[1].validation.push('Run compatibility tests.');
+    }],
+    ['ticket shape', (plan) => {
+      plan.tickets[0].shape = 'vertical';
+    }],
+    ['dependency semantics', (plan) => {
+      plan.tickets[1].consumes[0].output = 'A different schema contract.';
+    }],
+  ];
+  for (const [name, mutate] of changedWorkMutations) {
+    const changed = structuredClone(original);
+    mutate(changed);
+    assert.throws(
+      () => validateRegeneration(original, changed),
+      /reuses identity "T[12]" for changed work/,
+      name,
+    );
+  }
 
   const missingLineage = structuredClone(split);
   missingLineage.lineage = [];
@@ -404,6 +457,16 @@ test('regeneration preserves stable identities and explicit split/combine lineag
     () => validatePlan(cyclicLineage),
     /replacement lineage must be acyclic/,
   );
+
+  const role = readEvaluation('slice-plan', 'role.json');
+  const replacementLineageCase = role.evals.find(
+    ({ id }) => id === 'one-to-one-replacement-lineage',
+  );
+  assert.ok(replacementLineageCase);
+  assert.equal(
+    replacementLineageCase.covered_clauses.includes('sp-replace-lineage'),
+    true,
+  );
 });
 
 test('prefactor and expand-contract plans validate concrete migration ordering', () => {
@@ -419,6 +482,10 @@ test('prefactor and expand-contract plans validate concrete migration ordering',
   assert.equal(prefactor.migration_strategy, 'prefactor');
   assert.equal(expandContract.tickets[0].shape, 'prerequisite');
   assert.equal(expandContract.migration_strategy, 'expand-contract');
+  assert.deepEqual(
+    expandContract.migration.migration_groups[0].completion_ticket_ids,
+    ['M1B'],
+  );
 
   const convenienceFoundation = structuredClone(prefactor);
   convenienceFoundation.tickets[2].blockers = [];
@@ -429,11 +496,16 @@ test('prefactor and expand-contract plans validate concrete migration ordering',
   );
 
   const incompleteContraction = structuredClone(expandContract);
-  incompleteContraction.tickets[3].blockers = ['M1'];
-  incompleteContraction.tickets[3].consumes.pop();
+  const contraction = incompleteContraction.tickets.find(
+    ({ id }) => id === 'C1',
+  );
+  contraction.blockers = ['M1B'];
+  contraction.consumes = contraction.consumes.filter(
+    ({ ticket_id: ticketId }) => ticketId === 'M1B',
+  );
   assert.throws(
     () => validatePlan(incompleteContraction),
-    /contraction ticket "C1" must depend directly on every migration group ticket/,
+    /contraction ticket "C1" must depend directly on every migration group completion ticket/,
   );
 
   const coupledGroup = structuredClone(expandContract);
@@ -480,7 +552,21 @@ test('needs-decision plans validate unresolved choices and refuse publication', 
   assert.strictEqual(validatePlan(plan), plan);
   assert.equal(caseDefinition.publication_authorized, true);
   assert.equal(caseDefinition.expected_status, 'needs-decision');
-  assert.equal(grade().passed, true);
+  const acceptedGrade = grade();
+  assert.equal(acceptedGrade.passed, true);
+  assert.equal(
+    acceptedGrade.checks.some(
+      ({ name }) => name === 'response references plan artifact',
+    ),
+    true,
+  );
+  assert.equal(
+    definition.judge.dimensions.every(
+      ({ description }) => /needs-decision/i.test(description),
+    ),
+    true,
+    'shared outcome judge must score the needs-decision branch',
+  );
   assert.equal(grade([{
     operation: 'create-ticket',
     target: 'T1',
