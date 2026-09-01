@@ -2910,6 +2910,23 @@ test('grader fingerprints reject implementation substitution and tampering', asy
   });
   assert.equal(malformedAssessment.reusable, false);
   assert.ok(malformedAssessment.reason.length < 200);
+
+  const duplicate = structuredClone(treatment);
+  const oversizedValue = 'x'.repeat(10_000);
+  duplicate.execution.package_skills = [oversizedValue, oversizedValue];
+  reseal(duplicate);
+  const duplicateAssessment = assessReusableEvidence({
+    manifest,
+    definition,
+    caseDefinition,
+    cell,
+    repetition: 1,
+    arm: 'treatment',
+    record: duplicate,
+    graderRegistry: originalRegistry,
+  });
+  assert.equal(duplicateAssessment.reusable, false);
+  assert.ok(duplicateAssessment.reason.length <= 256);
 });
 
 test('default and owner graders cover role outcome component and trigger arms', async (t) => {

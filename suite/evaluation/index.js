@@ -28,12 +28,13 @@ const MAX_GRADER_VERSION_LENGTH = 32;
 const MAX_GRADER_CHECKS = 256;
 const MAX_GRADER_CHECK_NAME_LENGTH = 256;
 const MAX_GRADER_CHECK_DETAILS_LENGTH = 2048;
+const MAX_CONTRACT_ERROR_LENGTH = 256;
 const graderRegistrations = new WeakMap();
 let builtInGraderRegistry;
 
 class EvaluationContractError extends Error {
   constructor(message) {
-    super(message);
+    super(String(message).slice(0, MAX_CONTRACT_ERROR_LENGTH));
     this.name = 'EvaluationContractError';
   }
 }
