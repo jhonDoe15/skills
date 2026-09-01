@@ -3,72 +3,31 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {
+  EXACT_RELEASE_TARGET,
+  SuiteContractError,
+  assertUnique,
+  canonicalSkillNames,
+  formatRuntimeEdge,
+  requireArray,
+  runtimeEdgeKey,
+} = require('./contract');
+const {
   emptyPreExecutionInventory,
 } = require('./pre-execution-inventory');
 
 const CONTRACT_FILE = path.join('suite', 'canonical-suite.json');
-const EXPECTED_IDENTITY = {
-  name: 'skills',
-  version: '1.0.0',
-  stage: 'release-candidate',
-};
+const EXPECTED_IDENTITY = EXACT_RELEASE_TARGET.identity;
 const VALID_CLASSIFICATIONS = new Set(['audience', 'primary', 'private']);
-const EXPECTED_INVENTORY = [
-  ['agent-writing', 'primary'],
-  ['carve', 'primary'],
-  ['code-review', 'primary'],
-  ['dispatch-work', 'primary'],
-  ['engineering-guidance', 'primary'],
-  ['implement', 'primary'],
-  ['incident-investigation', 'primary'],
-  ['pr-carver', 'primary'],
-  ['skill-writing', 'primary'],
-  ['take-it-offline', 'primary'],
-  ['take-ticket', 'primary'],
-  ['to-humans', 'audience'],
-  ['review-coordinator', 'private'],
-  ['review-worker', 'private'],
-  ['skill-evaluation', 'private'],
-  ['skill-mechanics', 'private'],
-  ['slice-plan', 'private'],
-  ['ticket-scope', 'private'],
-  ['writing-foundation', 'private'],
-];
-const EXPECTED_EDGES = [
-  'agent-writing->writing-foundation',
-  'carve->slice-plan',
-  'code-review->review-coordinator',
-  'code-review->review-worker',
-  'code-review->take-it-offline',
-  'dispatch-work->take-it-offline',
-  'dispatch-work->take-ticket',
-  'implement->engineering-guidance',
-  'pr-carver->ticket-scope',
-  'review-coordinator->take-it-offline',
-  'review-worker->engineering-guidance',
-  'review-worker->take-it-offline',
-  'skill-writing->agent-writing',
-  'skill-writing->skill-evaluation',
-  'skill-writing->skill-mechanics',
-  'slice-plan->take-it-offline',
-  'slice-plan->ticket-scope',
-  'take-it-offline->agent-writing',
-  'take-ticket->code-review',
-  'take-ticket->implement',
-  'to-humans->writing-foundation',
-];
-const EXPECTED_EXTERNALS = [
-  ['autopilot', ['dispatch-work', 'pr-carver']],
-  ['split-to-prs', ['pr-carver']],
-  ['tdd', ['implement']],
-];
-const EXPECTED_PREDECESSORS = [
-  ['lean', 'to-humans'],
-  ['unslop', 'to-humans'],
-  ['writing-for-agents', 'agent-writing'],
-  ['writing-great-skills', 'skill-writing'],
-  ['handoff', 'take-it-offline'],
-];
+const EXPECTED_INVENTORY = EXACT_RELEASE_TARGET.inventory.map(
+  ({ name, classification }) => [name, classification],
+);
+const EXPECTED_EDGE_KEYS = EXACT_RELEASE_TARGET.runtimeEdges.map(runtimeEdgeKey);
+const EXPECTED_EXTERNALS = EXACT_RELEASE_TARGET.externalPrerequisites.map(
+  ({ name, consumers }) => [name, consumers],
+);
+const EXPECTED_PREDECESSORS = EXACT_RELEASE_TARGET.predecessors.map(
+  ({ name, replacement }) => [name, replacement],
+);
 const VALID_SKILL_OPERATIONS = new Set(['select', 'load']);
 const VALID_SKILL_STATUSES = new Set([
   'started',
@@ -81,33 +40,6 @@ const VALID_SKILL_STATUSES = new Set([
 const VALID_SKILL_TRIGGERS = new Set(['user', 'model', 'host', 'unknown']);
 const VALID_STATUS_SOURCES = new Set(['observed', 'inferred']);
 const productionAdapters = new WeakSet();
-
-class SuiteContractError extends Error {
-  constructor(message) {
-    super(message);
-    this.name = 'SuiteContractError';
-  }
-}
-
-function requireArray(value, field) {
-  if (!Array.isArray(value)) {
-    throw new SuiteContractError(`${field} must be an array`);
-  }
-}
-
-function assertUnique(values, field) {
-  const seen = new Set();
-  for (const value of values) {
-    if (seen.has(value)) {
-      throw new SuiteContractError(`${field} contains duplicate "${value}"`);
-    }
-    seen.add(value);
-  }
-}
-
-function canonicalSkillNames(suite) {
-  return suite.inventory.map(({ name }) => name);
-}
 
 function buildDependencyMap(skillNames, edges) {
   const dependencies = new Map([...skillNames].map((name) => [name, []]));
@@ -178,12 +110,17 @@ function validateRuntimeGraph(suite) {
     if (edge.consumer === edge.dependency) {
       throw new SuiteContractError(`runtime graph contains self-edge "${edge.consumer}"`);
     }
-    return `${edge.consumer}->${edge.dependency}`;
+    return runtimeEdgeKey(edge);
   });
 
-  assertUnique(edgeKeys, 'runtimeEdges');
+  assertUnique(
+    suite.runtimeEdges,
+    'runtimeEdges',
+    runtimeEdgeKey,
+    formatRuntimeEdge,
+  );
   assertAcyclic(skillNames, suite.runtimeEdges);
-  if (JSON.stringify(edgeKeys) !== JSON.stringify(EXPECTED_EDGES)) {
+  if (JSON.stringify(edgeKeys) !== JSON.stringify(EXPECTED_EDGE_KEYS)) {
     throw new SuiteContractError('runtime graph must contain the exact canonical edges');
   }
 }

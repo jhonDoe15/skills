@@ -4,30 +4,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const {
-  SuiteContractError,
   discoverCanonicalPackage,
   loadCanonicalSuite,
 } = require('.');
-
-function requireArray(value, field) {
-  if (!Array.isArray(value)) {
-    throw new SuiteContractError(`${field} must be an array`);
-  }
-}
-
-function assertUnique(values, field) {
-  const seen = new Set();
-  for (const value of values) {
-    if (seen.has(value)) {
-      throw new SuiteContractError(`${field} contains duplicate "${value}"`);
-    }
-    seen.add(value);
-  }
-}
-
-function canonicalSkillNames(suite) {
-  return suite.inventory.map(({ name }) => name);
-}
+const {
+  SuiteContractError,
+  assertUnique,
+  canonicalSkillNames,
+  formatRuntimeEdge,
+  requireArray,
+  runtimeEdgeKey,
+} = require('./contract');
 
 function validatePackageClosure(suite, packageDefinition) {
   const installed = packageDefinition.skills.map(({ name }) => name);
@@ -99,7 +86,8 @@ function validateInstallCollisions(suite, installedDefinitions) {
 }
 
 function validateComponentCoverage(repositoryRoot, suite, expectedEdges) {
-  const found = new Set();
+  const expectedEdgeKeys = new Set(expectedEdges.map(runtimeEdgeKey));
+  const found = new Map();
   for (const { name } of suite.inventory) {
     const evaluationsRoot = path.join(
       repositoryRoot,
@@ -114,20 +102,29 @@ function validateComponentCoverage(repositoryRoot, suite, expectedEdges) {
       const consumer = definition.evaluation?.skill || definition.skill_name;
       for (const evaluationCase of definition.evals || []) {
         if (evaluationCase.ablated_dependency) {
-          found.add(`${consumer}->${evaluationCase.ablated_dependency}`);
+          const edge = {
+            consumer,
+            dependency: evaluationCase.ablated_dependency,
+          };
+          found.set(runtimeEdgeKey(edge), edge);
         }
       }
     }
   }
-  const unknown = [...found].find((edge) => !expectedEdges.includes(edge));
+  const unknown = [...found.entries()]
+    .find(([key]) => !expectedEdgeKeys.has(key))?.[1];
   if (unknown) {
-    throw new SuiteContractError(`component evaluation has unknown edge "${unknown}"`);
+    throw new SuiteContractError(
+      `component evaluation has unknown edge "${formatRuntimeEdge(unknown)}"`,
+    );
   }
-  const missing = expectedEdges.find((edge) => !found.has(edge));
+  const missing = expectedEdges.find((edge) => !found.has(runtimeEdgeKey(edge)));
   if (missing) {
-    throw new SuiteContractError(`missing component evaluation for "${missing}"`);
+    throw new SuiteContractError(
+      `missing component evaluation for "${formatRuntimeEdge(missing)}"`,
+    );
   }
-  return [...expectedEdges];
+  return expectedEdges.map(formatRuntimeEdge);
 }
 
 function readJsonFile(root, ...segments) {
@@ -170,13 +167,11 @@ function validateReleasePackage(repositoryRoot) {
   const suite = loadCanonicalSuite(repositoryRoot);
   const packageDefinition = discoverCanonicalPackage(repositoryRoot);
   const skills = validatePackageClosure(suite, packageDefinition);
-  const runtimeEdges = suite.runtimeEdges.map(
-    ({ consumer, dependency }) => `${consumer}->${dependency}`,
-  );
+  const runtimeEdges = suite.runtimeEdges.map(formatRuntimeEdge);
   const componentEdges = validateComponentCoverage(
     repositoryRoot,
     suite,
-    runtimeEdges,
+    suite.runtimeEdges,
   );
   validateReleaseMetadata(repositoryRoot, suite);
   return Object.freeze({

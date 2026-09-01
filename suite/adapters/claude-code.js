@@ -23,6 +23,7 @@ const HOOK_OBSERVER_VERSION = 'claude-code-hooks-v1';
 const STREAM_OBSERVER_VERSION = 'claude-code-stream-json-v1';
 const OBSERVER_LOG_ENV = 'SUITE_CLAUDE_SKILL_OBSERVER_LOG';
 const EMPTY_MCP_CONFIG = JSON.stringify({ mcpServers: {} });
+const SKILL_CATALOG_FIELDS = ['skills', 'slash_commands'];
 const BASE_SESSION_SETTINGS = Object.freeze({
   autoMemoryEnabled: false,
   disableClaudeAiConnectors: true,
@@ -308,11 +309,27 @@ function isValidSkillCatalog(catalog) {
 }
 
 function skillCatalogFromInit(event) {
-  const catalogs = ['skills', 'slash_commands']
-    .filter((field) => Object.hasOwn(event, field))
-    .map((field) => event[field]);
+  const fields = SKILL_CATALOG_FIELDS
+    .filter((field) => Object.hasOwn(event, field));
+  const catalogs = fields.map((field) => event[field]);
   if (catalogs.length === 0 || !catalogs.every(isValidSkillCatalog)) return null;
-  return catalogs.flat().map((name) => name.replace(/^\//, ''));
+  return fields.flatMap((field) => event[field].map((name) => ({
+    field,
+    name: name.replace(/^\//, ''),
+  })));
+}
+
+function findDuplicateSkillName(entries) {
+  const seenByField = new Map();
+
+  for (const { field, name } of entries) {
+    const seen = seenByField.get(field) || new Set();
+    if (seen.has(name)) return name;
+    seen.add(name);
+    seenByField.set(field, seen);
+  }
+
+  return null;
 }
 
 function mutationFromTool(content, project) {
@@ -562,6 +579,7 @@ function parseClaudeStream(stdout, requestedSkill, project, requestId) {
   const evidence = {
     initialized: false,
     catalogObserved: false,
+    catalogInvalid: false,
     resultEventSeen: false,
     resultIsError: false,
     resultText: '',
@@ -569,6 +587,7 @@ function parseClaudeStream(stdout, requestedSkill, project, requestId) {
     costUsd: null,
     durationMs: null,
     availableSkills: new Set(),
+    availableSkillEntries: [],
     skillEvents: [],
     toolUses: [],
     attemptedMutations: [],
@@ -596,11 +615,15 @@ function parseClaudeStream(stdout, requestedSkill, project, requestId) {
         outcome: `submitted /${requestedSkill}`,
       });
       const catalog = skillCatalogFromInit(event);
-      evidence.availableSkills.clear();
       evidence.catalogObserved = catalog !== null;
-      for (const skillName of catalog || []) {
-        evidence.availableSkills.add(skillName);
-      }
+      evidence.catalogInvalid = catalog === null
+        && SKILL_CATALOG_FIELDS.some((field) => (
+          Object.hasOwn(event, field)
+        ));
+      evidence.availableSkillEntries = catalog || [];
+      evidence.availableSkills = new Set(
+        evidence.availableSkillEntries.map(({ name }) => name),
+      );
     }
 
     if (event.type === 'assistant') {
@@ -827,17 +850,29 @@ function normalizeClaudeExecutionEvidence({
   return evidence;
 }
 
+function hostAvailableSkillNames(context, evidence) {
+  if (!evidence.catalogObserved) return null;
+
+  const entries = evidence.availableSkillEntries || [];
+  const unexpected = entries.some(({ name }) => (
+    !context.packageSkills.includes(name)
+  ));
+  if (findDuplicateSkillName(entries) || unexpected) return null;
+
+  const availableSkills = evidence.availableSkills || new Set();
+  return context.packageSkills.filter((name) => availableSkills.has(name));
+}
+
 function observations(context, invocation, evidence = {}) {
   const responses = evidence.resultText
     ? [{ text: evidence.resultText }]
     : [];
+  const availableSkillNames = hostAvailableSkillNames(context, evidence);
   return {
     packageSkills: context.packageSkills,
-    hostAvailableSkills: evidence.catalogObserved
+    hostAvailableSkills: availableSkillNames
       ? {
-        names: context.packageSkills.filter((name) => (
-          evidence.availableSkills?.has(name)
-        )),
+        names: availableSkillNames,
         provenance: eventProvenance({
           mechanism: 'stream-json-init',
           eventType: 'system.init',
@@ -1088,6 +1123,38 @@ function createClaudeCodeAdapter({
             'result-normalization',
             'claude-model-missing',
             'Claude Code result did not identify the resolved model',
+          );
+        }
+
+        if (evidence.catalogInvalid) {
+          return fail(
+            'result-normalization',
+            'claude-skill-catalog-invalid',
+            'Claude Code returned an invalid Skill catalog',
+          );
+        }
+
+        const duplicateSkill = evidence.catalogObserved
+          ? findDuplicateSkillName(evidence.availableSkillEntries)
+          : null;
+        if (duplicateSkill) {
+          return fail(
+            'execution',
+            'claude-skill-catalog-duplicate',
+            `Claude Code Skill catalog contains duplicate "${duplicateSkill}"`,
+          );
+        }
+
+        const unexpectedSkill = evidence.catalogObserved
+          ? evidence.availableSkillEntries.find(({ name }) => (
+            !context.packageSkills.includes(name)
+          ))?.name
+          : null;
+        if (unexpectedSkill) {
+          return fail(
+            'execution',
+            'claude-skill-catalog-unexpected',
+            `Claude Code discovered unexpected Skill "${unexpectedSkill}"`,
           );
         }
 
