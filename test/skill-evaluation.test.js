@@ -121,6 +121,7 @@ function normalizedResult({
   skill,
   model,
   output,
+  responses = [{ text: output }],
   loadedSkills = [],
   resolvedSkills = loadedSkills,
   packageSkills = resolvedSkills,
@@ -155,7 +156,7 @@ function normalizedResult({
         requestedSkill: skill,
         resolvedSkills,
       },
-      responses: [{ text: output }],
+      responses,
       artifacts: [],
       toolUses: [],
       attemptedMutations: [],
@@ -285,6 +286,7 @@ function asLegacyRunEvidence(record, {
   const legacy = structuredClone(record);
   delete legacy.grader;
   delete legacy.fingerprints.grading;
+  delete legacy.execution.responses;
   Object.assign(legacy.deterministic, deterministicOverrides);
   legacy.fingerprints.input = hash({
     campaign_fingerprint: manifest.fingerprint,
@@ -2138,6 +2140,87 @@ test('owner grader evidence remains reusable through lifecycle resolution', asyn
   assert.equal(replay.passed, true);
 });
 
+test('owner graders retain normalized response boundaries through replay', async (t) => {
+  const definition = declareOwnerGrader(testDefinition());
+  const manifest = createManifest(definition);
+  const cell = manifest.cells[0];
+  const caseDefinition = definition.evals[0];
+  const fixtureRoot = createPackageFixture(t, ['incident-investigation']);
+  const graderRegistry = ownerGraderRegistry({
+    implementationDigest: hash('response-boundary grader v1'),
+    grade({ arm, result }) {
+      const count = result.observations.responses.length;
+      const passed = arm.kind !== 'treatment' || count === 2;
+      return {
+        passed,
+        checks: [{
+          name: 'response boundaries',
+          passed,
+          details: `responses=${count}`,
+        }],
+      };
+    },
+  });
+  const runs = await runMatchedEvaluation({
+    repositoryRoot: fixtureRoot,
+    manifest,
+    definition,
+    caseDefinition,
+    cell,
+    repetition: 1,
+    executeArm({ arm }) {
+      const treatment = arm === 'treatment';
+      return normalizedResult({
+        skill: definition.skill_name,
+        model: cell.model,
+        output: treatment ? 'first\n\nsecond' : 'control',
+        responses: treatment
+          ? [{ text: 'first' }, { text: 'second' }]
+          : [{ text: 'control' }],
+        loadedSkills: treatment ? [definition.skill_name] : [],
+        packageSkills: treatment ? [definition.skill_name] : [],
+      });
+    },
+    graderRegistry,
+  });
+  assert.equal(assessReusableEvidence({
+    manifest,
+    definition,
+    caseDefinition,
+    cell,
+    repetition: 1,
+    arm: 'treatment',
+    record: runs[1],
+    graderRegistry,
+  }).reusable, true);
+  const comparison = createBlindComparison({
+    manifest,
+    definition,
+    caseDefinition,
+    repetition: 1,
+    control: runs[0],
+    treatment: runs[1],
+    judgeModel: 'judge-model',
+    graderRegistry,
+  });
+  const judgment = createJudgmentEvidence({
+    comparison,
+    definition,
+    caseDefinition,
+    judgeModel: 'judge-model',
+    judgment: structuredJudgment(comparison),
+    durationMs: 5,
+    costUsd: 0.02,
+  });
+  assert.equal(replayCampaign({
+    manifest,
+    definition,
+    runs,
+    judgments: [judgment],
+    graderRegistry,
+  }).passed, true);
+});
+
 test('grader declarations and trusted registrations reject code-loading inputs', () => {
   assert.doesNotThrow(() => ownerGraderRegistry());
   const registrationWithoutDigest = ownerGraderRegistration();
@@ -2811,6 +2894,22 @@ test('grader fingerprints reject implementation substitution and tampering', asy
     }),
     /deterministic grader fingerprint mismatch/,
   );
+
+  const malformed = structuredClone(treatment);
+  malformed.deterministic.checks[0]['x'.repeat(10_000)] = true;
+  reseal(malformed);
+  const malformedAssessment = assessReusableEvidence({
+    manifest,
+    definition,
+    caseDefinition,
+    cell,
+    repetition: 1,
+    arm: 'treatment',
+    record: malformed,
+    graderRegistry: originalRegistry,
+  });
+  assert.equal(malformedAssessment.reusable, false);
+  assert.ok(malformedAssessment.reason.length < 200);
 });
 
 test('default and owner graders cover role outcome component and trigger arms', async (t) => {

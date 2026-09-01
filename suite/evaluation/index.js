@@ -68,7 +68,9 @@ function assertExactFields(value, expected, field) {
   const expectedFields = new Set(expected);
   const unsupported = Object.keys(value).find((name) => !expectedFields.has(name));
   if (unsupported) {
-    throw new EvaluationContractError(`${field} has unsupported field "${unsupported}"`);
+    throw new EvaluationContractError(
+      `${field} has unsupported field "${unsupported.slice(0, 64)}"`,
+    );
   }
   const missing = expected.find((name) => !Object.hasOwn(value, name));
   if (missing) {
@@ -1514,6 +1516,7 @@ function createRunEvidence({
           controlPolicy || manifest.control_policy,
         )
         : null,
+      responses: structuredClone(result.observations.responses),
       output,
       failure: structuredClone(result.failure),
     },
@@ -1651,6 +1654,21 @@ function validateRunEvidence({
       'run evidence execution.output must be a string',
     );
   }
+  const retainedResponses = responsesFromExecution(record.execution);
+  if (record.execution.responses === undefined && record.grader !== undefined) {
+    throw new EvaluationContractError(
+      'run evidence execution.responses is required',
+    );
+  }
+  validateObjectItems(
+    retainedResponses,
+    ['text'],
+    'run evidence execution.responses',
+  );
+  if (retainedResponses.map(({ text }) => text).join('\n\n')
+    !== record.execution.output) {
+    throw new EvaluationContractError('run evidence responses do not match output');
+  }
   requireFiniteNonNegative(
     record.execution.duration_ms,
     'run evidence execution.duration_ms',
@@ -1710,9 +1728,7 @@ function validateRunEvidence({
         requestedSkill: record.execution.routing.requested_skill,
         resolvedSkills: record.execution.routing.resolved_skills,
       },
-      responses: record.execution.output
-        ? [{ text: record.execution.output }]
-        : [],
+      responses: retainedResponses,
       artifacts: record.execution.artifacts,
       toolUses: record.execution.observable_tool_use,
       attemptedMutations: record.execution.attempted_mutations,
@@ -2246,14 +2262,17 @@ function observationsFromExecution(execution) {
   };
 }
 
+function responsesFromExecution(execution) {
+  if (execution.responses !== undefined) return execution.responses;
+  return execution.output ? [{ text: execution.output }] : [];
+}
+
 function resultFromRunEvidence(record) {
   return {
     status: record.execution.status,
     observations: {
       ...observationsFromExecution(record.execution),
-      responses: record.execution.output
-        ? [{ text: record.execution.output }]
-        : [],
+      responses: responsesFromExecution(record.execution),
       artifacts: record.execution.artifacts,
       toolUses: record.execution.observable_tool_use,
       attemptedMutations: record.execution.attempted_mutations,

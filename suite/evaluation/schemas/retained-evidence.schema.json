@@ -175,6 +175,22 @@
             "$ref": "#/$defs/skillEvent"
           }
         },
+        "responses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "text"
+            ],
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
         "routing": {
           "type": "object",
           "required": [
@@ -530,6 +546,22 @@
           "cost_usd",
           "fingerprint"
         ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "grader"
+        ]
+      },
+      "then": {
+        "properties": {
+          "execution": {
+            "required": [
+              "responses"
+            ]
+          }
+        }
       }
     },
     {
