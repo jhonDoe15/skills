@@ -3,6 +3,11 @@
   "$id": "https://jhonDoe15.github.io/skills/schemas/skill-evaluation-definition-v1.json",
   "title": "Skill Evaluation definition",
   "type": "object",
+  "propertyNames": {
+    "not": {
+      "pattern": "^(?:grader(?:_|[A-Z]|$)|gradeOutput$)"
+    }
+  },
   "required": [
     "skill_name",
     "version",
@@ -81,6 +86,11 @@
       "minItems": 1,
       "items": {
         "type": "object",
+        "propertyNames": {
+          "not": {
+            "pattern": "^(?:grader(?:_|[A-Z]|$)|gradeOutput$)"
+          }
+        },
         "required": [
           "id",
           "name",

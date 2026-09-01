@@ -214,6 +214,9 @@
         "passed": {
           "type": "boolean"
         },
+        "status": {
+          "const": "baseline"
+        },
         "checks": {
           "type": "array",
           "maxItems": 256,
@@ -243,8 +246,23 @@
           }
         }
       },
-      "allOf": [
+      "oneOf": [
         {
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "passed": {
+              "const": true
+            }
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "status"
+            ]
+          },
           "if": {
             "properties": {
               "passed": {
@@ -512,6 +530,39 @@
           "cost_usd",
           "fingerprint"
         ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "deterministic"
+        ],
+        "properties": {
+          "deterministic": {
+            "required": [
+              "status"
+            ]
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "grader"
+          ]
+        },
+        "properties": {
+          "arm": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "no-skill"
+              }
+            }
+          }
+        }
       }
     }
   ]

@@ -393,6 +393,7 @@ function validateRegistration(registration, index) {
   assertExactFields(registration, [
     'id',
     'version',
+    'implementationDigest',
     'configuration',
     'layers',
     'arms',
@@ -402,6 +403,10 @@ function validateRegistration(registration, index) {
     id: registration.id,
     version: registration.version,
   }, field);
+  requireFingerprint(
+    registration.implementationDigest,
+    `${field}.implementationDigest`,
+  );
   const configuration = canonicalGraderConfiguration(
     registration.configuration,
     `${field}.configuration`,
@@ -433,6 +438,9 @@ function validateRegistration(registration, index) {
       // detects substitutions; it is not a proof of semantic equivalence
       // across engines, transpilers, minifiers, or mutable closed-over state.
       implementation: graderImplementationSource(registration.grade),
+      // The trusted artifact digest covers helpers and closed-over state
+      // without letting retained evidence select code to load.
+      implementation_digest: registration.implementationDigest,
       configuration,
     }),
   };
@@ -442,6 +450,7 @@ function defaultGraderRegistration() {
   return {
     id: DEFAULT_GRADER.id,
     version: DEFAULT_GRADER.version,
+    implementationDigest: fingerprintValue(fs.readFileSync(__filename)),
     configuration: {
       contract: 'json-pattern deterministic grader v1',
     },
@@ -674,8 +683,22 @@ function immutableGraderValue(value, mutationState) {
   });
 }
 
+function rejectEmbeddedGraderControls(value, field) {
+  const unsupported = Object.keys(value).find((name) => (
+    name === 'grader'
+    || name === 'gradeOutput'
+    || /^grader[_A-Z]/.test(name)
+  ));
+  if (unsupported) {
+    throw new EvaluationContractError(
+      `${field} has unsupported grader control "${unsupported.slice(0, 64)}"`,
+    );
+  }
+}
+
 function validateEvaluationDefinition(definition) {
   requireObject(definition, 'definition');
+  rejectEmbeddedGraderControls(definition, 'definition');
   requireString(definition.skill_name, 'definition.skill_name');
   requireObject(definition.evaluation, 'definition.evaluation');
   const metadata = definition.evaluation;
@@ -755,6 +778,10 @@ function validateEvaluationDefinition(definition) {
   const caseNames = [];
   for (const [index, evaluation] of definition.evals.entries()) {
     requireObject(evaluation, `definition.evals[${index}]`);
+    rejectEmbeddedGraderControls(
+      evaluation,
+      `definition.evals[${index}]`,
+    );
     if (!Number.isInteger(evaluation.id) && typeof evaluation.id !== 'string') {
       throw new EvaluationContractError(
         `definition.evals[${index}].id must be a string or integer`,
@@ -1276,6 +1303,32 @@ function validateResolvedGrade(
   return grade;
 }
 
+function validateLegacyDefaultControlGrade(
+  grade,
+  { definition, caseDefinition, grader },
+) {
+  validateDeterministicGrade(grade);
+  assertExactFields(
+    grade,
+    ['passed', 'checks', 'status'],
+    'deterministicGrade',
+  );
+  if (grade.status !== 'baseline' || grade.passed !== true) {
+    throw new EvaluationContractError(
+      'legacy default control grade is invalid',
+    );
+  }
+  validateResolvedGrade({
+    passed: grade.checks.every(({ passed }) => passed),
+    checks: grade.checks,
+  }, {
+    definition,
+    caseDefinition,
+    grader,
+  });
+  return grade;
+}
+
 function gradeWithResolvedGrader({
   graderRegistry = defaultGraderRegistry(),
   manifest,
@@ -1753,11 +1806,19 @@ function validateRunEvidence({
     || record.package_revision !== manifest.package_revision) {
     throw new EvaluationContractError('retained evidence coordinates mismatch');
   }
-  validateResolvedGrade(record.deterministic, {
+  const gradeContext = {
     definition,
     caseDefinition,
     grader: manifestGraderIdentity(manifest),
-  });
+  };
+  const hasLegacyDefaultBaseline = record.grader === undefined
+    && expectedArm.kind === 'no-skill'
+    && Object.hasOwn(record.deterministic, 'status');
+  if (hasLegacyDefaultBaseline) {
+    validateLegacyDefaultControlGrade(record.deterministic, gradeContext);
+  } else {
+    validateResolvedGrade(record.deterministic, gradeContext);
+  }
   return record;
 }
 
