@@ -68,11 +68,12 @@ const VALID_SKILL_STATUSES = new Set([
 ]);
 const VALID_SKILL_TRIGGERS = new Set(['user', 'model', 'host', 'unknown']);
 const VALID_STATUS_SOURCES = new Set(['observed', 'inferred']);
+const MAX_CONTRACT_ERROR_LENGTH = 256;
 const productionAdapters = new WeakSet();
 
 class SuiteContractError extends Error {
   constructor(message) {
-    super(message);
+    super(String(message).slice(0, MAX_CONTRACT_ERROR_LENGTH));
     this.name = 'SuiteContractError';
   }
 }

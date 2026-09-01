@@ -15,6 +15,7 @@ const {
 } = require('../suite');
 const {
   createCampaignManifest,
+  createGraderRegistry,
   gradeTriggerResult,
   runMatchedEvaluation,
   runTriggerEvaluation,
@@ -56,6 +57,22 @@ function createPackageFixture(t) {
 
 function digest(value) {
   return createHash('sha256').update(value).digest('hex');
+}
+
+function createFixtureGraderRegistry(definition, id, grade) {
+  const version = '1';
+  definition.evaluation.grader = { id, version };
+  return createGraderRegistry({
+    graders: [{
+      id,
+      version,
+      implementationDigest: digest(id),
+      configuration: { fixture: id },
+      layers: [definition.evaluation.layer],
+      arms: [...definition.evaluation.arms],
+      grade,
+    }],
+  });
 }
 
 function readJson(filePath) {
@@ -473,10 +490,24 @@ test('role, outcome, and trigger evaluations retain exact observable lifecycle e
       ({ evaluation }) => evaluation.layer === layer,
     );
     const caseDefinition = definition.evals[0];
+    const graderRegistry = createFixtureGraderRegistry(
+      definition,
+      `fixture.engineering-guidance-${layer}`,
+      ({
+        definition: registeredDefinition,
+        caseDefinition: registeredCase,
+        result,
+      }) => gradeEngineeringGuidanceResult({
+        definition: registeredDefinition,
+        caseDefinition: registeredCase,
+        result,
+      }),
+    );
     const manifest = manifestFor(definition);
     const records = await runMatchedEvaluation({
       repositoryRoot: packageRoot,
       manifest,
+      definition,
       caseDefinition,
       cell,
       repetition: 1,
@@ -495,16 +526,7 @@ test('role, outcome, and trigger evaluations retain exact observable lifecycle e
           },
         );
       },
-      gradeOutput({ arm, result }) {
-        if (arm === 'no-skill') {
-          return { passed: true, status: 'baseline', checks: [] };
-        }
-        return gradeEngineeringGuidanceResult({
-          definition,
-          caseDefinition,
-          result,
-        });
-      },
+      graderRegistry,
     });
 
     assert.deepEqual(

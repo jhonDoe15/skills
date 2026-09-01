@@ -16,6 +16,7 @@ const {
 const {
   createBlindComparison,
   createCampaignManifest,
+  createGraderRegistry,
   gradeTriggerResult,
   runComponentEvaluation,
   runMatchedEvaluation,
@@ -38,6 +39,22 @@ const foundationFixturePath = path.join(
   fixtureRoot,
   'writing-foundation.skill.md',
 );
+
+function createFixtureGraderRegistry(definition, id, grade) {
+  const version = '1';
+  definition.evaluation.grader = { id, version };
+  return createGraderRegistry({
+    graders: [{
+      id,
+      version,
+      implementationDigest: '0'.repeat(64),
+      configuration: { fixture: id },
+      layers: [definition.evaluation.layer],
+      arms: [...definition.evaluation.arms],
+      grade,
+    }],
+  });
+}
 
 function normalizedResult({
   output,
@@ -705,6 +722,18 @@ test('contract fixtures validate v2 campaigns through either Adapter', async (t)
 
 test('Foundation component ablation runs through either test Adapter', async (t) => {
   const component = definitionFor(loadDefinitions(), 'component');
+  const graderRegistry = createFixtureGraderRegistry(
+    component,
+    'fixture.to-humans-component',
+    ({ arm }) => ({
+      passed: true,
+      checks: [{
+        name: 'test-only Adapter completed',
+        passed: true,
+        details: arm.kind,
+      }],
+    }),
+  );
   const packageRoot = createPackageFixture(t);
 
   for (const host of ['claude-code', 'cursor']) {
@@ -728,21 +757,12 @@ test('Foundation component ablation runs through either test Adapter', async (t)
     const evidence = await runComponentEvaluation({
       repositoryRoot: packageRoot,
       manifest,
+      definition: component,
       caseDefinition: component.evals[0],
       cell: manifest.cells[0],
       repetition: 1,
       adapter,
-      gradeOutput({ arm }) {
-        return {
-          passed: true,
-          status: arm === 'component-ablation' ? 'baseline' : 'treatment',
-          checks: [{
-            name: 'test-only Adapter completed',
-            passed: true,
-            details: host,
-          }],
-        };
-      },
+      graderRegistry,
     });
 
     assert.deepEqual(
@@ -763,11 +783,23 @@ test('Foundation component ablation runs through either test Adapter', async (t)
 test('complete outcome retains a matched No-Skill control', async (t) => {
   const outcome = definitionFor(loadDefinitions(), 'outcome');
   const caseDefinition = outcome.evals[0];
+  const graderRegistry = createFixtureGraderRegistry(
+    outcome,
+    'fixture.to-humans-outcome',
+    ({ definition, caseDefinition: registeredCase, output }) => (
+      gradeMechanicalOutput({
+        evaluationDefinition: definition,
+        caseDefinition: registeredCase,
+        output,
+      })
+    ),
+  );
   const manifest = manifestFor(outcome);
   const packageRoot = createPackageFixture(t);
   const evidence = await runMatchedEvaluation({
     repositoryRoot: packageRoot,
     manifest,
+    definition: outcome,
     caseDefinition,
     cell: manifest.cells[0],
     repetition: 1,
@@ -799,20 +831,7 @@ test('complete outcome retains a matched No-Skill control', async (t) => {
           : 'There are several options to consider.',
       });
     },
-    gradeOutput({ arm, result }) {
-      if (arm === 'no-skill') {
-        return {
-          passed: true,
-          status: 'baseline',
-          checks: [],
-        };
-      }
-      return gradeMechanicalOutput({
-        evaluationDefinition: outcome,
-        caseDefinition,
-        output: result.observations.responses.map(({ text }) => text).join('\n\n'),
-      });
-    },
+    graderRegistry,
   });
 
   assert.deepEqual(
@@ -830,6 +849,19 @@ test('complete outcome retains a matched No-Skill control', async (t) => {
 test('complete outcome gates judging on exact successful closure loads', async (t) => {
   const outcome = definitionFor(loadDefinitions(), 'outcome');
   const caseDefinition = outcome.evals[0];
+  let treatmentGrades = 0;
+  const graderRegistry = createFixtureGraderRegistry(
+    outcome,
+    'fixture.to-humans-load-gate',
+    ({ arm, definition, caseDefinition: registeredCase, output }) => {
+      if (arm.kind === 'treatment') treatmentGrades += 1;
+      return gradeMechanicalOutput({
+        evaluationDefinition: definition,
+        caseDefinition: registeredCase,
+        output,
+      });
+    },
+  );
   const manifest = manifestFor(outcome);
   const packageRoot = createPackageFixture(t);
   assert.strictEqual(
@@ -845,10 +877,10 @@ test('complete outcome gates judging on exact successful closure loads', async (
   );
 
   async function runWith(skillEvents) {
-    let treatmentGrades = 0;
     const records = await runMatchedEvaluation({
       repositoryRoot: packageRoot,
       manifest,
+      definition: outcome,
       caseDefinition,
       cell: manifest.cells[0],
       repetition: 1,
@@ -868,16 +900,7 @@ test('complete outcome gates judging on exact successful closure loads', async (
             : 'There are several options to consider.',
         });
       },
-      gradeOutput({ arm, output }) {
-        if (arm === 'treatment') treatmentGrades += 1;
-        return arm === 'treatment'
-          ? gradeMechanicalOutput({
-            evaluationDefinition: outcome,
-            caseDefinition,
-            output,
-          })
-          : { passed: true, status: 'baseline', checks: [] };
-      },
+      graderRegistry,
     });
     return {
       control: records.find(({ arm }) => arm.kind === 'no-skill'),
@@ -898,6 +921,7 @@ test('complete outcome gates judging on exact successful closure loads', async (
       control: targetOnly.control,
       treatment: targetOnly.treatment,
       judgeModel: 'judge-model',
+      graderRegistry,
     }),
     /required Skill load gate failed.*writing-foundation/,
   );
@@ -924,6 +948,7 @@ test('complete outcome gates judging on exact successful closure loads', async (
         control: rejected.control,
         treatment: rejected.treatment,
         judgeModel: 'judge-model',
+        graderRegistry,
       }),
       /required Skill load gate failed/,
       label,
@@ -944,5 +969,6 @@ test('complete outcome gates judging on exact successful closure loads', async (
     control: complete.control,
     treatment: complete.treatment,
     judgeModel: 'judge-model',
+    graderRegistry,
   }));
 });
