@@ -18,8 +18,8 @@ function loadCursorSdk() {
   return require('@cursor/sdk');
 }
 
-function copyResolvedSkills(repositoryRoot, projectRoot, resolvedSkills) {
-  for (const name of resolvedSkills) {
+function copyPackageSkills(repositoryRoot, projectRoot, packageSkills) {
+  for (const name of packageSkills) {
     const source = path.join(repositoryRoot, 'skills', name);
     const destination = path.join(projectRoot, '.cursor', 'skills', name);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
@@ -621,10 +621,10 @@ async function executeCursor({
       projectRoot = path.join(executionRoot, 'project');
       storeRoot = path.join(executionRoot, 'store');
       fs.mkdirSync(projectRoot);
-      copyResolvedSkills(repositoryRoot, projectRoot, context.resolvedSkills);
+      copyPackageSkills(repositoryRoot, projectRoot, context.packageSkills);
       inventory = buildPreExecutionInventory({
         projectRoot,
-        skillNames: context.resolvedSkills,
+        skillNames: context.packageSkills,
         relativePathFor: (name) => `.cursor/skills/${name}/SKILL.md`,
       });
       const store = new cursorSdk.JsonlLocalAgentStore(storeRoot);

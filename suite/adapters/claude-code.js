@@ -23,6 +23,7 @@ const HOOK_OBSERVER_VERSION = 'claude-code-hooks-v1';
 const STREAM_OBSERVER_VERSION = 'claude-code-stream-json-v1';
 const OBSERVER_LOG_ENV = 'SUITE_CLAUDE_SKILL_OBSERVER_LOG';
 const EMPTY_MCP_CONFIG = JSON.stringify({ mcpServers: {} });
+const SKILL_CATALOG_FIELDS = ['skills', 'slash_commands'];
 const BASE_SESSION_SETTINGS = Object.freeze({
   autoMemoryEnabled: false,
   disableClaudeAiConnectors: true,
@@ -88,13 +89,13 @@ function validateOptions({
   }
 }
 
-function createIsolatedProject(skillsRoot, resolvedSkills) {
+function createIsolatedProject(skillsRoot, packageSkills) {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-code-adapter-'));
   const projectSkillsRoot = path.join(project, '.claude', 'skills');
   fs.mkdirSync(projectSkillsRoot, { recursive: true });
 
   try {
-    for (const skillName of resolvedSkills) {
+    for (const skillName of packageSkills) {
       const source = path.join(skillsRoot, skillName);
       const definition = path.join(source, 'SKILL.md');
       if (!fs.existsSync(definition)
@@ -308,11 +309,27 @@ function isValidSkillCatalog(catalog) {
 }
 
 function skillCatalogFromInit(event) {
-  const catalogs = ['skills', 'slash_commands']
-    .filter((field) => Object.hasOwn(event, field))
-    .map((field) => event[field]);
+  const fields = SKILL_CATALOG_FIELDS
+    .filter((field) => Object.hasOwn(event, field));
+  const catalogs = fields.map((field) => event[field]);
   if (catalogs.length === 0 || !catalogs.every(isValidSkillCatalog)) return null;
-  return catalogs.flat().map((name) => name.replace(/^\//, ''));
+  return fields.flatMap((field) => event[field].map((name) => ({
+    field,
+    name: name.replace(/^\//, ''),
+  })));
+}
+
+function findDuplicateSkillName(entries) {
+  const seenByField = new Map();
+
+  for (const { field, name } of entries) {
+    const seen = seenByField.get(field) || new Set();
+    if (seen.has(name)) return name;
+    seen.add(name);
+    seenByField.set(field, seen);
+  }
+
+  return null;
 }
 
 function mutationFromTool(content, project) {
@@ -562,6 +579,7 @@ function parseClaudeStream(stdout, requestedSkill, project, requestId) {
   const evidence = {
     initialized: false,
     catalogObserved: false,
+    catalogInvalid: false,
     resultEventSeen: false,
     resultIsError: false,
     resultText: '',
@@ -569,6 +587,7 @@ function parseClaudeStream(stdout, requestedSkill, project, requestId) {
     costUsd: null,
     durationMs: null,
     availableSkills: new Set(),
+    availableSkillEntries: [],
     skillEvents: [],
     toolUses: [],
     attemptedMutations: [],
@@ -596,11 +615,15 @@ function parseClaudeStream(stdout, requestedSkill, project, requestId) {
         outcome: `submitted /${requestedSkill}`,
       });
       const catalog = skillCatalogFromInit(event);
-      evidence.availableSkills.clear();
       evidence.catalogObserved = catalog !== null;
-      for (const skillName of catalog || []) {
-        evidence.availableSkills.add(skillName);
-      }
+      evidence.catalogInvalid = catalog === null
+        && SKILL_CATALOG_FIELDS.some((field) => (
+          Object.hasOwn(event, field)
+        ));
+      evidence.availableSkillEntries = catalog || [];
+      evidence.availableSkills = new Set(
+        evidence.availableSkillEntries.map(({ name }) => name),
+      );
     }
 
     if (event.type === 'assistant') {
@@ -827,15 +850,61 @@ function normalizeClaudeExecutionEvidence({
   return evidence;
 }
 
+function analyzeSkillCatalog(context, evidence) {
+  if (evidence.catalogInvalid) {
+    return { status: 'invalid', availableSkillNames: null };
+  }
+  if (!evidence.catalogObserved) {
+    return { status: 'absent', availableSkillNames: null };
+  }
+
+  const entries = evidence.availableSkillEntries || [];
+  const duplicateSkill = findDuplicateSkillName(entries);
+  if (duplicateSkill) {
+    return {
+      status: 'duplicate',
+      availableSkillNames: null,
+      skillName: duplicateSkill,
+    };
+  }
+
+  const unexpectedSkill = entries.find(({ field, name }) => (
+    field === 'skills' && !context.packageSkills.includes(name)
+  ))?.name;
+  if (unexpectedSkill) {
+    return {
+      status: 'unexpected',
+      availableSkillNames: null,
+      skillName: unexpectedSkill,
+    };
+  }
+
+  const availableSkills = evidence.availableSkills || new Set();
+  const availableSkillNames = context.packageSkills.filter(
+    (name) => availableSkills.has(name),
+  );
+  const unavailableSkill = context.packageSkills.find(
+    (name) => !availableSkills.has(name),
+  );
+  return unavailableSkill
+    ? {
+      status: 'missing',
+      availableSkillNames,
+      skillName: unavailableSkill,
+    }
+    : { status: 'valid', availableSkillNames };
+}
+
 function observations(context, invocation, evidence = {}) {
   const responses = evidence.resultText
     ? [{ text: evidence.resultText }]
     : [];
+  const { availableSkillNames } = analyzeSkillCatalog(context, evidence);
   return {
     packageSkills: context.packageSkills,
-    hostAvailableSkills: evidence.catalogObserved
+    hostAvailableSkills: availableSkillNames
       ? {
-        names: [...(evidence.availableSkills || [])],
+        names: availableSkillNames,
         provenance: eventProvenance({
           mechanism: 'stream-json-init',
           eventType: 'system.init',
@@ -958,7 +1027,7 @@ function createClaudeCodeAdapter({
 
       try {
         try {
-          project = createIsolatedProject(skillsRoot, context.resolvedSkills);
+          project = createIsolatedProject(skillsRoot, context.packageSkills);
         } catch (error) {
           const detail = error instanceof ClaudeProjectSetupError
             ? error.message
@@ -976,7 +1045,7 @@ function createClaudeCodeAdapter({
         const observer = installClaudeSkillObserver(project);
         const inventory = buildPreExecutionInventory({
           projectRoot: project,
-          skillNames: context.resolvedSkills,
+          skillNames: context.packageSkills,
           relativePathFor: (name) => `.claude/skills/${name}/SKILL.md`,
         });
         const environment = createSanitizedEnvironment(observer.logPath);
@@ -1089,16 +1158,36 @@ function createClaudeCodeAdapter({
           );
         }
 
-        const unavailableSkill = evidence.catalogObserved
-          ? context.resolvedSkills.find((skillName) => (
-            !evidence.availableSkills.has(skillName)
-          ))
-          : null;
-        if (unavailableSkill) {
+        const catalog = analyzeSkillCatalog(context, evidence);
+        if (catalog.status === 'invalid') {
+          return fail(
+            'result-normalization',
+            'claude-skill-catalog-invalid',
+            'Claude Code returned an invalid Skill catalog',
+          );
+        }
+
+        if (catalog.status === 'duplicate') {
+          return fail(
+            'execution',
+            'claude-skill-catalog-duplicate',
+            `Claude Code Skill catalog contains duplicate "${catalog.skillName}"`,
+          );
+        }
+
+        if (catalog.status === 'unexpected') {
+          return fail(
+            'execution',
+            'claude-skill-catalog-unexpected',
+            `Claude Code discovered unexpected Skill "${catalog.skillName}"`,
+          );
+        }
+
+        if (catalog.status === 'missing') {
           return fail(
             'execution',
             'claude-skill-unavailable',
-            `Claude Code did not discover Skill "${unavailableSkill}"`,
+            `Claude Code did not discover packaged Skill "${catalog.skillName}"`,
           );
         }
 

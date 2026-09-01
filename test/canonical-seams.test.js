@@ -75,6 +75,43 @@ function createPackageFixture(t, skillNames) {
   return fixtureRoot;
 }
 
+function alteredContractValidation(t, change) {
+  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'contract-oracle-'));
+  t.after(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
+  const fixtureSuiteRoot = path.join(fixtureRoot, 'suite');
+  fs.cpSync(
+    path.join(repositoryRoot, 'suite'),
+    fixtureSuiteRoot,
+    { recursive: true },
+  );
+  const contractPath = path.join(fixtureSuiteRoot, 'canonical-suite.json');
+  const contract = JSON.parse(fs.readFileSync(contractPath, 'utf8'));
+  change(contract);
+  fs.writeFileSync(contractPath, JSON.stringify(contract));
+
+  return () => require(fixtureSuiteRoot).loadCanonicalSuite(fixtureRoot);
+}
+
+test('canonical manifest is checked against an independent release target', (t) => {
+  assert.throws(
+    alteredContractValidation(t, (contract) => {
+      contract.inventory.find(
+        ({ name }) => name === 'incident-investigation',
+      ).name = 'incident-response';
+    }),
+    /inventory must contain the exact canonical 19-Skill target/,
+  );
+
+  assert.throws(
+    alteredContractValidation(t, (contract) => {
+      contract.runtimeEdges.find(
+        ({ consumer }) => consumer === 'carve',
+      ).dependency = 'ticket-scope';
+    }),
+    /runtime graph must contain the exact canonical edges/,
+  );
+});
+
 function normalizedAdapterResult(invocation, context, {
   response,
   artifact,
@@ -266,6 +303,18 @@ test('canonical validators reject malformed target inventory and graph contracts
   assert.throws(
     mutate((suite) => suite.aliases.push('lean')),
     /aliases are not permitted/,
+  );
+  assert.throws(
+    mutate((suite) => {
+      suite.identity.version = '1.0.1';
+    }),
+    /package identity must be skills version 1\.0\.0 release-candidate/,
+  );
+  assert.throws(
+    mutate((suite) => {
+      suite.predecessors[0].replacement = 'agent-writing';
+    }),
+    /predecessors must contain the exact migration set/,
   );
   assert.throws(
     mutate((suite) => suite.inventory.push({ ...suite.inventory[0] })),

@@ -9,10 +9,12 @@ const test = require('node:test');
 const {
   discoverCanonicalPackage,
   executeProduction,
+  loadCanonicalSuite,
 } = require('../suite');
 const {
   createClaudeCodeAdapter,
 } = require('../suite/adapters/claude-code');
+const { validateReleaseHostDiscovery } = require('../suite/release');
 
 const REQUESTED_MODEL = 'requested-test-model';
 const RESOLVED_MODEL = 'resolved-test-model-20260825';
@@ -174,7 +176,7 @@ function invocation(model = REQUESTED_MODEL) {
   };
 }
 
-function successEvents() {
+function successEvents(catalog = ['agent-writing', 'writing-foundation']) {
   const artifact = [
     '# Deploy status instruction',
     '',
@@ -193,7 +195,7 @@ function successEvents() {
       type: 'system',
       subtype: 'init',
       model: RESOLVED_MODEL,
-      skills: ['agent-writing', 'writing-foundation'],
+      skills: catalog,
     },
     {
       type: 'assistant',
@@ -374,6 +376,102 @@ test('Claude Code Adapter executes the host-local Agent Writing tracer', async (
       execution.args.indexOf('--max-budget-usd') + 2,
     ),
     ['--max-budget-usd', '0.25'],
+  );
+});
+
+test('Claude Code Adapter stages and discovers the complete release package', async (t) => {
+  const expectedSkills = loadCanonicalSuite(repositoryRoot)
+    .inventory.map(({ name }) => name);
+  const fakeClaude = createFakeClaude(t, {
+    events: successEvents(expectedSkills),
+    observerEvents: successfulObserverEvents(),
+  });
+  const adapter = createClaudeCodeAdapter({
+    skillsRoot: path.join(repositoryRoot, 'skills'),
+    command: fakeClaude.commandPath,
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: invocation(),
+  });
+  const execution = readCommandLog(fakeClaude.logPath).at(-1);
+
+  assert.deepEqual(execution.skills, [...expectedSkills].sort());
+  assert.deepEqual(
+    validateReleaseHostDiscovery(repositoryRoot, result),
+    expectedSkills,
+  );
+  assert.deepEqual(result.observations.routing.resolvedSkills, [
+    'writing-foundation',
+    'agent-writing',
+  ]);
+});
+
+test('Claude Code Adapter rejects an unexpected release catalog entry', async (t) => {
+  const expectedSkills = loadCanonicalSuite(repositoryRoot)
+    .inventory.map(({ name }) => name);
+  const unexpectedSkill = 'agent-writing-alias';
+  const fakeClaude = createFakeClaude(t, {
+    events: successEvents([...expectedSkills, unexpectedSkill]),
+    observerEvents: successfulObserverEvents(),
+  });
+  const adapter = createClaudeCodeAdapter({
+    skillsRoot: path.join(repositoryRoot, 'skills'),
+    command: fakeClaude.commandPath,
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: invocation(),
+  });
+
+  assert.equal(result.status, 'failed');
+  assert.deepEqual(result.failure, {
+    stage: 'execution',
+    code: 'claude-skill-catalog-unexpected',
+    message: `Claude Code discovered unexpected Skill "${unexpectedSkill}"`,
+  });
+  assert.equal(result.observations.hostAvailableSkills, null);
+  assert.throws(
+    () => validateReleaseHostDiscovery(repositoryRoot, result),
+    /host did not report packaged Skill discovery/,
+  );
+});
+
+test('Claude Code Adapter rejects a duplicate release catalog entry', async (t) => {
+  const expectedSkills = loadCanonicalSuite(repositoryRoot)
+    .inventory.map(({ name }) => name);
+  const duplicateSkill = expectedSkills[0];
+  const fakeClaude = createFakeClaude(t, {
+    events: successEvents([...expectedSkills, duplicateSkill]),
+    observerEvents: successfulObserverEvents(),
+  });
+  const adapter = createClaudeCodeAdapter({
+    skillsRoot: path.join(repositoryRoot, 'skills'),
+    command: fakeClaude.commandPath,
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: invocation(),
+  });
+
+  assert.equal(result.status, 'failed');
+  assert.deepEqual(result.failure, {
+    stage: 'execution',
+    code: 'claude-skill-catalog-duplicate',
+    message: `Claude Code Skill catalog contains duplicate "${duplicateSkill}"`,
+  });
+  assert.throws(
+    () => validateReleaseHostDiscovery(repositoryRoot, result),
+    /host did not report packaged Skill discovery/,
   );
 });
 
@@ -699,7 +797,7 @@ test('Claude Code Adapter returns setup failure before session startup', async (
   assert.deepEqual(result.failure, {
     stage: 'setup',
     code: 'project-setup-failed',
-    message: 'Failed to prepare Claude Code project: missing Skill source "writing-foundation"',
+    message: 'Failed to prepare Claude Code project: missing Skill source "agent-writing"',
   });
   assert.deepEqual(result.observations.responses, []);
   assert.deepEqual(result.observations.toolUses, []);
@@ -947,16 +1045,42 @@ test('Claude Code Adapter distinguishes absent, empty, and malformed catalogs', 
         slash_commands: ['/writing-foundation'],
       },
       expected: ['agent-writing', 'writing-foundation'],
+      expectedStatus: 'succeeded',
+    },
+    {
+      label: 'same Skills across host catalog fields',
+      init: {
+        skills: ['agent-writing', 'writing-foundation'],
+        slash_commands: ['/agent-writing', '/writing-foundation'],
+      },
+      expected: ['agent-writing', 'writing-foundation'],
+      expectedStatus: 'succeeded',
+    },
+    {
+      label: 'non-Skill slash commands',
+      init: {
+        skills: ['agent-writing', 'writing-foundation'],
+        slash_commands: [
+          '/agent-writing',
+          '/writing-foundation',
+          'clear',
+          'compact',
+        ],
+      },
+      expected: ['agent-writing', 'writing-foundation'],
+      expectedStatus: 'succeeded',
     },
     {
       label: 'empty',
       init: { skills: [], slash_commands: [] },
       expected: [],
+      expectedStatus: 'failed',
     },
     {
       label: 'absent',
       init: {},
       expected: null,
+      expectedStatus: 'succeeded',
     },
     {
       label: 'malformed only',
@@ -965,6 +1089,8 @@ test('Claude Code Adapter distinguishes absent, empty, and malformed catalogs', 
         slash_commands: [{ name: 'writing-foundation' }],
       },
       expected: null,
+      expectedStatus: 'failed',
+      expectedFailureCode: 'claude-skill-catalog-invalid',
     },
     {
       label: 'malformed plus empty',
@@ -973,6 +1099,8 @@ test('Claude Code Adapter distinguishes absent, empty, and malformed catalogs', 
         slash_commands: [],
       },
       expected: null,
+      expectedStatus: 'failed',
+      expectedFailureCode: 'claude-skill-catalog-invalid',
     },
     {
       label: 'malformed plus populated',
@@ -981,10 +1109,18 @@ test('Claude Code Adapter distinguishes absent, empty, and malformed catalogs', 
         slash_commands: ['/writing-foundation'],
       },
       expected: null,
+      expectedStatus: 'failed',
+      expectedFailureCode: 'claude-skill-catalog-invalid',
     },
   ];
 
-  for (const { label, init, expected } of cases) {
+  for (const {
+    label,
+    init,
+    expected,
+    expectedStatus,
+    expectedFailureCode,
+  } of cases) {
     await t.test(label, async (caseTest) => {
       const events = successEventsWithoutSkillTool();
       events[0] = {
@@ -998,6 +1134,10 @@ test('Claude Code Adapter distinguishes absent, empty, and malformed catalogs', 
         result.observations.hostAvailableSkills?.names ?? null,
         expected,
       );
+      assert.equal(result.status, expectedStatus);
+      if (expectedFailureCode) {
+        assert.equal(result.failure.code, expectedFailureCode);
+      }
     });
   }
 });

@@ -6,6 +6,7 @@ const path = require('node:path');
 
 const repositoryRoot = path.resolve(__dirname, '..');
 const commands = [
+  ['scripts/check-package.js'],
   ['--test'],
   [
     'skills/incident-investigation/scripts/run-evals.js',

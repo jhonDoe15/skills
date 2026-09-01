@@ -6,8 +6,9 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 
-const { executeProduction } = require('../suite');
+const { executeProduction, loadCanonicalSuite } = require('../suite');
 const { createCursorAdapter } = require('../suite/adapters/cursor');
+const { validateReleaseHostDiscovery } = require('../suite/release');
 const {
   AGENT_WRITING_SKILL,
   createTracerPackage,
@@ -237,7 +238,17 @@ test('Cursor Adapter executes the tracer in a pristine project and normalizes ev
     requestedSkill: 'agent-writing',
     resolvedSkills: ['writing-foundation', 'agent-writing'],
   });
+  const inventorySkillNames = result.observations.preExecutionInventory
+    .skillDefinitions.map(({ name }) => name);
   assert.equal(result.observations.hostAvailableSkills, null);
+  assert.deepEqual(
+    inventorySkillNames,
+    ['agent-writing', 'writing-foundation'],
+  );
+  assert.deepEqual(
+    inventorySkillNames,
+    result.observations.packageSkills,
+  );
   assert.deepEqual(result.observations.packageSkills, [
     'agent-writing',
     'writing-foundation',
@@ -308,6 +319,36 @@ test('Cursor Adapter executes the tracer in a pristine project and normalizes ev
     tracerCase.gateOrder,
     ['deterministic', 'qualitative'],
   );
+});
+
+test('Cursor Adapter stages the complete release package without claiming discovery', async () => {
+  const observation = {};
+  const adapter = createCursorAdapter({
+    repositoryRoot: canonicalRepositoryRoot,
+    sdk: createSuccessfulSdk(observation),
+  });
+  const expectedSkills = loadCanonicalSuite(canonicalRepositoryRoot)
+    .inventory.map(({ name }) => name);
+
+  const result = await executeProduction({
+    repositoryRoot: canonicalRepositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  });
+  const stagedSkills = observation.projectFilesAtCreate
+    .filter((file) => /^\.cursor\/skills\/[^/]+\/SKILL\.md$/.test(file))
+    .map((file) => file.split('/')[2])
+    .sort();
+
+  assert.deepEqual(stagedSkills, [...expectedSkills].sort());
+  assert.throws(
+    () => validateReleaseHostDiscovery(canonicalRepositoryRoot, result),
+    /host did not report packaged Skill discovery/,
+  );
+  assert.deepEqual(result.observations.routing.resolvedSkills, [
+    'writing-foundation',
+    'agent-writing',
+  ]);
 });
 
 test('Cursor Adapter reports run identifiers before streaming', async (t) => {

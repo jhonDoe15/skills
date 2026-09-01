@@ -1,6 +1,18 @@
 {
+  "identity": {
+    "name": "skills",
+    "version": "1.0.0",
+    "stage": "release-candidate"
+  },
   "skillsSourceRoot": "skills",
   "aliases": [],
+  "predecessors": [
+    { "name": "lean", "replacement": "to-humans" },
+    { "name": "unslop", "replacement": "to-humans" },
+    { "name": "writing-for-agents", "replacement": "agent-writing" },
+    { "name": "writing-great-skills", "replacement": "skill-writing" },
+    { "name": "handoff", "replacement": "take-it-offline" }
+  ],
   "inventory": [
     { "name": "agent-writing", "classification": "primary" },
     { "name": "carve", "classification": "primary" },
@@ -48,15 +60,89 @@
   "externalPrerequisites": [
     {
       "name": "autopilot",
+      "source": {
+        "url": "https://cursor.com/docs/context/skills",
+        "locator": "autopilot"
+      },
+      "testedRevision": "sha256:2f0fd7aebbcacfa81afb8ead8107b44e4202e45e23ad20e3778c9123cadb9589",
+      "license": "Provider terms; prerequisite is not redistributed",
       "consumers": ["dispatch-work", "pr-carver"]
     },
     {
       "name": "split-to-prs",
+      "source": {
+        "url": "https://cursor.com/docs/context/skills",
+        "locator": "split-to-prs"
+      },
+      "testedRevision": "sha256:61e3b94b54457e0f8a850cccf64936a0f5a686f6ad22016d17d30958d2f2b328",
+      "license": "Provider terms; prerequisite is not redistributed",
       "consumers": ["pr-carver"]
     },
     {
       "name": "tdd",
+      "source": {
+        "url": "https://cursor.com/docs/context/skills",
+        "locator": "tdd"
+      },
+      "testedRevision": "sha256:cb01f66bebfaa25fa1f88e6b7e769cd9fd9f35b1120b8563749820738814c927",
+      "license": "Provider terms; prerequisite is not redistributed",
       "consumers": ["implement"]
+    }
+  ],
+  "adaptedUpstream": [
+    {
+      "source": {
+        "name": "Matt Pocock to-tickets",
+        "url": "https://github.com/mattpocock/skills/blob/6654f6b60cd9d5be8b54c6fafe44346dabeb3b76/skills/engineering/to-tickets/SKILL.md"
+      },
+      "pinnedRevision": "6654f6b60cd9d5be8b54c6fafe44346dabeb3b76",
+      "license": "MIT",
+      "modules": ["carve", "slice-plan", "ticket-scope"]
+    },
+    {
+      "source": {
+        "name": "GitHub Spec Kit task template",
+        "url": "https://github.com/github/spec-kit/blob/b1d9d5626c02df8d378c8ab401ceb8961009f6dc/templates/commands/tasks.md"
+      },
+      "pinnedRevision": "b1d9d5626c02df8d378c8ab401ceb8961009f6dc",
+      "license": "MIT",
+      "modules": ["slice-plan"]
+    },
+    {
+      "source": {
+        "name": "OpenSpec schema",
+        "url": "https://github.com/Fission-AI/OpenSpec/blob/6926ccb18afa4ff621112813e9968334576ee11a/schemas/spec-driven/schema.yaml"
+      },
+      "pinnedRevision": "6926ccb18afa4ff621112813e9968334576ee11a",
+      "license": "MIT",
+      "modules": ["slice-plan"]
+    },
+    {
+      "source": {
+        "name": "Matt Pocock code-review",
+        "url": "https://github.com/mattpocock/skills/blob/5c89081d4bbeb3d039a42093653f90bb698d780e/skills/engineering/code-review/SKILL.md"
+      },
+      "pinnedRevision": "5c89081d4bbeb3d039a42093653f90bb698d780e",
+      "license": "MIT",
+      "modules": ["code-review", "review-coordinator", "review-worker"]
+    },
+    {
+      "source": {
+        "name": "Superpowers code reviewer",
+        "url": "https://github.com/obra/superpowers/blob/b36e0829c6d0140e93cfef2ca599b1b07d4a7797/skills/requesting-code-review/code-reviewer.md"
+      },
+      "pinnedRevision": "b36e0829c6d0140e93cfef2ca599b1b07d4a7797",
+      "license": "MIT",
+      "modules": ["code-review", "review-worker"]
+    },
+    {
+      "source": {
+        "name": "Agent Skills specification",
+        "url": "https://github.com/agentskills/agentskills/blob/217be548739f21d6008915c29aefe320ea1a90af/docs/specification.mdx"
+      },
+      "pinnedRevision": "217be548739f21d6008915c29aefe320ea1a90af",
+      "license": "CC-BY-4.0",
+      "modules": ["skill-evaluation", "skill-mechanics", "skill-writing"]
     }
   ]
 }
