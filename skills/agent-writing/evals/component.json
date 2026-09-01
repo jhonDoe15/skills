@@ -1,0 +1,60 @@
+{
+  "skill_name": "agent-writing",
+  "version": 1,
+  "evaluation": {
+    "scope": "agent-writing-to-writing-foundation",
+    "layer": "component",
+    "skill": "agent-writing",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment", "component-ablation"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "agent-writing-foundation-component-v1"
+  },
+  "signals": {
+    "aw-foundation-edge-terminology": ["`?DAG frontier`?"],
+    "aw-foundation-edge-work-product": ["\\{\"maxAttempts\":3\\}"]
+  },
+  "global_required_signals": [
+    "aw-foundation-edge-terminology",
+    "aw-foundation-edge-work-product"
+  ],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "foundation-contribution",
+        "description": "Blindly compare whether the complete consumer improves coverage, grounding, unresolved-owner handling, relevance, and completion over the dependency-ablated output. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "agent-contract-stability",
+        "description": "Verify that both outputs answer the same neutral Agent Writing task while the treatment preserves exact terminology and work-product meaning without semantic regressions. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "complete-consumer-versus-foundation-ablation",
+      "name": "complete-agent-writing-consumer",
+      "prompt": "Create agent instructions for validating `deploy-plan.json`. Account for the required success and failure branches, preserve the canonical term `DAG frontier` and JSON literal `{\"maxAttempts\":3}`, keep the unresolved retry owner visible, and complete only after reporting the observed result.",
+      "expected_output": "The complete consumer invokes Writing Foundation and preserves shared coverage, grounding, uncertainty, exact terminology, work-product fidelity, and completion behavior beyond the dependency-ablated control.",
+      "files": ["evals/fixtures/deploy-plan-source.json"],
+      "expectations": [
+        "Exact lifecycle evidence, not output prose, records writing-foundation and agent-writing in the treatment.",
+        "The deterministic gate establishes only the exact canonical term and JSON literal.",
+        "The blind judge compares branch coverage, grounding, the unresolved owner, relevance, and completion with quoted or referenced output evidence.",
+        "The ablated control removes only the writing-foundation invocation through the test Adapter boundary.",
+        "A missing production dependency is not used as either arm, and failed critical mechanical gates are non-overridable."
+      ],
+      "covered_clauses": ["aw-foundation-edge"],
+      "ablated_dependency": "writing-foundation",
+      "required_signals": []
+    }
+  ]
+}

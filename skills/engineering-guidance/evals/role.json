@@ -1,0 +1,363 @@
+{
+  "skill_name": "engineering-guidance",
+  "version": 1,
+  "evaluation": {
+    "scope": "engineering-guidance-role",
+    "layer": "role",
+    "skill": "engineering-guidance",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "engineering-guidance-role-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every expectation and dimension, quote or reference specific output evidence. A disposition label without its artifact-specific reason is not evidence.",
+    "dimensions": [
+      {
+        "id": "authority",
+        "description": "Checks quoted output evidence that authority follows host policy, requirements, scoped repository instructions, mechanical configuration, nearby practice, and labelled fallback in that order while retaining conflicts."
+      },
+      {
+        "id": "concern_coverage",
+        "description": "Checks quoted output evidence that every compact concern has exactly one artifact-specific disposition and that dispositions are not presented as defects."
+      },
+      {
+        "id": "gaps_and_routes",
+        "description": "Checks quoted output evidence that missing inputs and specialist capability remain unresolved gaps with routes instead of invented context or shallow specialist advice."
+      },
+      {
+        "id": "guidance_boundary",
+        "description": "Checks quoted output evidence that the response advises without authoring a design, mutating artifacts, executing validation, creating Review findings, or taking over caller operations."
+      },
+      {
+        "id": "compactness",
+        "description": "Checks quoted output evidence that tiny work receives compact coverage while complex or conflicted work retains enough detail to be actionable."
+      }
+    ]
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "evals": [
+    {
+      "id": "sparse-tiny-typescript",
+      "name": "tiny TypeScript change under sparse authority",
+      "prompt": "Assess this proposed change, not its prose: in src/format-id.ts, replace a local two-line lowercase helper with String.prototype.toLowerCase(). Intent: preserve current identifier output. Scope: that function only. Current artifact: a three-line TypeScript patch. Applicable authority: the user requires no behavior change; the repository has no instruction file, formatter, linter, tests, or nearby equivalent. Activity: implementation. Return Engineering concern coverage. Do not change files or run commands.",
+      "expected_output": "Compact coverage keeps missing repository evidence visible, uses fallback only where needed, disposes every concern once, and identifies proof conditions without running them.",
+      "files": [],
+      "required_skill_loads": ["engineering-guidance"],
+      "required_concerns": [
+        "intent-and-scope",
+        "responsibilities-and-seams",
+        "dependencies-and-contracts",
+        "state-and-invariants",
+        "failure-and-boundaries",
+        "simplicity-and-reuse",
+        "compatibility-and-change",
+        "maintainer-legibility",
+        "evidence-and-validation"
+      ],
+      "expectations": [
+        "Every concern has exactly one applicable-now, applicable-later, or justified not-applicable disposition tied to this tiny patch.",
+        "Absent repository authority remains a gap rather than invented local policy.",
+        "Fallback guidance is labelled and limited to uncovered applicable-now concerns.",
+        "The response identifies behavior-preservation evidence without running validation.",
+        "The amount of guidance is proportionate to a tiny change and prompt cost is considered.",
+        "Sampled human review checks that semantic advice remains useful under alternate wording."
+      ],
+      "covers": [
+        "sparse-authority",
+        "tiny-change",
+        "language-diverse-change",
+        "prompt-cost"
+      ]
+    },
+    {
+      "id": "nested-conflict-architecture",
+      "name": "architectural proposal with nested conflicting authority",
+      "authority_conflict": {
+        "higher": {
+          "source": "organization policy",
+          "rule": "Payment retries must not proceed without an idempotency key."
+        },
+        "lower": {
+          "source": "ticket INV-17",
+          "rule": "Retry every transient payment failure, including legacy events without an idempotency key."
+        },
+        "resolution": "Organization policy controls retry safety; recovery for legacy events without keys remains unresolved."
+      },
+      "prompt": "Assess an existing service-boundary proposal. Intent: move invoice retry ownership from the API process to the queue worker. Scope: services/api/retry and services/worker/invoice only. Current artifact: proposal revision r17. Authority, high to low: organization policy says payment retries must not proceed without an idempotency key; ticket INV-17 says retry every transient payment failure, including legacy events without an idempotency key; root AGENTS.md says all external effects use adapters; services/worker/AGENTS.md requires queue handlers to be idempotent; compiler config enforces strict null checks. Nearby descriptive evidence: an old worker performs charges directly and retries without an idempotency key. Activity: design. Keep incompatible authority and residual effects visible. Do not write a replacement design.",
+      "expected_output": "Coverage applies nested authority by scope and precedence, resolves the organization-policy and ticket conflict where precedence decides it, retains unresolved legacy-event recovery, and treats the old pattern only as descriptive evidence.",
+      "files": [],
+      "required_skill_loads": ["engineering-guidance"],
+      "required_concerns": [
+        "intent-and-scope",
+        "responsibilities-and-seams",
+        "dependencies-and-contracts",
+        "state-and-invariants",
+        "failure-and-boundaries",
+        "simplicity-and-reuse",
+        "compatibility-and-change",
+        "maintainer-legibility",
+        "evidence-and-validation"
+      ],
+      "expectations": [
+        "Authority resolution preserves both organization policy and ticket INV-17 as incompatible sources with their explicit precedence.",
+        "The higher organization policy controls retry safety where the conflict is resolvable.",
+        "Recovery for legacy events without keys remains unresolved after applying precedence.",
+        "The nearby direct-charge retry pattern remains visible as descriptive evidence and does not become authority.",
+        "Every concern has exactly one current disposition with an artifact-specific reason.",
+        "Advice identifies relevant ownership, contracts, state, failure, compatibility, and evidence questions without authoring a replacement architecture.",
+        "Sampled human review checks semantic correctness and useful restraint."
+      ],
+      "covers": [
+        "strong-authority",
+        "conflicting-authority",
+        "nested-authority",
+        "architectural-change",
+        "pre-existing-bad-pattern"
+      ]
+    },
+    {
+      "id": "weak-ci-specialist-route",
+      "name": "non-code CI change with weak authority and specialist gap",
+      "prompt": "Assess a proposed YAML-only CI change that adds a performance budget before deployment. Intent: detect a p95 regression. Scope: .github/workflows/deploy.yml. Current artifact: draft workflow revision ci-4. Authority: the ticket says deployments must stop on material regression; nearby jobs use inconsistent thresholds; no performance owner, approved threshold, workload model, or specialist Skill is available. Activity: design. Do not invent a threshold, edit YAML, or run the workflow.",
+      "expected_output": "Coverage treats the technical non-code artifact as assessable, preserves weak authority and missing performance expertise, and routes the caller instead of inventing specialist criteria.",
+      "files": [],
+      "required_skill_loads": ["engineering-guidance"],
+      "required_concerns": [
+        "intent-and-scope",
+        "responsibilities-and-seams",
+        "dependencies-and-contracts",
+        "state-and-invariants",
+        "failure-and-boundaries",
+        "simplicity-and-reuse",
+        "compatibility-and-change",
+        "maintainer-legibility",
+        "evidence-and-validation"
+      ],
+      "expectations": [
+        "The YAML workflow is treated as a technical non-code artifact, not excluded as generic non-code work.",
+        "Inconsistent nearby thresholds remain weak descriptive evidence.",
+        "Missing threshold authority, workload model, and performance capability remain unresolved gaps.",
+        "The response gives a performance specialist route without imitating performance expertise.",
+        "Every concern has one justified current disposition and no validation is run.",
+        "Sampled human review checks that the route and gaps are actionable."
+      ],
+      "covers": [
+        "weak-authority",
+        "non-code-change",
+        "specialist-routing"
+      ]
+    },
+    {
+      "id": "independent-review-disagreement",
+      "name": "review activity preserves independent disagreement",
+      "prompt": "Assess immutable range a1b2..c3d4 during review. Intent: cache product permissions without changing authorization results. Scope: packages/auth/cache.js and its tests. Current artifact: the immutable diff. Authority: organization policy requires deny-by-default; the ticket permits caching; repository tests require cache invalidation after role changes. The implementation handoff claims state-and-invariants is not applicable, while the fresh reviewer says invalidation state is applicable now. Activity: review. Provide concern coverage, not Review findings or severity.",
+      "expected_output": "Fresh coverage resolves authority from the immutable review artifact, keeps the implementation claim and reviewer disagreement visible, and does not convert concern dispositions into findings.",
+      "files": [],
+      "required_skill_loads": ["engineering-guidance"],
+      "required_concerns": [
+        "intent-and-scope",
+        "responsibilities-and-seams",
+        "dependencies-and-contracts",
+        "state-and-invariants",
+        "failure-and-boundaries",
+        "simplicity-and-reuse",
+        "compatibility-and-change",
+        "maintainer-legibility",
+        "evidence-and-validation"
+      ],
+      "expectations": [
+        "Review resolves fresh concern coverage from the immutable range rather than inheriting the handoff conclusion.",
+        "The state-and-invariants disagreement remains visible with its authority basis.",
+        "Every concern has one disposition and dispositions are not defects or Review findings.",
+        "The response avoids severity, finding confidence, fix direction, and review coordination.",
+        "Deny-by-default remains higher authority than the ticket and implementation claim.",
+        "Sampled human review checks independence and semantic authority handling."
+      ],
+      "covers": [
+        "independent-review-disagreement",
+        "conflicting-authority",
+        "strong-authority"
+      ]
+    },
+    {
+      "id": "missing-change-intent",
+      "name": "required change intent omitted",
+      "case_family": "missing-required-input",
+      "missing_required_input": "change-intent",
+      "provided_context": {
+        "bounded-scope": "src/cache.js",
+        "current-artifact": "proposal revision cache-2",
+        "ordered-authority": "repository tests require cache invalidation after role changes",
+        "current-activity": "design"
+      },
+      "prompt": "Assess proposal revision cache-2 for src/cache.js during design. Repository tests require cache invalidation after role changes. The change intent was not supplied. Return bounded Engineering concern coverage without guessing the intended behavior.",
+      "expected_output": "The result keeps change intent unresolved, limits advice to supported observations, and disposes every concern without manufacturing a requirement.",
+      "files": [],
+      "required_skill_loads": ["engineering-guidance"],
+      "required_concerns": [
+        "intent-and-scope",
+        "responsibilities-and-seams",
+        "dependencies-and-contracts",
+        "state-and-invariants",
+        "failure-and-boundaries",
+        "simplicity-and-reuse",
+        "compatibility-and-change",
+        "maintainer-legibility",
+        "evidence-and-validation"
+      ],
+      "expectations": [
+        "change-intent remains an unresolved gap with its effect on the assessment.",
+        "The response does not invent a requirement, purpose, or decision source.",
+        "Every concern still receives one bounded disposition where the supplied context supports it.",
+        "Sampled human review checks that the gap is concrete and the remaining advice stays useful."
+      ],
+      "covers": ["missing-required-input"]
+    },
+    {
+      "id": "missing-bounded-scope",
+      "name": "required bounded scope omitted",
+      "case_family": "missing-required-input",
+      "missing_required_input": "bounded-scope",
+      "provided_context": {
+        "change-intent": "prevent duplicate notifications during retry",
+        "current-artifact": "retry proposal revision r3",
+        "ordered-authority": "organization policy forbids duplicate customer notifications",
+        "current-activity": "design"
+      },
+      "prompt": "Assess retry proposal revision r3 during design. Intent: prevent duplicate notifications during retry. Organization policy forbids duplicate customer notifications. No repository root, path, or component boundary was supplied. Return Engineering concern coverage without assuming which code or service is in scope.",
+      "expected_output": "The result keeps bounded scope unresolved and avoids repository-specific placement claims while preserving the supplied intent and authority.",
+      "files": [],
+      "required_skill_loads": ["engineering-guidance"],
+      "required_concerns": [
+        "intent-and-scope",
+        "responsibilities-and-seams",
+        "dependencies-and-contracts",
+        "state-and-invariants",
+        "failure-and-boundaries",
+        "simplicity-and-reuse",
+        "compatibility-and-change",
+        "maintainer-legibility",
+        "evidence-and-validation"
+      ],
+      "expectations": [
+        "bounded-scope remains an unresolved gap with its effect on repository-specific advice.",
+        "The response does not invent a repository root, path, component, or ownership boundary.",
+        "Supplied intent and organization policy remain usable authority.",
+        "Sampled human review checks that guidance stays bounded despite the missing scope."
+      ],
+      "covers": ["missing-required-input"]
+    },
+    {
+      "id": "missing-current-artifact",
+      "name": "required current artifact omitted",
+      "case_family": "missing-required-input",
+      "missing_required_input": "current-artifact",
+      "provided_context": {
+        "change-intent": "make retries recover from transient broker failure",
+        "bounded-scope": "consumer/retry.go",
+        "ordered-authority": "ticket R-8 requires transient retry and repository instructions require explicit effect adapters",
+        "current-activity": "implementation"
+      },
+      "prompt": "Assess implementation activity for consumer/retry.go. Intent: make retries recover from transient broker failure. Ticket R-8 requires transient retry and repository instructions require explicit effect adapters. No proposal, patch, worktree state, or immutable range was supplied. Return Engineering concern coverage without inventing implementation details.",
+      "expected_output": "The result keeps the current artifact unresolved and distinguishes general proof conditions from claims about code that was not supplied.",
+      "files": [],
+      "required_skill_loads": ["engineering-guidance"],
+      "required_concerns": [
+        "intent-and-scope",
+        "responsibilities-and-seams",
+        "dependencies-and-contracts",
+        "state-and-invariants",
+        "failure-and-boundaries",
+        "simplicity-and-reuse",
+        "compatibility-and-change",
+        "maintainer-legibility",
+        "evidence-and-validation"
+      ],
+      "expectations": [
+        "current-artifact remains an unresolved gap with its effect on artifact-specific conclusions.",
+        "The response does not invent code, diff contents, worktree state, or a revision.",
+        "Proof conditions are framed as guidance for the caller rather than validation of absent code.",
+        "Sampled human review checks that artifact absence is not hidden by generic advice."
+      ],
+      "covers": ["missing-required-input"]
+    },
+    {
+      "id": "missing-ordered-authority",
+      "name": "required ordered authority omitted",
+      "case_family": "missing-required-input",
+      "missing_required_input": "ordered-authority",
+      "provided_context": {
+        "change-intent": "move retry ownership to the queue worker",
+        "bounded-scope": "services/worker/invoice",
+        "current-artifact": "proposal revision r17",
+        "current-activity": "design"
+      },
+      "prompt": "Assess proposal revision r17 during design. Intent: move retry ownership to the queue worker. Scope: services/worker/invoice. No applicable host, user, requirement, repository, mechanical, or nearby-practice authority was supplied in precedence order. Return Engineering concern coverage and label any fallback.",
+      "expected_output": "The result keeps ordered authority unresolved, labels fallback guidance, and does not present suite guidance as repository policy.",
+      "files": [],
+      "required_skill_loads": ["engineering-guidance"],
+      "required_concerns": [
+        "intent-and-scope",
+        "responsibilities-and-seams",
+        "dependencies-and-contracts",
+        "state-and-invariants",
+        "failure-and-boundaries",
+        "simplicity-and-reuse",
+        "compatibility-and-change",
+        "maintainer-legibility",
+        "evidence-and-validation"
+      ],
+      "expectations": [
+        "ordered-authority remains an unresolved gap with its effect on precedence-sensitive guidance.",
+        "The response does not invent repository policy, mechanical conventions, or nearby practice.",
+        "Any suite source used for an uncovered concern is explicitly labelled fallback.",
+        "Sampled human review checks that fallback is not misrepresented as local authority."
+      ],
+      "covers": ["missing-required-input"]
+    },
+    {
+      "id": "missing-current-activity",
+      "name": "required current activity omitted",
+      "case_family": "missing-required-input",
+      "missing_required_input": "current-activity",
+      "provided_context": {
+        "change-intent": "preserve authorization behavior while adding a cache",
+        "bounded-scope": "packages/auth/cache.js",
+        "current-artifact": "immutable range a1b2..c3d4",
+        "ordered-authority": "organization policy requires deny-by-default and tests require invalidation after role changes"
+      },
+      "prompt": "Assess immutable range a1b2..c3d4. Intent: preserve authorization behavior while adding a cache. Scope: packages/auth/cache.js. Organization policy requires deny-by-default and tests require invalidation after role changes. The caller did not say whether this is design, implementation, or review activity. Return bounded Engineering concern coverage.",
+      "expected_output": "The result keeps current activity unresolved and avoids pretending to know when activity-sensitive concerns apply.",
+      "files": [],
+      "required_skill_loads": ["engineering-guidance"],
+      "required_concerns": [
+        "intent-and-scope",
+        "responsibilities-and-seams",
+        "dependencies-and-contracts",
+        "state-and-invariants",
+        "failure-and-boundaries",
+        "simplicity-and-reuse",
+        "compatibility-and-change",
+        "maintainer-legibility",
+        "evidence-and-validation"
+      ],
+      "expectations": [
+        "current-activity remains an unresolved gap with its effect on concern timing.",
+        "The response does not invent design, implementation, or review as the activity.",
+        "Authority remains applicable even though concern timing is unresolved.",
+        "Sampled human review checks that deferred and current concerns are not falsely timed."
+      ],
+      "covers": ["missing-required-input"]
+    }
+  ]
+}

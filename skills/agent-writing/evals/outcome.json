@@ -1,0 +1,88 @@
+{
+  "skill_name": "agent-writing",
+  "version": 1,
+  "evaluation": {
+    "scope": "agent-writing-outcome",
+    "layer": "outcome",
+    "skill": "agent-writing",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "agent-writing-outcome-v1"
+  },
+  "signals": {
+    "aw-artifact-name": ["deploy-plan\\.json"],
+    "aw-terminology": ["`?DAG frontier`?"],
+    "aw-execution-semantics": ["\\{\"maxAttempts\":3\\}"],
+    "aw-input-mode": ["`?read-only`?"],
+    "aw-environment-source": ["`?environment`?"]
+  },
+  "global_required_signals": [
+    "aw-artifact-name",
+    "aw-terminology",
+    "aw-execution-semantics",
+    "aw-input-mode",
+    "aw-environment-source"
+  ],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "complete-agent-outcome",
+        "description": "Semantically assess whether activation, valid and invalid branches, failure-only disclosure, missing-input behavior, and completion form a complete executable procedure. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "foundation-preservation",
+        "description": "Semantically assess grounding, relevance, branch separation, whether the environment command remains a lookup rather than cached or persisted local state, and whether any prose contradicts source-owned values. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "host-neutral-agent-instructions",
+      "name": "complete-host-neutral-agent-writing-outcome",
+      "prompt": "Create an agent-facing procedure from the supplied `evals/fixtures/deploy-plan-source.json` for validating `deploy-plan.json`. Activate when the file path is supplied. Preserve the canonical `DAG frontier` term and the JSON literal `{\"maxAttempts\":3}`. Read the current schema command from the environment. On valid input, report the frontier; on invalid input, disclose failure-only remediation reference. Never modify the input. Complete after reporting the observed validation result and branch. Return the procedure; headings and labels are optional.",
+      "expected_output": "A complete host-neutral Agent Writing outcome that invokes Writing Foundation and exposes the accepted context, activation, outcome, branches, ordered steps, conditional reference, co-located authority, instruction form, context choices, exact semantics, failure path, pruning, and completion.",
+      "files": ["evals/fixtures/deploy-plan-source.json"],
+      "required_skill_loads": [
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "The deterministic gate establishes only deploy-plan.json, DAG frontier, the exact JSON literal {\"maxAttempts\":3}, read-only, and environment.",
+        "Exact lifecycle evidence establishes writing-foundation and agent-writing activation; output wording is not used as trigger evidence.",
+        "The blind judge assesses activation, outcome, valid and invalid branches, ordered steps, missing-input behavior, and terminal checks.",
+        "The blind judge verifies that failure-only reference is absent from the success path until its branch applies.",
+        "The blind judge verifies that the schema command remains an environment lookup rather than cached, persisted, or kept in local state.",
+        "The blind judge rejects prose or additional values that contradict the source-owned retry policy.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness.",
+        "Failed critical mechanical gates are non-overridable, and the matched No-Skill control receives the same task without the package."
+      ],
+      "covered_clauses": [
+        "aw-accepted-context",
+        "aw-activation",
+        "aw-intended-outcomes",
+        "aw-branches",
+        "aw-completion",
+        "aw-steps-reference",
+        "aw-branch-disclosure",
+        "aw-co-located-authority",
+        "aw-instruction-form",
+        "aw-context-load",
+        "aw-behavioral-pruning",
+        "aw-terminology",
+        "aw-execution-semantics",
+        "aw-environment-source",
+        "aw-failure-behavior"
+      ],
+      "required_signals": []
+    }
+  ]
+}

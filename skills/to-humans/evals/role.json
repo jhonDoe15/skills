@@ -1,0 +1,179 @@
+{
+  "skill_name": "to-humans",
+  "version": 1,
+  "evaluation": {
+    "scope": "to-humans-role",
+    "layer": "role",
+    "skill": "to-humans",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "to-humans-role-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every assertion and dimension, the blind judge must quote or reference specific output evidence. Labels or unsupported conclusions are not evidence.",
+    "dimensions": [
+      {
+        "id": "coverage",
+        "description": "Checks source-grounded proposition meaning: every requested fact, accountable owner and action, qualifier, uncertainty, limit, and neutral-record constraint remains correct."
+      },
+      {
+        "id": "reader_fit",
+        "description": "Checks that vocabulary, depth, organization, and contextual voice fit the stated reader."
+      },
+      {
+        "id": "actionability",
+        "description": "Checks answer-first ordering and distinct, concrete accountable actions without requiring a heading or fixed sentence form."
+      },
+      {
+        "id": "decision_support",
+        "description": "Checks a distinct recommendation, basis, material uncertainty, and change condition with source-correct polarity and direction."
+      },
+      {
+        "id": "clarity",
+        "description": "Checks that prose is clear, meaningful, and non-hollow rather than token stuffing, repetition, or field labels without substance."
+      },
+      {
+        "id": "voice",
+        "description": "Checks contextual voice and neutral-record behavior without flattening prose into a standardized template or inventing opinion."
+      }
+    ]
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "evals": [
+    {
+      "id": "human-status",
+      "name": "human project status with complete actions",
+      "prompt": "Write a status reply for an experienced release lead. Rollback is verified, but peak demand remains untested. Recommend whether to start a staged rollout today. Preserve these separate requested actions: at 14:00 the release lead stages the internal cohort; before rollout the support owner prepares the customer notice; before approval the security owner verifies that the exception expires Friday.",
+      "expected_output": "The answer appears first, all three source-grounded owner/action/qualifier propositions remain correct and distinct, the basis follows, and the prose is direct and easy to scan.",
+      "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
+      "expectations": [
+        "Answer first: the opening states the rollout recommendation before supporting detail.",
+        "Accountable owner evidence: the release lead stages the internal cohort at 14:00.",
+        "Accountable owner evidence: the support owner prepares the customer notice before rollout.",
+        "Accountable owner evidence: the security owner verifies before approval that the exception expires Friday.",
+        "Source-grounded meaning preserves actor, action, object, timing, condition, polarity, and direction without detached or contradictory qualifiers.",
+        "Clarity is non-hollow: the response uses meaningful prose rather than repeated tokens, keyword soup, or field labels alone.",
+        "Vocabulary and depth fit an experienced release lead.",
+        "The prose contains no em dash."
+      ],
+      "covers": [
+        "answer-first",
+        "requested-breadth",
+        "reader-calibration",
+        "scan-structure",
+        "action-grouping",
+        "plain-wording",
+        "concrete-attribution",
+        "no-em-dash"
+      ],
+      "forbidden_patterns": ["—"]
+    },
+    {
+      "id": "decision-support",
+      "name": "decision support with bounded recommendation",
+      "prompt": "Recommend one of two deployment options to an engineering manager. A limited release has a verified rollback. It starts with a small first cohort, which contains exposure; a full deployment reaches everyone at once. Peak traffic remains untested. The noon load test passes when p95 latency stays under 200 ms; a passing result supports moving to full deployment, while a miss means keeping the limited release. Include the basis, material uncertainty, and the evidence that would change the recommendation.",
+      "expected_output": "The response starts with one recommendation and gives distinct, source-grounded evidence for its basis, material uncertainty, and change condition.",
+      "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
+      "expectations": [
+        "Answer first: the recommendation appears before supporting detail.",
+        "The recommendation explicitly chooses a deployment option.",
+        "The basis correctly attributes verified rollback and contained exposure to the limited first cohort.",
+        "Material uncertainty clearly states that peak traffic remains untested.",
+        "The change condition preserves the supplied pass/fail, under/over 200 ms, and limited/full deployment direction.",
+        "Recommendation, basis, material uncertainty, and change condition each have substantive output evidence; one repeated phrase or label does not satisfy multiple assertions.",
+        "Source-grounded proposition meaning is correct even when the response uses alternate wording.",
+        "Clarity is non-hollow and free of token stuffing or grammatical nonsense."
+      ],
+      "covers": ["decision-support", "answer-first", "concrete-attribution"]
+    },
+    {
+      "id": "neutral-record",
+      "name": "neutral incident record without invented opinion",
+      "prompt": "Record these supplied incident facts for a post-incident timeline: at 09:10 the release lead paused deployment; at 09:14 the security owner confirmed the signing key was unchanged; at 09:18 the support owner opened incident INC-42. Do not recommend remediation or add an opinion.",
+      "expected_output": "The neutral record preserves every timestamped fact and accountable attribution without manufacturing a recommendation.",
+      "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
+      "expectations": [
+        "Neutral record behavior: the output remains factual and does not manufacture a recommendation, remediation, or opinion.",
+        "Source-grounded meaning preserves each timestamp, accountable owner, action, object, and INC-42.",
+        "Clarity and scan structure suit a post-incident timeline."
+      ],
+      "covers": ["neutral-record", "concrete-attribution"]
+    },
+    {
+      "id": "contextual-voice",
+      "name": "personal note retains contextual voice",
+      "prompt": "Revise my first-person note to remove filler while retaining its candid voice and uneven sentence rhythm. Source note: \"I want us to move fast. I also don't trust the noon numbers yet, and honestly, that bothers me.\"",
+      "expected_output": "The revision is direct but still sounds like a candid first-person note rather than a standardized corporate template.",
+      "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
+      "expectations": [
+        "Contextual voice remains candid and first-person where that carries the author's meaning.",
+        "Sentence rhythm is not mechanically regularized.",
+        "The revision removes filler without losing the concern about untrusted noon numbers.",
+        "Clarity, active voice, sentence splitting, symmetry, and vocabulary are judged in context.",
+        "The prose contains no em dash."
+      ],
+      "covers": ["contextual-voice", "plain-wording", "no-em-dash"],
+      "forbidden_patterns": ["—"]
+    },
+    {
+      "id": "protected-content",
+      "name": "non-prose and quoted source remain unchanged",
+      "prompt": "Explain the supplied artifacts to a person. Preserve each category between its marker lines exactly in your response.\n\nBEGIN PROTECTED CODE\nfunction retryCount(payload) {\n  return payload.retry_count;\n}\nEND PROTECTED CODE\n\nBEGIN PROTECTED SCHEMA\n{\"type\":\"integer\",\"minimum\":1}\nEND PROTECTED SCHEMA\n\nBEGIN PROTECTED DATA\n{\"retry-count\": 3, \"note\": \"keep—exact\"}\nEND PROTECTED DATA\n\nBEGIN PROTECTED QUOTE\n\"Quoted source — preserve this punctuation.\"\nEND PROTECTED QUOTE",
+      "expected_output": "The explanation is human-facing prose while protected code, schema, data, and quoted source material remain byte-for-byte unchanged.",
+      "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
+      "expectations": [
+        "Answer first: the explanation leads with what the reader should know.",
+        "Every protected segment remains byte-for-byte unchanged.",
+        "Human-writing rules do not alter punctuation inside protected content.",
+        "The explanatory prose outside protected inputs contains no em dash."
+      ],
+      "covers": [
+        "non-prose-fidelity",
+        "code-fidelity",
+        "schema-fidelity",
+        "data-fidelity",
+        "quoted-source-fidelity",
+        "answer-first",
+        "no-em-dash"
+      ],
+      "protected_segments": [
+        {
+          "category": "code",
+          "content": "function retryCount(payload) {\n  return payload.retry_count;\n}",
+          "occurrence_count": 1
+        },
+        {
+          "category": "schema",
+          "content": "{\"type\":\"integer\",\"minimum\":1}",
+          "occurrence_count": 1
+        },
+        {
+          "category": "data",
+          "content": "{\"retry-count\": 3, \"note\": \"keep—exact\"}",
+          "occurrence_count": 1
+        },
+        {
+          "category": "quote",
+          "content": "\"Quoted source — preserve this punctuation.\"",
+          "occurrence_count": 1
+        }
+      ],
+      "no_em_dash": true
+    }
+  ]
+}

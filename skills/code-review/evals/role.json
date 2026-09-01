@@ -1,0 +1,87 @@
+{
+  "skill_name": "code-review",
+  "version": 1,
+  "evaluation": {
+    "scope": "code-review-role",
+    "layer": "role",
+    "skill": "code-review",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "code-review-role-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "Quote or reference the retained run, worker, coverage, coordination, completeness, or brief evidence for every semantic conclusion.",
+    "dimensions": [
+      {
+        "id": "whole-ticket-dispatch",
+        "description": "The evidence-backed consolidation decision and change signals select every required fresh lens; each worker receives the complete Ticket outcome and preserves independent provenance."
+      },
+      {
+        "id": "artifact-completeness",
+        "description": "The run retains consolidation, specialist-routing, worker, disagreement, supersession, confidence, Context-limit, and failure evidence and cannot present a partial result as complete."
+      },
+      {
+        "id": "review-boundary",
+        "description": "The review stays read-only and does not take implementation, remediation, tracker, pull-request, or reviewed-ticket ownership."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "ordinary-whole-ticket-review",
+      "name": "ordinary whole-ticket multi-lens review",
+      "prompt": "Review the supplied nontrivial Ticket outcome. It includes originating requirements, immutable implementation range, implementation handoff, validation evidence, and repository authority. Return a read-only Review brief with inspectable retained artifacts.",
+      "expected_output": "Separate fresh Domain and Engineering/Design workers inspect the complete Ticket outcome, then structural coordination produces a complete local Review brief without mutation.",
+      "files": [
+        "test/fixtures/code-review/scenario/requirements.md",
+        "test/fixtures/code-review/scenario/ticket-outcome.json",
+        "test/fixtures/code-review/scenario/implementation-handoff.json",
+        "test/fixtures/code-review/scenario/validation.json",
+        "test/fixtures/code-review/scenario/diff.patch",
+        "test/fixtures/code-review/scenario/seeded-defects.json",
+        "test/fixtures/code-review/hardening-cases.json",
+        "test/fixtures/code-review/scenario/repository/src/discount.js",
+        "test/fixtures/code-review/scenario/repository/test/discount.test.js"
+      ],
+      "required_skill_loads": [
+        "code-review",
+        "review-worker",
+        "review-coordinator",
+        "engineering-guidance",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "Consolidation records all six unchanged dimensions; unsupported consolidation retains separate Domain and Engineering/Design workers.",
+        "Change signals route available technology or specialist lenses, while unavailable capability remains an explicit Context limit.",
+        "Each worker receives the same complete Ticket outcome and immutable range while retaining distinct identity and lens provenance.",
+        "Each worker resolves Engineering Guidance independently rather than inheriting implementation conclusions.",
+        "The retained run exposes its manifest, diff package, worker streams and coverage, coordination, completeness, and Markdown brief.",
+        "A missing planned lens, unsupported combined worker, or structurally invalid result remains incomplete.",
+        "A failed worker retains partial artifacts and structured failure evidence without producing a Review brief or reviewed-ticket result.",
+        "The run performs no source, tracker, pull-request, dependency, or release mutation.",
+        "Blind model judgment and sampled human review assess semantic review quality from cited evidence."
+      ],
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr47-consolidation-and-specialist-routing"},
+        {"scope": "issue-42-code-review", "id": "cr47-artifact-exposure-and-partial-failure"},
+        {"scope": "issue-42-code-review", "id": "cr-complete-ticket-input"},
+        {"scope": "issue-42-code-review", "id": "cr-two-fresh-lenses"},
+        {"scope": "issue-42-code-review", "id": "cr-retained-artifacts"},
+        {"scope": "issue-42-code-review", "id": "cr-read-only"}
+      ]
+    }
+  ]
+}

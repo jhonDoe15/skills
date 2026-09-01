@@ -1,0 +1,82 @@
+{
+  "skill_name": "review-coordinator",
+  "version": 1,
+  "evaluation": {
+    "scope": "review-coordinator-role",
+    "layer": "role",
+    "skill": "review-coordinator",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "review-coordinator-role-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "Quote or reference worker records and coordination dispositions for every conclusion about aggregation.",
+    "dimensions": [
+      {
+        "id": "structural-validation",
+        "description": "The coordinator rejects unsupported consolidation, missing routed lenses, malformed findings, mismatched inputs, and incomplete artifacts."
+      },
+      {
+        "id": "conclusion-preservation",
+        "description": "Compatible finding duplicates, exact guidance duplicates, sorting, worker-declared supersession, and coverage union retain worker conclusions and every disagreement."
+      },
+      {
+        "id": "coordination-boundary",
+        "description": "The coordinator performs no second review, new finding, mutation, or remediation planning."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "structural-review-coordination",
+      "name": "structural aggregation of independent findings",
+      "prompt": "Coordinate complete Domain and Engineering/Design worker records for the same Ticket outcome. Validate structure, group compatible duplicates, sort, union coverage, and return the Review brief.",
+      "expected_output": "Every source finding receives a recorded disposition, compatible duplicates remain traceable, disagreements remain separate, and incomplete input cannot become a complete brief.",
+      "files": [
+        "test/fixtures/code-review/scenario/requirements.md",
+        "test/fixtures/code-review/scenario/ticket-outcome.json",
+        "test/fixtures/code-review/scenario/implementation-handoff.json",
+        "test/fixtures/code-review/scenario/validation.json",
+        "test/fixtures/code-review/scenario/diff.patch",
+        "test/fixtures/code-review/scenario/seeded-defects.json",
+        "test/fixtures/code-review/hardening-cases.json",
+        "test/fixtures/code-review/scenario/repository/src/discount.js",
+        "test/fixtures/code-review/scenario/repository/test/discount.test.js"
+      ],
+      "required_skill_loads": [
+        "review-coordinator",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "The coordinator validates the planned consolidated or separate base lenses, any routed specialist lenses, matching whole-ticket inputs, complete concern coverage, ordered regions, finding fields, and artifact references.",
+        "Compatible duplicate grouping keeps every source identity and conclusion; exact guidance duplicates group separately.",
+        "Sorting follows Review level, severity, and stable identity; coverage union loses no worker, lens, region, level, or concern.",
+        "Only worker-declared, region-bounded supersession is applied and conclusion, authority, severity, confidence, and fix-direction disagreements remain visible.",
+        "The coordinator does not inspect for new issues, change conclusions, plan fixes, or mutate reviewed state.",
+        "Blind model judgment and sampled human review assess semantic grouping and preservation."
+      ],
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr47-coordination-fidelity"},
+        {"scope": "issue-42-code-review", "id": "rc-validation"},
+        {"scope": "issue-42-code-review", "id": "rc-grouping"},
+        {"scope": "issue-42-code-review", "id": "rc-sorting"},
+        {"scope": "issue-42-code-review", "id": "rc-coverage-union"},
+        {"scope": "issue-42-code-review", "id": "rc-conclusion-preservation"},
+        {"scope": "issue-42-code-review", "id": "rc-no-second-review"}
+      ]
+    }
+  ]
+}

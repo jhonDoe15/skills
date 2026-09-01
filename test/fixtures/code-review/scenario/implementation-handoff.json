@@ -1,0 +1,13 @@
+{
+  "schema": "implement-handoff/v2",
+  "ticket": "fixture://issue-42-loyalty-discount",
+  "range": {
+    "base": "1111111111111111111111111111111111111111",
+    "head": "2222222222222222222222222222222222222222"
+  },
+  "summary": "Adds loyalty discount calculation and order quoting.",
+  "changed_files": [
+    "repository/src/discount.js",
+    "repository/test/discount.test.js"
+  ]
+}

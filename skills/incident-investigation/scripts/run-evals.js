@@ -174,6 +174,7 @@ function packageRevision() {
 function campaignFor(definition, options, model) {
   const scopedDefinition = selectedDefinition(definition, options.caseSelector);
   const manifest = createCampaignManifest({
+    repositoryRoot,
     definition: scopedDefinition,
     packageRevision: packageRevision(),
     cells: [{ host: 'claude-code', model }],
@@ -391,7 +392,7 @@ function compilePatterns(patterns, label) {
 
 function validateDefinition(definition, checks) {
   try {
-    validateEvaluationDefinition(definition);
+    validateEvaluationDefinition(definition, repositoryRoot);
     addCheck(
       checks,
       'static',
@@ -1275,7 +1276,11 @@ function checkGate(definition, options, resultsDirectory) {
   } else {
     try {
       const retainedManifest = readJson(campaignPath);
-      validateCampaignManifest(retainedManifest, campaign.definition);
+      validateCampaignManifest(
+        retainedManifest,
+        campaign.definition,
+        repositoryRoot,
+      );
       const matching = retainedManifest.fingerprint
         === campaign.manifest.fingerprint;
       addCheck(

@@ -1,0 +1,136 @@
+{
+  "schema": "dispatch-work-artifact/v1",
+  "dispatch_id": "dispatch-partial-1",
+  "authorization": {
+    "explicit": true,
+    "granted": true,
+    "source": "fixture authorization"
+  },
+  "execution_context": {
+    "repositories": ["fixture://repository/dispatch"],
+    "trackers": ["fixture://tracker/dispatch"],
+    "canonical_dependencies": ["take-ticket", "take-it-offline"],
+    "immutable_base": "1111111111111111111111111111111111111111"
+  },
+  "resume": {
+    "requested": false,
+    "decision": "fresh",
+    "source_dag_fingerprint": {
+      "current": "sha256:8c4b137d57b75cb673466bf9bce8291915b9494a220d6560cd15796aada12cc9",
+      "current_inputs": ["$.source_dag", "$.collision_constraints"]
+    },
+    "execution_fingerprint": {
+      "current": "sha256:f50a8fddccb249ec2d9eadd22c62609bc7608e9a0a51971ad7747b062f9d4218",
+      "current_inputs": ["$.execution_context", "$.executor"]
+    }
+  },
+  "executor": {
+    "precedence": ["repository", "project", "user", "bundled-default"],
+    "candidates": {
+      "repository": {
+        "value": null,
+        "source": "fixture://config/repository"
+      },
+      "project": {
+        "value": null,
+        "source": "fixture://config/project"
+      },
+      "user": {
+        "value": null,
+        "source": "fixture://config/user"
+      },
+      "bundled-default": {
+        "value": 1,
+        "source": "fixture://config/bundled-default"
+      }
+    },
+    "selected": {
+      "scope": "bundled-default",
+      "value": 1,
+      "source": "fixture://config/bundled-default"
+    }
+  },
+  "collision_constraints": [],
+  "source_dag": {
+    "identity": "fixture://published-dag/partial-frontier-v1",
+    "published": true,
+    "ready": true,
+    "tickets": [
+      { "id": "A", "dependencies": [], "initial_state": "completed" },
+      { "id": "B", "dependencies": ["A"], "initial_state": "open" },
+      { "id": "C", "dependencies": ["B"], "initial_state": "open" },
+      {
+        "id": "D",
+        "dependencies": [],
+        "initial_state": "failed",
+        "initial_recovery": {
+          "sequence": 0,
+          "action": "Repair the retained failure for ticket D, then resume dispatch."
+        }
+      }
+    ],
+    "dependencies": [
+      { "ticket": "B", "depends_on": "A", "initial_state": "satisfied" },
+      { "ticket": "C", "depends_on": "B", "initial_state": "open" }
+    ]
+  },
+  "frontier_calculations": [
+    {
+      "id": "frontier-1",
+      "sequence": 1,
+      "eligible": ["B"],
+      "active": [],
+      "selected": ["B"],
+      "deferred": []
+    }
+  ],
+  "ticket_lifecycles": [
+    {
+      "ticket": "B",
+      "state": "held",
+      "frontier_calculation": "frontier-1",
+      "started_sequence": 3,
+      "terminal_sequence": 4,
+      "result": {
+        "status": "held",
+        "recovery_action": "Resolve the human decision recorded by ticket B, then resume B."
+      }
+    }
+  ],
+  "worktrees": [
+    {
+      "ticket": "B",
+      "owner": "dispatch-held:B",
+      "path": "fixture://worktree/held/B",
+      "base": "1111111111111111111111111111111111111111",
+      "created_sequence": 2,
+      "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/held/B"
+      },
+      "lifecycle_state": "retained-for-diagnosis",
+      "cleanup": {
+        "decision": "retain-for-human-decision",
+        "diagnostic_artifacts": ["artifact://diagnostics/held-B.json"]
+      }
+    }
+  ],
+  "pr_maintenance": [],
+  "completion_events": [],
+  "dependency_transitions": [],
+  "synthesis": [],
+  "unresolved_systematic_concerns": [],
+  "final_state": {
+    "status": "failed",
+    "open_tickets": [],
+    "active_tickets": [],
+    "completed_tickets": ["A"],
+    "retryable_tickets": [],
+    "human_decision_tickets": [],
+    "held_tickets": ["B"],
+    "blocked_tickets": ["C"],
+    "failed_tickets": ["D"],
+    "first_recovery_action": "Repair the retained failure for ticket D, then resume dispatch."
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "schema": "pr-carver-assessment/v1",
+  "status": "needs-decision",
+  "subject": {
+    "kind": "branch",
+    "identity": "fixture/missing-prerequisite-evidence",
+    "base": "fixture/main"
+  },
+  "units": [],
+  "ordering_edges": [],
+  "collisions": [],
+  "structure": "needs-decision",
+  "flags": [
+    {
+      "decision": "Identify the schema output, validation, and migration order consumed by the API unit.",
+      "owner": "account API and persistence maintainers"
+    }
+  ],
+  "authorization": {
+    "mode": "assessment-only",
+    "allowed_mutations": []
+  }
+}

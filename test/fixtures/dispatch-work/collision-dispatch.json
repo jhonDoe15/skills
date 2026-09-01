@@ -1,0 +1,280 @@
+{
+  "schema": "dispatch-work-artifact/v1",
+  "authorization": {
+    "explicit": true,
+    "granted": true,
+    "source": "fixture://authorization/collision"
+  },
+  "execution_context": {
+    "repositories": ["fixture://repository/dispatch"],
+    "trackers": ["fixture://tracker/dispatch"],
+    "canonical_dependencies": ["take-ticket", "take-it-offline"],
+    "immutable_base": "1111111111111111111111111111111111111111"
+  },
+  "resume": {
+    "requested": false,
+    "decision": "fresh",
+    "source_dag_fingerprint": {
+      "current": "sha256:f4be8fc7470fce05bafeb0383eed373e4e401986666d9576580a82a6b3495670",
+      "current_inputs": ["$.source_dag", "$.collision_constraints"]
+    },
+    "execution_fingerprint": {
+      "current": "sha256:9ed1fe2ceef228ad298f78efeedbbcff71f054ac2215fa6872309695d5175fe8",
+      "current_inputs": ["$.execution_context", "$.executor"]
+    }
+  },
+  "source_dag": {
+    "identity": "fixture://published-dag/collision-chain-v1",
+    "published": true,
+    "ready": true,
+    "tickets": [
+      { "id": "A", "dependencies": [], "initial_state": "open" },
+      { "id": "B", "dependencies": [], "initial_state": "open" },
+      { "id": "C", "dependencies": [], "initial_state": "open" }
+    ],
+    "dependencies": []
+  },
+  "executor": {
+    "precedence": ["repository", "project", "user", "bundled-default"],
+    "candidates": {
+      "repository": {
+        "value": 2,
+        "source": "fixture://config/repository"
+      },
+      "project": {
+        "value": 4,
+        "source": "fixture://config/project"
+      },
+      "user": {
+        "value": 8,
+        "source": "fixture://config/user"
+      },
+      "bundled-default": {
+        "value": 1,
+        "source": "fixture://config/bundled-default"
+      }
+    },
+    "selected": {
+      "scope": "repository",
+      "value": 2,
+      "source": "fixture://config/repository"
+    }
+  },
+  "collision_constraints": [
+    {
+      "id": "collision-A-B",
+      "tickets": ["A", "B"],
+      "source": "fixture://published-dag/collision-chain-v1"
+    },
+    {
+      "id": "collision-B-C",
+      "tickets": ["B", "C"],
+      "source": "fixture://published-dag/collision-chain-v1"
+    }
+  ],
+  "frontier_calculations": [
+    {
+      "id": "frontier-collision-1",
+      "sequence": 1,
+      "eligible": ["A", "B", "C"],
+      "selected": ["A", "C"],
+      "active": [],
+      "deferred": [
+        {
+          "ticket": "B",
+          "reason": "collision",
+          "conflicts_with": ["A", "C"]
+        }
+      ]
+    },
+    {
+      "id": "frontier-collision-2",
+      "sequence": 5,
+      "eligible": ["B"],
+      "selected": [],
+      "active": ["C"],
+      "deferred": [
+        {
+          "ticket": "B",
+          "reason": "collision",
+          "conflicts_with": ["C"]
+        }
+      ]
+    },
+    {
+      "id": "frontier-collision-3",
+      "sequence": 7,
+      "eligible": ["B"],
+      "selected": ["B"],
+      "active": [],
+      "deferred": []
+    },
+    {
+      "id": "frontier-collision-4",
+      "sequence": 11,
+      "eligible": [],
+      "selected": [],
+      "active": [],
+      "deferred": []
+    }
+  ],
+  "ticket_lifecycles": [
+    {
+      "ticket": "A",
+      "state": "completed",
+      "frontier_calculation": "frontier-collision-1",
+      "started_sequence": 3,
+      "completed_sequence": 4,
+      "result": {
+        "status": "complete",
+        "authority": "reviewed-ticket",
+        "implementation_handoff": "artifact://implement/A.json",
+        "review_brief": "artifact://review/A.json"
+      }
+    },
+    {
+      "ticket": "B",
+      "state": "completed",
+      "frontier_calculation": "frontier-collision-3",
+      "started_sequence": 9,
+      "completed_sequence": 10,
+      "result": {
+        "status": "complete",
+        "authority": "reviewed-ticket",
+        "implementation_handoff": "artifact://implement/B.json",
+        "review_brief": "artifact://review/B.json"
+      }
+    },
+    {
+      "ticket": "C",
+      "state": "completed",
+      "frontier_calculation": "frontier-collision-1",
+      "started_sequence": 4,
+      "completed_sequence": 6,
+      "result": {
+        "status": "complete",
+        "authority": "reviewed-ticket",
+        "implementation_handoff": "artifact://implement/C.json",
+        "review_brief": "artifact://review/C.json"
+      }
+    }
+  ],
+  "worktrees": [
+    {
+      "ticket": "A",
+      "owner": "dispatch-collision:A",
+      "path": "fixture://worktree/collision/A",
+      "base": "1111111111111111111111111111111111111111",
+      "created_sequence": 2,
+      "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/collision/A"
+      },
+      "lifecycle_state": "removed",
+      "cleanup": {
+        "decision": "remove-after-completion",
+        "diagnostic_artifacts": []
+      }
+    },
+    {
+      "ticket": "B",
+      "owner": "dispatch-collision:B",
+      "path": "fixture://worktree/collision/B",
+      "base": "1111111111111111111111111111111111111111",
+      "created_sequence": 8,
+      "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/collision/B"
+      },
+      "lifecycle_state": "removed",
+      "cleanup": {
+        "decision": "remove-after-completion",
+        "diagnostic_artifacts": []
+      }
+    },
+    {
+      "ticket": "C",
+      "owner": "dispatch-collision:C",
+      "path": "fixture://worktree/collision/C",
+      "base": "1111111111111111111111111111111111111111",
+      "created_sequence": 3,
+      "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/collision/C"
+      },
+      "lifecycle_state": "removed",
+      "cleanup": {
+        "decision": "remove-after-completion",
+        "diagnostic_artifacts": []
+      }
+    }
+  ],
+  "pr_maintenance": [],
+  "completion_events": [
+    {
+      "sequence": 4,
+      "ticket": "A",
+      "result_status": "complete",
+      "authority": "reviewed-ticket"
+    },
+    {
+      "sequence": 6,
+      "ticket": "C",
+      "result_status": "complete",
+      "authority": "reviewed-ticket"
+    },
+    {
+      "sequence": 10,
+      "ticket": "B",
+      "result_status": "complete",
+      "authority": "reviewed-ticket"
+    }
+  ],
+  "dependency_transitions": [],
+  "synthesis": [
+    {
+      "frontier_id": "frontier-collision-1",
+      "sequence": 11,
+      "tickets": ["A", "C"],
+      "inputs": {
+        "implementation_handoffs": [
+          "artifact://implement/A.json",
+          "artifact://implement/C.json"
+        ],
+        "review_briefs": [
+          "artifact://review/A.json",
+          "artifact://review/C.json"
+        ]
+      },
+      "concerns": [],
+      "recommendations": ["accept A", "accept C"]
+    },
+    {
+      "frontier_id": "frontier-collision-3",
+      "sequence": 12,
+      "tickets": ["B"],
+      "inputs": {
+        "implementation_handoffs": ["artifact://implement/B.json"],
+        "review_briefs": ["artifact://review/B.json"]
+      },
+      "concerns": [],
+      "recommendations": ["accept B"]
+    }
+  ],
+  "unresolved_systematic_concerns": [],
+  "final_state": {
+    "status": "completed",
+    "open_tickets": [],
+    "active_tickets": [],
+    "completed_tickets": ["A", "B", "C"],
+    "retryable_tickets": [],
+    "human_decision_tickets": [],
+    "held_tickets": [],
+    "blocked_tickets": [],
+    "failed_tickets": [],
+    "first_recovery_action": null
+  }
+}

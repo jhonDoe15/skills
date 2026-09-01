@@ -1,0 +1,65 @@
+{
+  "skill_name": "carve",
+  "version": 1,
+  "evaluation": {
+    "scope": "carve-role",
+    "layer": "role",
+    "skill": "carve",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "carve-role-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "public-planning-boundary",
+        "description": "Semantically assess whether Carve accepts settled requirements, delegates set planning to Slice Plan, validates the complete result, and does not absorb Ticket Scope behavior. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "authority-boundary",
+        "description": "Semantically assess whether plan assessment, publication authorization, tracker writes, and later dispatch remain separate authorities with explicit failure states. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "ready-assessment-without-publication",
+      "name": "ordinary-carve-assessment-role",
+      "prompt": "/carve\n\nCreate a ready plan from settled account time-zone requirements using a normal migration. Assess it only; tracker publication is not authorized.",
+      "expected_output": "Carve returns a complete validated ready plan and coverage summary with zero tracker writes, without invoking later workflows.",
+      "files": [],
+      "required_skill_loads": [
+        "carve",
+        "slice-plan",
+        "ticket-scope",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "Carve uses Slice Plan rather than directly taking over per-candidate Ticket Scope judgments.",
+        "The response returns a ready plan and explicitly reports that publication was not performed.",
+        "No tracker, dispatch, branch, PR, or implementation mutation occurs.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks planning and authority boundaries."
+      ],
+      "covered_clauses": [
+        "cv-settled-input",
+        "cv-slice-plan-edge",
+        "cv-validation",
+        "cv-no-unauthorized-write",
+        "cv-no-dispatch"
+      ]
+    }
+  ]
+}

@@ -1,17 +1,20 @@
 # skills
 
-One Claude Code plugin with six agent skills:
+Agent Skills including these documented planning surfaces:
 
 - **Lean** — model-invoked writing guidance for response density and shape.
-- **`ticket-scope`** — internal model-invoked evaluation of cohesive, independently verifiable ticket and PR units.
-- **`/carve`** — explicitly invoked to size a spec-derived ticket set so each piece fits one main subagent.
-- **`pr-carver`** — model-invoked PR size and structure guidance for parallel and stacked pull requests.
-- **`/dispatch-work`** — explicitly invoked to run an already-sized tracker in parallel and carry each piece through implementation, review, and PR approval.
+- **`ticket-scope`** — private per-candidate judgment loaded by Slice Plan and PR Carver.
+- **`slice-plan`** — private set-level decomposition loaded by Carve.
+- **`/carve`** — explicitly invoked to turn authoritative requirements into a
+  ready ticket DAG or a needs-decision plan.
+- **`pr-carver`** — model-invoked, read-only topology guidance for existing branches and pull requests.
+- **`/dispatch-work`** — explicitly invoked to run an authorized published ticket DAG through moving parallel Take Ticket frontiers.
 - **`/incident-investigation`** — explicitly invoked, investigation-only guidance for evidence-led production incident and hard-to-localize bug analysis.
 
-Lean, ticket-scope, and pr-carver are selected automatically by the model when
-their descriptions match the work. Carve, dispatch-work, and
-incident-investigation run only when the user invokes them.
+Lean and pr-carver are selected automatically by the model when their
+descriptions match the work. Ticket Scope and Slice Plan activate only when
+their declared consumers load them. Carve, dispatch-work, and
+incident-investigation run only when the user explicitly invokes them.
 
 ## Install
 
@@ -37,10 +40,11 @@ The repository layout supports both installers: each skill lives under
 `skills/<name>/SKILL.md`, while `.claude-plugin/` exposes the tree as one
 Claude Code marketplace plugin.
 
-The workflow skills reference companion skills when their branches are used:
-`/to-tickets`, `/to-spec`, `/wayfinder`, `/implement`, `/code-review`,
-`/handoff`, and `/autopilot`. Install those separately in the host that runs
-the workflows.
+The workflow skills reference companion skills when their branches are used.
+Dispatch Work requires the canonical Take Ticket (`take-ticket`) and Take It
+Offline (`take-it-offline`) skills. Other workflows may also require
+`/to-tickets`, `/to-spec`, `/wayfinder`, `/implement`, `/code-review`, or
+`/autopilot`; install those separately in the host that runs the workflows.
 
 ### Upgrading from hook/card releases
 
@@ -65,46 +69,51 @@ short answer.
 The density levels are `terse`, `default`, and `full`. The model chooses the
 level from the request and the detail the reader needs.
 
-## `ticket-scope` — shared unit evaluation
+## `ticket-scope` — private unit evaluation
 
-Ticket-scope is the shared internal evaluator used by carve and pr-carver. It
-checks outcome, seam, shape, acceptance, validation, uncertainty, risk,
-breadth, blockers, and collisions. Vertical slices are preferred; constrained
-layered slices are valid when a real contract or migration order requires them.
+Ticket Scope is the private per-candidate evaluator loaded by Slice Plan and PR
+Carver. It checks outcome, seam, shape, acceptance, validation, uncertainty,
+risk, breadth, blockers, and collisions. Slice Plan accepts vertical slices or
+concrete prerequisites for the ordinary Carve path. PR Carver can also consume
+a constrained layered result when a real contract or migration order requires
+a separately landing PR.
 
 ## `/carve` — size the work
 
-Carve layers sizing and collision coordination onto a spec-derived ticket set.
-It uses ticket-scope first, then requires each resulting piece to fit one main
-subagent. Work that does not fit is split; an open design choice or risk
-boundary is flagged for a human. Related pieces record dependencies and
-shared-resource collisions so dispatch-work can parallelise safely.
+Carve turns authoritative requirements into either a complete ready ticket DAG
+or a needs-decision plan that states unresolved human choices and publishes
+nothing. It loads Slice Plan for set-level decomposition; Slice Plan loads
+Ticket Scope for each bounded candidate judgment. Work that does not fit is
+split. Related pieces record direct dependencies and non-blocking
+shared-resource collisions so later execution can parallelise safely.
 
-Invoke `/carve` explicitly after the work has been reduced to a spec and ticket
-set.
+Invoke `/carve` explicitly when an authoritative requirement source exists.
+Carve publishes only a validated ready plan and only with separate explicit
+authorization.
 
-## `pr-carver` — size and structure PRs
+## `pr-carver` — assess PR topology
 
-PR Carver independently measures additions and deletions and raises size-watch
-bands at 500 and 1000 changed lines. It uses ticket-scope to recommend
-independent PRs first, then GitHub native stacked PRs, ordinary stacked Git
-PRs, or one PR when splitting adds no value. Keeping a Band 3 PR as one unit
-requires confirmation; branch and PR mutations always require authorization.
+PR Carver uses Ticket Scope to identify natural mergeable units, then recommends
+topology from concrete prerequisite edges and normal, prefactor, or
+expand-contract migration treatment. Shared-resource collisions remain
+serialization metadata rather than dependency edges. Assessment is read-only;
+every later branch or pull-request mutation requires separate authorization for
+the named operation and target.
 
 ## `/dispatch-work` — run the tracker
 
-Dispatch-work takes an already-carved tracker and keeps a small batch of
-independent pieces in flight. Each piece is implemented, independently
-reviewed, and babysat through PR approval in separate subagent contexts.
-Invoking it again resumes from live tracker, branch, and PR state.
+Dispatch Work consumes explicit execution authorization and a published ready
+ticket DAG. It starts each independent eligible ticket through canonical Take
+Ticket, then advances dependencies and starts newly unblocked tickets on each
+complete authoritative reviewed-ticket completion event without waiting for
+unrelated work. Completed-frontier synthesis consumes compact implementation
+handoffs and Review briefs without repeating per-ticket review.
 
 Invoke `/dispatch-work` explicitly.
 
-Carve and dispatch-work use the repository model policy when one exists.
-Otherwise they read `subagent.model` and `subagent.effort` from the active
-`lean.config.json`. Those values apply to every implementation, review, and
-PR-babysitting spawn; there is no routing ladder. Lean, ticket-scope, and
-pr-carver do not read that config.
+Carve uses the repository model policy when one exists. Otherwise it reads
+`subagent.model` and `subagent.effort` from the active `lean.config.json`.
+Lean, ticket-scope, and pr-carver do not read that config.
 
 ## `/incident-investigation` — isolate incident causes
 

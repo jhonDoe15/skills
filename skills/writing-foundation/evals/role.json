@@ -1,0 +1,79 @@
+{
+  "skill_name": "writing-foundation",
+  "version": 1,
+  "evaluation": {
+    "scope": "writing-foundation-role",
+    "layer": "role",
+    "skill": "writing-foundation",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "writing-foundation-role-v1"
+  },
+  "signals": {
+    "wf-terminology": ["`?DAG frontier`?"],
+    "wf-work-product-fidelity": ["\\{\"maxAttempts\":3\\}"]
+  },
+  "global_required_signals": [
+    "wf-terminology",
+    "wf-work-product-fidelity"
+  ],
+  "global_order": [],
+  "forbidden_patterns": [
+    "Historical background: the legacy deployer used a weekly batch window that does not control this deployment\\."
+  ],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "foundation-contract",
+        "description": "Semantically assess whether every supplied requirement is covered and grounded, the owner-pending concurrency limit remains unresolved without an invented value, and the work product preserves meaning. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "foundation-pruning",
+        "description": "Semantically assess whether structure follows purpose, audience-specific voice is absent, duplicated or irrelevant material is pruned without losing requirements, and completion is justified. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "foundation-complete-contract",
+      "name": "audience-independent-writing-contract",
+      "prompt": "Revise the supplied `evals/fixtures/deployment-note-source.md` without choosing an audience-specific voice. Preserve the exact domain term `DAG frontier`, the JSON value `{\"maxAttempts\":3}`, and all three requirements: deploy only unblocked tickets, retain the unresolved concurrency limit, and remove the duplicated background paragraph. Return the revised note; headings and labels are optional.",
+      "expected_output": "A purpose-shaped record that accounts for every requirement, grounds claims, keeps the concurrency limit unresolved, preserves the exact term and JSON value, removes only the duplicate, and exposes a checkable completion result.",
+      "files": ["evals/fixtures/deployment-note-source.md"],
+      "required_skill_loads": [
+        "writing-foundation"
+      ],
+      "expectations": [
+        "The deterministic gate establishes only the exact DAG frontier term, exact JSON literal {\"maxAttempts\":3}, and removal of the duplicated source paragraph.",
+        "The blind judge verifies that every requested requirement and exclusion has an explicit, source-grounded disposition, including deployment of unblocked tickets only.",
+        "The blind judge verifies that the owner-pending concurrency limit remains unresolved and no numeric cap is invented, including until the owner responds.",
+        "The blind judge verifies that structure follows purpose rather than an audience-specific voice.",
+        "The blind judge verifies that only duplicated or behaviorally irrelevant material is pruned and no required meaning is lost.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness.",
+        "Failed critical mechanical gates are non-overridable, and completion is withheld when semantic evidence is missing."
+      ],
+      "covered_clauses": [
+        "wf-accepted-context",
+        "wf-coverage",
+        "wf-grounding",
+        "wf-uncertainty",
+        "wf-structure",
+        "wf-terminology",
+        "wf-relevance",
+        "wf-work-product-fidelity",
+        "wf-behavioral-pruning",
+        "wf-exclusions",
+        "wf-failure-behavior",
+        "wf-completion"
+      ],
+      "required_signals": []
+    }
+  ]
+}

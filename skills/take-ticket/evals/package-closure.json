@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "scope": "take-ticket-package-closure",
+  "owner": "take-ticket",
+  "cases": [
+    {
+      "id": "missing-implement",
+      "consumer": "take-ticket",
+      "missing_dependency": "implement",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"implement\"",
+        "missingSkill": "implement"
+      },
+      "covered_clauses": ["tt-production-dependencies"]
+    },
+    {
+      "id": "missing-code-review",
+      "consumer": "take-ticket",
+      "missing_dependency": "code-review",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"code-review\"",
+        "missingSkill": "code-review"
+      },
+      "covered_clauses": ["tt-production-dependencies"]
+    }
+  ]
+}

@@ -1,0 +1,277 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jhonDoe15.github.io/skills/schemas/slice-plan-v2.json",
+  "title": "Slice Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "status",
+    "migration_strategy",
+    "migration",
+    "requirements",
+    "coverage_ledger",
+    "tickets",
+    "lineage",
+    "decisions",
+    "initial_frontier"
+  ],
+  "properties": {
+    "schema": {
+      "const": "slice-plan/v2"
+    },
+    "status": {
+      "enum": ["ready", "needs-decision"]
+    },
+    "migration_strategy": {
+      "enum": ["normal", "prefactor", "expand-contract", null]
+    },
+    "migration": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "prefactor_ticket_ids",
+        "expansion_ticket_id",
+        "migration_groups",
+        "contraction_ticket_id"
+      ],
+      "properties": {
+        "prefactor_ticket_ids": {
+          "$ref": "#/$defs/uniqueStrings"
+        },
+        "expansion_ticket_id": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        },
+        "migration_groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "ticket_ids",
+              "completion_ticket_ids",
+              "independently_mergeable",
+              "green_independently",
+              "integration_point"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "ticket_ids": {
+                "$ref": "#/$defs/nonEmptyUniqueStrings"
+              },
+              "completion_ticket_ids": {
+                "$ref": "#/$defs/nonEmptyUniqueStrings"
+              },
+              "independently_mergeable": {
+                "type": "boolean"
+              },
+              "green_independently": {
+                "type": "boolean"
+              },
+              "integration_point": {
+                "$ref": "#/$defs/nullableNonEmptyString"
+              }
+            }
+          }
+        },
+        "contraction_ticket_id": {
+          "$ref": "#/$defs/nullableNonEmptyString"
+        }
+      }
+    },
+    "requirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "text"],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "text": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    },
+    "coverage_ledger": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["requirement_id", "disposition", "ticket_ids", "reason"],
+        "properties": {
+          "requirement_id": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "disposition": {
+            "enum": ["covered", "excluded", "unresolved"]
+          },
+          "ticket_ids": {
+            "$ref": "#/$defs/uniqueStrings"
+          },
+          "reason": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    },
+    "tickets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "outcome",
+          "seam",
+          "shape",
+          "in_scope",
+          "out_of_scope",
+          "acceptance",
+          "validation",
+          "blockers",
+          "consumes",
+          "collisions"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "title": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "outcome": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "seam": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "shape": {
+            "enum": ["vertical", "prerequisite"]
+          },
+          "in_scope": {
+            "$ref": "#/$defs/nonEmptyUniqueStrings"
+          },
+          "out_of_scope": {
+            "$ref": "#/$defs/nonEmptyUniqueStrings"
+          },
+          "acceptance": {
+            "$ref": "#/$defs/nonEmptyUniqueStrings"
+          },
+          "validation": {
+            "$ref": "#/$defs/nonEmptyUniqueStrings"
+          },
+          "blockers": {
+            "$ref": "#/$defs/uniqueStrings"
+          },
+          "consumes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ticket_id", "output"],
+              "properties": {
+                "ticket_id": {
+                  "$ref": "#/$defs/nonEmptyString"
+                },
+                "output": {
+                  "$ref": "#/$defs/nonEmptyString"
+                }
+              }
+            }
+          },
+          "collisions": {
+            "$ref": "#/$defs/uniqueStrings"
+          }
+        }
+      }
+    },
+    "lineage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "predecessor_ids", "successor_ids"],
+        "properties": {
+          "kind": {
+            "enum": ["split", "combine", "replace"]
+          },
+          "predecessor_ids": {
+            "$ref": "#/$defs/nonEmptyUniqueStrings"
+          },
+          "successor_ids": {
+            "$ref": "#/$defs/nonEmptyUniqueStrings"
+          }
+        }
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "source", "requirement_ids", "choice", "owner"],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "source": {
+            "enum": ["requirement", "ticket-scope", "planning-pressure"]
+          },
+          "requirement_ids": {
+            "$ref": "#/$defs/nonEmptyUniqueStrings"
+          },
+          "choice": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "owner": {
+            "$ref": "#/$defs/nonEmptyString"
+          }
+        }
+      }
+    },
+    "initial_frontier": {
+      "$ref": "#/$defs/uniqueStrings"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "nullableNonEmptyString": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "uniqueStrings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "nonEmptyUniqueStrings": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    }
+  }
+}

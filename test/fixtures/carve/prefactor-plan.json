@@ -1,0 +1,82 @@
+{
+  "schema": "slice-plan/v2",
+  "status": "ready",
+  "migration_strategy": "prefactor",
+  "migration": {
+    "prefactor_ticket_ids": ["P1"],
+    "expansion_ticket_id": null,
+    "migration_groups": [],
+    "contraction_ticket_id": null
+  },
+  "requirements": [
+    {
+      "id": "REQ-1",
+      "text": "Use one validated time-zone value contract in the account API and scheduler."
+    }
+  ],
+  "coverage_ledger": [
+    {
+      "requirement_id": "REQ-1",
+      "disposition": "covered",
+      "ticket_ids": ["P1", "T2", "T3"],
+      "reason": "The concrete contract is consumed by the independently verified API and scheduler slices."
+    }
+  ],
+  "tickets": [
+    {
+      "id": "P1",
+      "title": "Publish the time-zone value contract",
+      "outcome": "The account API and scheduler can consume one validated time-zone value contract.",
+      "seam": "time-zone value contract",
+      "shape": "prerequisite",
+      "in_scope": ["Define and verify the shared validation contract."],
+      "out_of_scope": ["Adopt the contract in either consumer."],
+      "acceptance": ["Contract tests reject invalid IANA time zones."],
+      "validation": ["Run the time-zone contract tests."],
+      "blockers": [],
+      "consumes": [],
+      "collisions": []
+    },
+    {
+      "id": "T2",
+      "title": "Adopt the time-zone contract in the account API",
+      "outcome": "The account API validates preferences through the shared contract.",
+      "seam": "account API",
+      "shape": "vertical",
+      "in_scope": ["Replace API-local validation with the shared contract."],
+      "out_of_scope": ["Change scheduler behavior."],
+      "acceptance": ["The API accepts and rejects values through the shared contract."],
+      "validation": ["Run account API integration tests."],
+      "blockers": ["P1"],
+      "consumes": [
+        {
+          "ticket_id": "P1",
+          "output": "The verified time-zone value contract."
+        }
+      ],
+      "collisions": []
+    },
+    {
+      "id": "T3",
+      "title": "Adopt the time-zone contract in the scheduler",
+      "outcome": "The scheduler validates preferences through the shared contract.",
+      "seam": "notification scheduler",
+      "shape": "vertical",
+      "in_scope": ["Replace scheduler-local validation with the shared contract."],
+      "out_of_scope": ["Change account API behavior."],
+      "acceptance": ["The scheduler accepts and rejects values through the shared contract."],
+      "validation": ["Run scheduler integration tests."],
+      "blockers": ["P1"],
+      "consumes": [
+        {
+          "ticket_id": "P1",
+          "output": "The verified time-zone value contract."
+        }
+      ],
+      "collisions": []
+    }
+  ],
+  "lineage": [],
+  "decisions": [],
+  "initial_frontier": ["P1"]
+}

@@ -1,0 +1,104 @@
+{
+  "skill_name": "agent-writing",
+  "version": 1,
+  "evaluation": {
+    "scope": "agent-writing-trigger",
+    "layer": "trigger",
+    "skill": "agent-writing",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 5,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 1,
+    "randomization_seed": "agent-writing-trigger-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "routing",
+        "description": "Selects Agent Writing only for its public outcome and respects canonical invocation and specialized exclusions."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "agent-writing-positive",
+      "name": "agent-consumed-artifact",
+      "prompt": "Write operating instructions whose primary reader is an automation agent that validates deployment manifests.",
+      "expected_output": "Agent Writing activates for an artifact whose declared primary reader is an agent.",
+      "files": [],
+      "expectations": [
+        "The host records Agent Writing activation."
+      ],
+      "covered_clauses": ["aw-routing-positive"],
+      "should_trigger": true,
+      "required_skill_loads": ["writing-foundation"]
+    },
+    {
+      "id": "agent-writing-skill-exclusion",
+      "name": "agent-skill-package-exclusion",
+      "prompt": "Create a new Agent Skill package with SKILL.md, routing metadata, and evaluations.",
+      "expected_output": "Agent Writing stays inactive because Skill Writing owns Agent Skill packages.",
+      "files": [],
+      "expectations": [
+        "The host does not record Agent Writing activation."
+      ],
+      "covered_clauses": ["aw-routing-agent-skill-exclusion"],
+      "should_trigger": false
+    },
+    {
+      "id": "agent-writing-handoff-exclusion",
+      "name": "fresh-context-handoff-exclusion",
+      "prompt": "Prepare a handoff that lets a fresh agent context continue this unfinished investigation.",
+      "expected_output": "Agent Writing stays inactive because Take It Offline owns fresh-context handoffs.",
+      "files": [],
+      "expectations": [
+        "The host does not record Agent Writing activation."
+      ],
+      "covered_clauses": ["aw-routing-handoff-exclusion"],
+      "should_trigger": false
+    },
+    {
+      "id": "agent-writing-human-exclusion",
+      "name": "human-facing-expression-exclusion",
+      "prompt": "Rewrite this release announcement for customers with the answer first and less jargon.",
+      "expected_output": "Agent Writing stays inactive because To Humans owns human-facing expression.",
+      "files": [],
+      "expectations": [
+        "The host does not record Agent Writing activation."
+      ],
+      "covered_clauses": ["aw-routing-human-exclusion"],
+      "should_trigger": false
+    },
+    {
+      "id": "agent-writing-ambiguous",
+      "name": "ambiguous-primary-reader",
+      "prompt": "Write a setup guide that automation and engineers will both consume; the primary reader has not been decided.",
+      "expected_output": "Agent Writing does not claim the ambiguous deliverable until its primary reader is resolved.",
+      "files": [],
+      "expectations": [
+        "The host does not record Agent Writing activation from an unresolved reader."
+      ],
+      "covered_clauses": ["aw-routing-ambiguous"],
+      "should_trigger": false
+    },
+    {
+      "id": "agent-writing-canonical",
+      "name": "canonical-direct-invocation",
+      "prompt": "/agent-writing\n\nCreate a short instruction artifact for a validation agent.",
+      "expected_output": "Direct canonical invocation selects Agent Writing for the deliverable.",
+      "files": [],
+      "expectations": [
+        "The host records invocation of Agent Writing by its canonical name."
+      ],
+      "covered_clauses": ["aw-routing-canonical"],
+      "should_trigger": true,
+      "required_skill_loads": ["writing-foundation"],
+      "canonical_invocation": true
+    }
+  ]
+}

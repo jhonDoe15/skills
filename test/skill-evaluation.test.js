@@ -20,10 +20,10 @@ const {
   gradeTriggerResult,
   inspectNoSkillContamination,
   replayCampaign,
+  replayTriggerCampaign,
   runComponentEvaluation,
   runMatchedEvaluation,
   runTriggerEvaluation,
-  replayTriggerCampaign,
   validateCampaignManifest,
   validateEvaluationDefinition,
   validateEvaluationSchemas,
@@ -47,7 +47,7 @@ function fixtureSkillEvent(name, {
     operation,
     status,
     trigger,
-    callId,
+    ...(callId ? { callId } : {}),
     provenance: {
       host: 'fixture',
       mechanism: 'deterministic-fixture',
@@ -173,6 +173,7 @@ function normalizedResult({
 
 function createManifest(definition = testDefinition(), overrides = {}) {
   return createCampaignManifest({
+    repositoryRoot,
     definition,
     packageRevision: baseRevision,
     cells: [
@@ -304,17 +305,26 @@ function asLegacyRunEvidence(record, {
   return reseal(legacy);
 }
 
+function resealManifest(manifest) {
+  const candidate = structuredClone(manifest);
+  delete candidate.fingerprint;
+  manifest.fingerprint = hash(candidate);
+  return manifest;
+}
+
+function resealLoadAuthority(manifest) {
+  const authority = manifest.skill_load_authority;
+  const candidate = structuredClone(authority);
+  delete candidate.fingerprint;
+  authority.fingerprint = hash(candidate);
+  return resealManifest(manifest);
+}
+
 function resealJudgment(evidence) {
   const candidate = structuredClone(evidence);
   delete candidate.fingerprint;
   evidence.fingerprint = hash(candidate);
   return evidence;
-}
-
-function resealManifest(manifest) {
-  delete manifest.fingerprint;
-  manifest.fingerprint = hash(manifest);
-  return manifest;
 }
 
 function createPackageFixture(t, skillNames) {
@@ -880,6 +890,661 @@ test('trigger reuse applies positive and negative exact lifecycle predicates', a
   );
 });
 
+test('matched role and outcome cases canonicalize required Skill loads', () => {
+  const defaultDefinition = testDefinition();
+  const defaultManifest = createManifest(defaultDefinition);
+  assert.deepEqual(defaultManifest.cases[0].required_skill_loads, [
+    'incident-investigation',
+  ]);
+  assert.deepEqual(defaultManifest.skill_load_authority.resolved_skills, [
+    'incident-investigation',
+  ]);
+
+  for (const layer of ['role', 'outcome']) {
+    const definition = testDefinition({
+      skill: 'skill-writing',
+      scope: `skill-writing-${layer}`,
+      layer,
+    });
+    definition.evals[0].required_skill_loads = [
+      'skill-writing',
+      'agent-writing',
+      'writing-foundation',
+      'skill-mechanics',
+      'skill-evaluation',
+    ];
+    assert.equal(
+      validateEvaluationDefinition(definition, repositoryRoot),
+      definition,
+    );
+    assert.deepEqual(
+      createManifest(definition).cases[0].required_skill_loads,
+      definition.evals[0].required_skill_loads,
+    );
+  }
+
+  for (const [requiredSkillLoads, expectedError] of [
+    [[], /non-empty array/],
+    [['writing-foundation'], /must contain evaluated target "agent-writing"/],
+    [
+      ['agent-writing', 'writing-foundation', 'writing-foundation'],
+      /required_skill_loads contains duplicate/,
+    ],
+    [['agent-writing', 'Writing-Foundation'], /not canonical/],
+  ]) {
+    const invalid = testDefinition({
+      skill: 'agent-writing',
+      scope: 'agent-writing-outcome',
+    });
+    invalid.evals[0].required_skill_loads = requiredSkillLoads;
+    assert.throws(() => validateEvaluationDefinition(invalid), expectedError);
+  }
+});
+
+test('matched outcome rejects required loads outside the trusted closure', () => {
+  const definition = testDefinition({
+    skill: 'agent-writing',
+    scope: 'agent-writing-outcome',
+  });
+  definition.evals[0].required_skill_loads = [
+    'agent-writing',
+    'engineering-guidance',
+  ];
+  assert.throws(
+    () => createManifest(definition),
+    /required_skill_loads contains "engineering-guidance" outside trusted canonical closure/,
+  );
+});
+
+test('matched outcome checks every required load before deterministic grading', async (t) => {
+  const definition = testDefinition({
+    skill: 'agent-writing',
+    scope: 'agent-writing-outcome',
+  });
+  declareOwnerGrader(definition);
+  definition.evals[0].required_skill_loads = [
+    'agent-writing',
+    'writing-foundation',
+  ];
+  const manifest = createManifest(definition);
+  const fixtureRoot = createPackageFixture(
+    t,
+    ['agent-writing', 'writing-foundation'],
+  );
+  let treatmentGrades = 0;
+  const graderRegistry = ownerGraderRegistry({
+    grade({ arm }) {
+      if (arm.kind === 'treatment') treatmentGrades += 1;
+      return passingGrade();
+    },
+  });
+  const records = await runMatchedEvaluation({
+    repositoryRoot: fixtureRoot,
+    manifest,
+    definition,
+    caseDefinition: definition.evals[0],
+    cell: manifest.cells[0],
+    repetition: 1,
+    async executeArm({ arm }) {
+      const treatment = arm === 'treatment';
+      return normalizedResult({
+        skill: definition.skill_name,
+        model: 'test-model',
+        output: treatment
+          ? 'Frame\nInventory\nMap\nOnly the target loaded.'
+          : 'Independent control.',
+        loadedSkills: treatment ? ['agent-writing'] : [],
+        resolvedSkills: treatment
+          ? ['writing-foundation', 'agent-writing']
+          : [],
+        packageSkills: treatment
+          ? ['agent-writing', 'writing-foundation']
+          : [],
+        preExecutionSkills: treatment
+          ? ['writing-foundation', 'agent-writing']
+          : [],
+      });
+    },
+    graderRegistry,
+  });
+  const control = records.find(({ arm }) => arm.kind === 'no-skill');
+  const treatment = records.find(({ arm }) => arm.kind === 'treatment');
+
+  assert.equal(treatmentGrades, 0);
+  assert.equal(control.execution.control_contamination.clean, true);
+  assert.equal(treatment.deterministic.passed, false);
+  assert.throws(
+    () => createBlindComparison({
+      manifest,
+      definition,
+      caseDefinition: definition.evals[0],
+      repetition: 1,
+      control,
+      treatment,
+      judgeModel: 'judge-model',
+      graderRegistry,
+    }),
+    /required Skill load gate failed.*writing-foundation/,
+  );
+});
+
+test('matched lifecycle gate accepts only exact successful required loads', async (t) => {
+  const definition = testDefinition({
+    skill: 'agent-writing',
+    scope: 'agent-writing-outcome',
+  });
+  const caseDefinition = definition.evals[0];
+  caseDefinition.required_skill_loads = [
+    'agent-writing',
+    'writing-foundation',
+  ];
+  const manifest = createManifest(definition);
+  const fixtureRoot = createPackageFixture(
+    t,
+    ['agent-writing', 'writing-foundation'],
+  );
+  const output = 'Frame\nInventory\nMap\nRead-only investigation.';
+  const records = await runMatchedEvaluation({
+    repositoryRoot: fixtureRoot,
+    manifest,
+    definition,
+    caseDefinition,
+    cell: manifest.cells[0],
+    repetition: 1,
+    async executeArm({ arm }) {
+      const treatment = arm === 'treatment';
+      return normalizedResult({
+        skill: definition.skill_name,
+        model: 'test-model',
+        output: treatment ? output : 'Independent control.',
+        loadedSkills: treatment
+          ? ['agent-writing', 'writing-foundation']
+          : [],
+        resolvedSkills: treatment
+          ? ['writing-foundation', 'agent-writing']
+          : [],
+        packageSkills: treatment
+          ? ['agent-writing', 'writing-foundation']
+          : [],
+        preExecutionSkills: treatment
+          ? ['writing-foundation', 'agent-writing']
+          : [],
+      });
+    },
+  });
+  const control = records.find(({ arm }) => arm.kind === 'no-skill');
+  const validTreatment = records.find(({ arm }) => arm.kind === 'treatment');
+  const expected = {
+    manifest,
+    definition,
+    caseDefinition,
+    cell: manifest.cells[0],
+    repetition: 1,
+    arm: 'treatment',
+  };
+  const treatmentWithEvents = (skillEvents) => createRunEvidence({
+    manifest,
+    caseDefinition,
+    cell: manifest.cells[0],
+    repetition: 1,
+    arm: 'treatment',
+    result: normalizedResult({
+      skill: definition.skill_name,
+      model: 'test-model',
+      output,
+      resolvedSkills: ['writing-foundation', 'agent-writing'],
+      packageSkills: ['agent-writing', 'writing-foundation'],
+      preExecutionSkills: ['writing-foundation', 'agent-writing'],
+      skillEvents,
+    }),
+    deterministicGrade: gradeDeterministicOutput({
+      definition,
+      caseDefinition,
+      output,
+    }),
+  });
+
+  for (const [label, events] of [
+    ['missing dependency', [fixtureSkillEvent('agent-writing')]],
+    ['dependency only', [fixtureSkillEvent('writing-foundation')]],
+    ['wrong Skill', [
+      fixtureSkillEvent('agent-writing'),
+      fixtureSkillEvent('skill-mechanics'),
+    ]],
+    ['unrelated Skill', [fixtureSkillEvent('to-humans')]],
+    ...['started', 'failed', 'rejected', 'cancelled', 'unknown'].map((status) => [
+      status,
+      [
+        fixtureSkillEvent('agent-writing'),
+        fixtureSkillEvent('writing-foundation', { status }),
+      ],
+    ]),
+  ]) {
+    const treatment = treatmentWithEvents(events);
+    assert.throws(
+      () => createBlindComparison({
+        manifest,
+        definition,
+        caseDefinition,
+        repetition: 1,
+        control,
+        treatment,
+        judgeModel: 'judge-model',
+      }),
+      /required Skill load gate failed/,
+      label,
+    );
+    assert.deepEqual(
+      assessReusableEvidence({ ...expected, record: treatment }),
+      { reusable: false, reason: 'activation evidence not successful' },
+      label,
+    );
+  }
+
+  const duplicateSuccesses = treatmentWithEvents([
+    fixtureSkillEvent('agent-writing', { callId: 'target-1' }),
+    fixtureSkillEvent('agent-writing', { callId: 'target-2' }),
+    fixtureSkillEvent('writing-foundation', { callId: 'dependency-1' }),
+    fixtureSkillEvent('writing-foundation', { callId: 'dependency-2' }),
+  ]);
+  assert.doesNotThrow(() => createBlindComparison({
+    manifest,
+    definition,
+    caseDefinition,
+    repetition: 1,
+    control,
+    treatment: duplicateSuccesses,
+    judgeModel: 'judge-model',
+  }));
+  assert.deepEqual(
+    assessReusableEvidence({ ...expected, record: duplicateSuccesses }),
+    { reusable: true, reason: 'complete matching evidence' },
+  );
+
+  const missingDependency = treatmentWithEvents([
+    fixtureSkillEvent('agent-writing'),
+  ]);
+  const replay = replayCampaign({
+    manifest,
+    definition,
+    runs: [control, missingDependency],
+    judgments: [],
+  });
+  assert.equal(replay.passed, false);
+  assert.equal(replay.failures[0].gate, 'treatment-activation');
+  const validComparison = createBlindComparison({
+    manifest,
+    definition,
+    caseDefinition,
+    repetition: 1,
+    control,
+    treatment: validTreatment,
+    judgeModel: 'judge-model',
+  });
+  assert.throws(
+    () => replayCampaign({
+      manifest,
+      definition,
+      runs: [control, missingDependency],
+      judgments: [createJudgmentEvidence({
+        comparison: validComparison,
+        definition,
+        caseDefinition,
+        judgeModel: 'judge-model',
+        judgment: structuredJudgment(validComparison),
+        durationMs: 5,
+        costUsd: 0,
+      })],
+    }),
+    /judgment exists after failed deterministic gate/,
+  );
+});
+
+test('required-load metadata and lifecycle evidence are fingerprint protected', async (t) => {
+  const definition = testDefinition({
+    skill: 'agent-writing',
+    scope: 'agent-writing-outcome',
+  });
+  definition.evals[0].required_skill_loads = [
+    'agent-writing',
+    'writing-foundation',
+  ];
+  const manifest = createManifest(definition);
+  const fixtureRoot = createPackageFixture(
+    t,
+    ['agent-writing', 'writing-foundation'],
+  );
+  const records = await runMatchedEvaluation({
+    repositoryRoot: fixtureRoot,
+    manifest,
+    definition,
+    caseDefinition: definition.evals[0],
+    cell: manifest.cells[0],
+    repetition: 1,
+    executeArm({ arm }) {
+      const treatment = arm === 'treatment';
+      return normalizedResult({
+        skill: definition.skill_name,
+        model: 'test-model',
+        output: treatment
+          ? 'Frame\nInventory\nMap\nRead-only investigation.'
+          : 'Independent control.',
+        loadedSkills: treatment
+          ? ['agent-writing', 'writing-foundation']
+          : [],
+        resolvedSkills: treatment
+          ? ['writing-foundation', 'agent-writing']
+          : [],
+        packageSkills: treatment
+          ? ['agent-writing', 'writing-foundation']
+          : [],
+        preExecutionSkills: treatment
+          ? ['writing-foundation', 'agent-writing']
+          : [],
+      });
+    },
+  });
+
+  const tamperedManifest = structuredClone(manifest);
+  tamperedManifest.cases[0].required_skill_loads = ['agent-writing'];
+  assert.throws(
+    () => validateRunEvidence({
+      manifest: tamperedManifest,
+      caseDefinition: definition.evals[0],
+      cell: manifest.cells[0],
+      repetition: 1,
+      arm: 'treatment',
+      record: records[1],
+    }),
+    /campaign fingerprint mismatch/,
+  );
+
+  resealManifest(tamperedManifest);
+  assert.throws(
+    () => createBlindComparison({
+      manifest: tamperedManifest,
+      definition,
+      caseDefinition: definition.evals[0],
+      repetition: 1,
+      control: records[0],
+      treatment: records[1],
+      judgeModel: 'judge-model',
+    }),
+    /manifest cases do not match definition/,
+  );
+
+  const changedDefinition = structuredClone(definition);
+  changedDefinition.evals[0].required_skill_loads = ['agent-writing'];
+  assert.throws(
+    () => createBlindComparison({
+      manifest,
+      definition: changedDefinition,
+      caseDefinition: changedDefinition.evals[0],
+      repetition: 1,
+      control: records[0],
+      treatment: records[1],
+      judgeModel: 'judge-model',
+    }),
+    /stale definition fingerprint/,
+  );
+
+  const tamperedEvidence = structuredClone(records[1]);
+  tamperedEvidence.execution.skill_events = [
+    fixtureSkillEvent('agent-writing'),
+  ];
+  assert.throws(
+    () => validateRunEvidence({
+      manifest,
+      caseDefinition: definition.evals[0],
+      cell: manifest.cells[0],
+      repetition: 1,
+      arm: 'treatment',
+      record: tamperedEvidence,
+    }),
+    /record fingerprint mismatch/,
+  );
+  reseal(tamperedEvidence);
+  assert.throws(
+    () => createBlindComparison({
+      manifest,
+      definition,
+      caseDefinition: definition.evals[0],
+      repetition: 1,
+      control: records[0],
+      treatment: tamperedEvidence,
+      judgeModel: 'judge-model',
+    }),
+    /required Skill load gate failed.*writing-foundation/,
+  );
+});
+
+test('matched load authority rejects self-consistent unrelated Skill evidence', () => {
+  const validDefinition = testDefinition({
+    skill: 'agent-writing',
+    scope: 'agent-writing-outcome',
+  });
+  validDefinition.evals[0].required_skill_loads = [
+    'agent-writing',
+    'writing-foundation',
+  ];
+  const validManifest = createManifest(validDefinition);
+
+  const definition = structuredClone(validDefinition);
+  definition.evals[0].required_skill_loads = [
+    'agent-writing',
+    'engineering-guidance',
+  ];
+  definition.trusted_required_skill_closure = [
+    'writing-foundation',
+    'engineering-guidance',
+    'agent-writing',
+  ];
+  const manifest = structuredClone(validManifest);
+  manifest.definition_fingerprint = hash(definition);
+  manifest.cases[0].required_skill_loads = [
+    'agent-writing',
+    'engineering-guidance',
+  ];
+  manifest.skill_load_authority = {
+    target: 'agent-writing',
+    package_revision: manifest.package_revision,
+    resolved_skills: [
+      'writing-foundation',
+      'engineering-guidance',
+      'agent-writing',
+    ],
+    suite_fingerprint: 'f'.repeat(64),
+    fingerprint: null,
+  };
+  resealLoadAuthority(manifest);
+
+  const caseDefinition = definition.evals[0];
+  const cell = manifest.cells[0];
+  const controlPolicy = {
+    target: 'agent-writing',
+    dependencies: ['writing-foundation', 'engineering-guidance'],
+  };
+  const control = createRunEvidence({
+    manifest,
+    definition,
+    caseDefinition,
+    cell,
+    repetition: 1,
+    arm: 'no-skill',
+    result: normalizedResult({
+      skill: 'agent-writing',
+      model: cell.model,
+      output: 'Independent control.',
+      packageSkills: [],
+      resolvedSkills: [],
+      preExecutionSkills: [],
+      skillEvents: [],
+    }),
+    deterministicGrade: gradeDeterministicOutput({
+      definition,
+      caseDefinition,
+      output: 'Independent control.',
+    }),
+    controlPolicy,
+  });
+  const output = 'Frame\nInventory\nMap\nRead-only investigation.';
+  const treatment = createRunEvidence({
+    manifest,
+    definition,
+    caseDefinition,
+    cell,
+    repetition: 1,
+    arm: 'treatment',
+    result: normalizedResult({
+      skill: 'agent-writing',
+      model: cell.model,
+      output,
+      packageSkills: [
+        'agent-writing',
+        'writing-foundation',
+        'engineering-guidance',
+      ],
+      resolvedSkills: [
+        'writing-foundation',
+        'engineering-guidance',
+        'agent-writing',
+      ],
+      preExecutionSkills: [
+        'writing-foundation',
+        'engineering-guidance',
+        'agent-writing',
+      ],
+      skillEvents: [
+        fixtureSkillEvent('agent-writing', { callId: 'target-load' }),
+        fixtureSkillEvent('engineering-guidance', {
+          callId: 'fabricated-unrelated-load',
+        }),
+      ],
+    }),
+    deterministicGrade: gradeDeterministicOutput({
+      definition,
+      caseDefinition,
+      output,
+    }),
+  });
+
+  assert.throws(
+    () => validateEvaluationDefinition(definition),
+    /repository context is required for canonical definition validation/,
+  );
+  assert.throws(
+    () => validateEvaluationDefinition(definition, repositoryRoot),
+    /outside trusted canonical closure/,
+  );
+  assert.throws(
+    () => validateCampaignManifest(manifest, definition, repositoryRoot),
+    /trusted canonical load authority mismatch/,
+  );
+  assert.throws(
+    () => createBlindComparison({
+      repositoryRoot,
+      manifest,
+      definition,
+      caseDefinition,
+      repetition: 1,
+      control,
+      treatment,
+      judgeModel: 'judge-model',
+    }),
+    /trusted canonical load authority mismatch/,
+  );
+  assert.deepEqual(
+    assessReusableEvidence({
+      repositoryRoot,
+      manifest,
+      definition,
+      caseDefinition,
+      cell,
+      repetition: 1,
+      arm: 'treatment',
+      record: treatment,
+    }),
+    {
+      reusable: false,
+      reason: 'trusted canonical load authority mismatch',
+    },
+  );
+  assert.throws(
+    () => replayCampaign({
+      repositoryRoot,
+      manifest,
+      definition,
+      runs: [control, treatment],
+      judgments: [],
+    }),
+    /trusted canonical load authority mismatch/,
+  );
+});
+
+test('matched load authority rejects stale revision and closure digests', () => {
+  const definition = testDefinition({
+    skill: 'agent-writing',
+    scope: 'agent-writing-outcome',
+  });
+  definition.evals[0].required_skill_loads = [
+    'agent-writing',
+    'writing-foundation',
+  ];
+  assert.equal(
+    validateEvaluationDefinition(definition, repositoryRoot),
+    definition,
+  );
+  const manifest = createManifest(definition);
+  assert.deepEqual(manifest.skill_load_authority?.resolved_skills, [
+    'writing-foundation',
+    'agent-writing',
+  ]);
+
+  const staleRevision = structuredClone(manifest);
+  staleRevision.skill_load_authority.package_revision = 'stale-revision';
+  resealLoadAuthority(staleRevision);
+  assert.throws(
+    () => validateCampaignManifest(staleRevision, definition, repositoryRoot),
+    /load authority package revision mismatch/,
+  );
+
+  const staleDigest = structuredClone(manifest);
+  staleDigest.skill_load_authority.suite_fingerprint = '0'.repeat(64);
+  resealLoadAuthority(staleDigest);
+  assert.throws(
+    () => validateCampaignManifest(staleDigest, definition, repositoryRoot),
+    /trusted canonical load authority mismatch/,
+  );
+
+  const retainedManifest = structuredClone(manifest);
+  assert.throws(
+    () => validateCampaignManifest(retainedManifest, definition),
+    /repository context is required/,
+  );
+});
+
+test('rootless matched validation is explicitly structural and target-only', () => {
+  const evaluation = require('../suite/evaluation');
+  assert.equal(
+    typeof evaluation.validateEvaluationDefinitionStructure,
+    'function',
+  );
+  const definition = testDefinition();
+
+  assert.equal(
+    evaluation.validateEvaluationDefinitionStructure(definition),
+    definition,
+  );
+  assert.throws(
+    () => validateEvaluationDefinition(definition),
+    /repository context is required for canonical definition validation/,
+  );
+  assert.equal(
+    validateEvaluationDefinition(definition, repositoryRoot),
+    definition,
+  );
+});
+
 function passingGrade() {
   return {
     passed: true,
@@ -999,7 +1664,10 @@ test('shared schemas accept the normalized Incident Investigation definition', (
     'evals.json',
   ));
 
-  assert.equal(validateEvaluationDefinition(incidentDefinition), incidentDefinition);
+  assert.equal(
+    validateEvaluationDefinition(incidentDefinition, repositoryRoot),
+    incidentDefinition,
+  );
   assert.deepEqual(validateEvaluationSchemas(repositoryRoot), {
     definition: true,
     retainedEvidence: true,
@@ -1362,6 +2030,7 @@ console.log(JSON.stringify({
   });
   assert.equal(judged.status, 0, judged.stderr);
   const comparison = createBlindComparison({
+    repositoryRoot,
     manifest,
     definition,
     caseDefinition: definition.evals[0],
@@ -3174,6 +3843,7 @@ test('legacy evidence resolves only to a provably equivalent default grader', ()
   const output = 'Frame\nInventory\nMap';
   const record = asLegacyRunEvidence(createRunEvidence({
     manifest,
+    definition,
     caseDefinition,
     cell,
     repetition: 1,
@@ -3196,6 +3866,7 @@ test('legacy evidence resolves only to a provably equivalent default grader', ()
   });
   assert.deepEqual(
     assessReusableEvidence({
+      repositoryRoot,
       manifest,
       definition,
       caseDefinition,
@@ -3210,6 +3881,7 @@ test('legacy evidence resolves only to a provably equivalent default grader', ()
   const controlOutput = 'Possible cause.';
   const control = asLegacyRunEvidence(createRunEvidence({
     manifest,
+    definition,
     caseDefinition,
     cell,
     repetition: 1,
@@ -3237,6 +3909,7 @@ test('legacy evidence resolves only to a provably equivalent default grader', ()
   });
   assert.deepEqual(
     assessReusableEvidence({
+      repositoryRoot,
       manifest,
       definition,
       caseDefinition,
@@ -3248,6 +3921,7 @@ test('legacy evidence resolves only to a provably equivalent default grader', ()
     { reusable: true, reason: 'complete matching evidence' },
   );
   const comparison = createBlindComparison({
+    repositoryRoot,
     manifest,
     definition,
     caseDefinition,
@@ -3266,6 +3940,7 @@ test('legacy evidence resolves only to a provably equivalent default grader', ()
     costUsd: 0.02,
   });
   assert.equal(replayCampaign({
+    repositoryRoot,
     manifest,
     definition,
     runs: [control, record],
@@ -3277,6 +3952,7 @@ test('legacy evidence resolves only to a provably equivalent default grader', ()
   reseal(stale);
   assert.deepEqual(
     assessReusableEvidence({
+      repositoryRoot,
       manifest,
       definition,
       caseDefinition,

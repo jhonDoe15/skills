@@ -1,0 +1,82 @@
+{
+  "skill_name": "review-worker",
+  "version": 1,
+  "evaluation": {
+    "scope": "review-worker-role",
+    "layer": "role",
+    "skill": "review-worker",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "review-worker-role-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "Quote or reference whole-ticket evidence, region analysis, concern coverage, and finding records for every semantic conclusion.",
+    "dimensions": [
+      {
+        "id": "independent-lens",
+        "description": "The worker uses its lens to focus a complete Ticket outcome and independently resolves Engineering Guidance."
+      },
+      {
+        "id": "ordered-analysis",
+        "description": "Coherent Review regions are examined in required level order with worker-declared supersession bounded to findings and lower levels in one region."
+      },
+      {
+        "id": "finding-records",
+        "description": "Supported findings contain every required evidence, evidence-quality and Context-limit confidence input, impact, scope, direction, and acceptance field."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "whole-ticket-worker-analysis",
+      "name": "complete independent Review worker",
+      "prompt": "Through the assigned change-specific lens, inspect the complete Ticket outcome and immutable diff. Resolve Engineering Guidance afresh, analyze coherent regions in level order, and retain findings plus separate concern coverage.",
+      "expected_output": "The worker returns provenance, complete inputs, independent concern coverage, ordered region analysis, and evidence-backed finding records without coordination or mutation.",
+      "files": [
+        "test/fixtures/code-review/scenario/requirements.md",
+        "test/fixtures/code-review/scenario/ticket-outcome.json",
+        "test/fixtures/code-review/scenario/implementation-handoff.json",
+        "test/fixtures/code-review/scenario/validation.json",
+        "test/fixtures/code-review/scenario/diff.patch",
+        "test/fixtures/code-review/scenario/seeded-defects.json",
+        "test/fixtures/code-review/hardening-cases.json",
+        "test/fixtures/code-review/scenario/repository/src/discount.js",
+        "test/fixtures/code-review/scenario/repository/test/discount.test.js"
+      ],
+      "required_skill_loads": [
+        "review-worker",
+        "engineering-guidance",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "The lens focuses but does not narrow the complete Ticket outcome.",
+        "All nine Engineering Guidance concerns receive independent reasoned dispositions separate from findings.",
+        "Requirements & Expectations, Engineering & Architecture, and Code Quality are accounted for in order in every region; supersession is worker-declared and bounded to one Review region.",
+        "Each finding records both confidence values, evidence-quality and Context-limit inputs, cited evidence, impact, scope, fix direction, and acceptance evidence.",
+        "The worker neither coordinates another lens nor mutates the reviewed state.",
+        "Blind model judgment and sampled human review assess semantic finding validity."
+      ],
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr47-worker-confidence-and-region-suppression"},
+        {"scope": "issue-42-code-review", "id": "rw-complete-input"},
+        {"scope": "issue-42-code-review", "id": "rw-independent-guidance"},
+        {"scope": "issue-42-code-review", "id": "rw-region-order"},
+        {"scope": "issue-42-code-review", "id": "rw-findings"},
+        {"scope": "issue-42-code-review", "id": "rw-read-only"}
+      ]
+    }
+  ]
+}
