@@ -74,9 +74,11 @@ const EXACT_RELEASE_TARGET = deepFreeze({
   ],
 });
 
+const MAX_CONTRACT_ERROR_LENGTH = 256;
+
 class SuiteContractError extends Error {
   constructor(message) {
-    super(message);
+    super(String(message).slice(0, MAX_CONTRACT_ERROR_LENGTH));
     this.name = 'SuiteContractError';
   }
 }

@@ -9,6 +9,7 @@ const test = require('node:test');
 const {
   createBlindComparison,
   createCampaignManifest,
+  createGraderRegistry,
   createRunEvidence,
   gradeDeterministicOutput,
   gradeTriggerResult,
@@ -60,6 +61,22 @@ const expectedCoverage = new Map([
   ['aw-foundation-edge', 'agent-writing'],
   ['aw-missing-dependency', 'agent-writing'],
 ]);
+
+function createFixtureGraderRegistry(definition, id, grade) {
+  const version = '1';
+  definition.evaluation.grader = { id, version };
+  return createGraderRegistry({
+    graders: [{
+      id,
+      version,
+      implementationDigest: '0'.repeat(64),
+      configuration: { fixture: id },
+      layers: [definition.evaluation.layer],
+      arms: [...definition.evaluation.arms],
+      grade,
+    }],
+  });
+}
 
 function readJson(filePath) {
   assert.equal(fs.existsSync(filePath), true, `${filePath} must exist`);
@@ -262,6 +279,19 @@ test('owner-local definitions isolate roles, the dependency edge, and the public
 test('outcome load declaration gates matched judging on exact successful events', async (t) => {
   const definition = loadDefinition('agent-writing', 'outcome.json');
   const caseDefinition = definition.evals[0];
+  let treatmentGrades = 0;
+  const graderRegistry = createFixtureGraderRegistry(
+    definition,
+    'fixture.agent-writing-outcome',
+    ({ arm, definition: registeredDefinition, caseDefinition: registeredCase, output }) => {
+      if (arm.kind === 'treatment') treatmentGrades += 1;
+      return gradeDeterministicOutput({
+        definition: registeredDefinition,
+        caseDefinition: registeredCase,
+        output,
+      });
+    },
+  );
   assert.deepEqual(caseDefinition.required_skill_loads, [
     'agent-writing',
     'writing-foundation',
@@ -300,10 +330,10 @@ test('outcome load declaration gates matched judging on exact successful events'
     'utf8',
   );
   async function runWith(skillEvents) {
-    let treatmentGrades = 0;
     const records = await runMatchedEvaluation({
       repositoryRoot: fixtureRoot,
       manifest,
+      definition,
       caseDefinition,
       cell: manifest.cells[0],
       repetition: 1,
@@ -320,17 +350,7 @@ test('outcome load declaration gates matched judging on exact successful events'
           observedSkillEvents: treatment ? skillEvents : [],
         });
       },
-      gradeOutput({ arm, output: resultOutput }) {
-        const grade = gradeDeterministicOutput({
-          definition,
-          caseDefinition,
-          output: resultOutput,
-        });
-        if (arm === 'treatment') treatmentGrades += 1;
-        return arm === 'treatment'
-          ? grade
-          : { ...grade, passed: true, status: 'baseline' };
-      },
+      graderRegistry,
     });
     return {
       treatmentGrades,
@@ -362,6 +382,7 @@ test('outcome load declaration gates matched judging on exact successful events'
         control: run.control,
         treatment: run.treatment,
         judgeModel: 'judge-model',
+        graderRegistry,
       }),
       /required Skill load gate failed/,
       label,
@@ -382,12 +403,25 @@ test('outcome load declaration gates matched judging on exact successful events'
     control: complete.control,
     treatment: complete.treatment,
     judgeModel: 'judge-model',
+    graderRegistry,
   }));
 });
 
 test('component orchestration sends one neutral task and owns Foundation ablation', async (t) => {
   const definition = loadDefinition('agent-writing', 'component.json');
   const caseDefinition = definition.evals[0];
+  const graderRegistry = createFixtureGraderRegistry(
+    definition,
+    'fixture.agent-writing-component',
+    () => ({
+      passed: true,
+      checks: [{
+        name: 'test-only Adapter completed',
+        passed: true,
+        details: 'component fixture',
+      }],
+    }),
+  );
   assert.deepEqual(definition.global_required_signals, [
     'aw-foundation-edge-terminology',
     'aw-foundation-edge-work-product',
@@ -437,13 +471,7 @@ test('component orchestration sends one neutral task and owns Foundation ablatio
     cell: manifest.cells[0],
     repetition: 1,
     adapter,
-    gradeOutput({ arm }) {
-      return {
-        passed: true,
-        checks: [],
-        status: arm === 'treatment' ? 'passed' : 'baseline',
-      };
-    },
+    graderRegistry,
   });
 
   assert.equal(executions.length, 2);
@@ -712,15 +740,21 @@ test('Agent Writing outcome keeps only unambiguous deterministic gates', () => {
   const cell = manifest.cells[0];
   const control = createRunEvidence({
     manifest,
+    definition,
     caseDefinition,
     cell,
     repetition: 1,
     arm: 'no-skill',
     result: normalizedResult({ output: 'Baseline response.', invokedSkills: [] }),
-    deterministicGrade: { passed: true, checks: [], status: 'baseline' },
+    deterministicGrade: gradeDeterministicOutput({
+      definition,
+      caseDefinition,
+      output: 'Baseline response.',
+    }),
   });
   const treatment = createRunEvidence({
     manifest,
+    definition,
     caseDefinition,
     cell,
     repetition: 1,

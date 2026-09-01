@@ -10,6 +10,7 @@ const { pathToFileURL } = require('node:url');
 
 const {
   createCampaignManifest,
+  createGraderRegistry,
   runComponentEvaluation,
   runMatchedEvaluation,
   runTriggerEvaluation,
@@ -113,6 +114,22 @@ function hash(value) {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
+function createFixtureGraderRegistry(definition, id, grade) {
+  const version = '1';
+  definition.evaluation.grader = { id, version };
+  return createGraderRegistry({
+    graders: [{
+      id,
+      version,
+      implementationDigest: hash(id),
+      configuration: { fixture: id },
+      layers: [definition.evaluation.layer],
+      arms: [...definition.evaluation.arms],
+      grade,
+    }],
+  });
+}
+
 function fixtureSkillEvent(
   name,
   index,
@@ -212,14 +229,6 @@ function manifestFor(definition, cells = [
       'Deterministic fixtures exercise contracts without claiming model adoption.',
     ],
   });
-}
-
-function baselineGrade() {
-  return {
-    passed: true,
-    status: 'baseline',
-    checks: [],
-  };
 }
 
 function isRegularNonSymlinkFile(filePath) {
@@ -515,6 +524,29 @@ test('routing boundaries execute unchanged through both host cells', async (t) =
 
 test('component evaluation observes Agent Writing and its test-only ablation', async (t) => {
   const definition = readJson(path.join(evaluationRoot, 'component.json'));
+  const { gradeTakeItOfflineResult } = loadGrader();
+  const graderRegistry = createFixtureGraderRegistry(
+    definition,
+    'fixture.take-it-offline-component',
+    ({ arm, definition: registeredDefinition, caseDefinition, result }) => (
+      arm.kind === 'treatment'
+        ? gradeTakeItOfflineResult({
+          definition: registeredDefinition,
+          caseDefinition,
+          result,
+          resolveArtifact: continuationArtifactResolver,
+          resolveReference: referenceResolver,
+        })
+        : {
+          passed: true,
+          checks: [{
+            name: 'component ablation baseline',
+            passed: true,
+            details: 'test-only dependency ablation',
+          }],
+        }
+    ),
+  );
   const manifest = manifestFor(definition, [
     { host: 'claude-code', model: 'test-model' },
   ]);
@@ -522,7 +554,6 @@ test('component evaluation observes Agent Writing and its test-only ablation', a
   const completeOutput = readFixture('continuations/complete.md');
   const ablatedOutput = readFixture('continuations/dependency-ablated.md');
   const complete = createContinuationArtifact(t, completeOutput);
-  const { gradeTakeItOfflineResult } = loadGrader();
   const adapter = defineTestAdapter({
     name: 'take-it-offline-agent-writing-ablation',
     async execute(invocation, context) {
@@ -540,21 +571,12 @@ test('component evaluation observes Agent Writing and its test-only ablation', a
   const records = await runComponentEvaluation({
     repositoryRoot: packageRoot,
     manifest,
+    definition,
     caseDefinition: definition.evals[0],
     cell: manifest.cells[0],
     repetition: 1,
     adapter,
-    gradeOutput({ arm, result }) {
-      return arm === 'treatment'
-        ? gradeTakeItOfflineResult({
-          definition,
-          caseDefinition: definition.evals[0],
-          result,
-          resolveArtifact: continuationArtifactResolver,
-          resolveReference: referenceResolver,
-        })
-        : baselineGrade();
-    },
+    graderRegistry,
   });
 
   assert.deepEqual(
@@ -585,6 +607,37 @@ test('matched outcome gates the complete canonical Skill load closure', async (t
   const definition = readJson(path.join(evaluationRoot, 'outcome.json'));
   const caseDefinition = definition.evals[0];
   const packageRoot = createCompletePackage(t);
+  const { gradeTakeItOfflineResult } = loadGrader();
+  let treatmentGrades = 0;
+  const graderRegistry = createFixtureGraderRegistry(
+    definition,
+    'fixture.take-it-offline-load-gate',
+    ({
+      arm,
+      definition: registeredDefinition,
+      caseDefinition: registeredCase,
+      result,
+    }) => {
+      if (arm.kind !== 'treatment') {
+        return {
+          passed: true,
+          checks: [{
+            name: 'matched control baseline',
+            passed: true,
+            details: 'test-only No-Skill control',
+          }],
+        };
+      }
+      treatmentGrades += 1;
+      return gradeTakeItOfflineResult({
+        definition: registeredDefinition,
+        caseDefinition: registeredCase,
+        result,
+        resolveArtifact: continuationArtifactResolver,
+        resolveReference: referenceResolver,
+      });
+    },
+  );
   const manifest = manifestFor(definition, [
     { host: 'claude-code', model: 'test-model' },
   ], packageRoot);
@@ -607,13 +660,13 @@ test('matched outcome gates the complete canonical Skill load closure', async (t
     t,
     readFixture('continuations/complete.md'),
   );
-  const { gradeTakeItOfflineResult } = loadGrader();
 
   async function runVariant(skillEvents) {
-    let treatmentGrades = 0;
+    treatmentGrades = 0;
     const records = await runMatchedEvaluation({
       repositoryRoot: packageRoot,
       manifest,
+      definition,
       caseDefinition,
       cell: manifest.cells[0],
       repetition: 1,
@@ -632,17 +685,7 @@ test('matched outcome gates the complete canonical Skill load closure', async (t
           artifacts: treatment ? [complete.artifact] : [],
         });
       },
-      gradeOutput({ arm, result }) {
-        if (arm !== 'treatment') return baselineGrade();
-        treatmentGrades += 1;
-        return gradeTakeItOfflineResult({
-          definition,
-          caseDefinition,
-          result,
-          resolveArtifact: continuationArtifactResolver,
-          resolveReference: referenceResolver,
-        });
-      },
+      graderRegistry,
     });
     return {
       treatment: records.find(({ arm }) => arm.kind === 'treatment'),
@@ -694,6 +737,20 @@ test('matched outcome gates the complete canonical Skill load closure', async (t
 test('complete outcome beats its matched No-Skill control on both hosts', async (t) => {
   const definition = readJson(path.join(evaluationRoot, 'outcome.json'));
   const packageRoot = createCompletePackage(t);
+  const { gradeTakeItOfflineResult } = loadGrader();
+  const graderRegistry = createFixtureGraderRegistry(
+    definition,
+    'fixture.take-it-offline-outcome',
+    ({ definition: registeredDefinition, caseDefinition, result }) => (
+      gradeTakeItOfflineResult({
+        definition: registeredDefinition,
+        caseDefinition,
+        result,
+        resolveArtifact: continuationArtifactResolver,
+        resolveReference: referenceResolver,
+      })
+    ),
+  );
   const manifest = manifestFor(definition, [
     { host: 'claude-code', model: 'test-model' },
     { host: 'cursor', model: 'test-model' },
@@ -701,12 +758,12 @@ test('complete outcome beats its matched No-Skill control on both hosts', async 
   const completeOutput = readFixture('continuations/complete.md');
   const controlOutput = readFixture('continuations/no-skill.md');
   const complete = createContinuationArtifact(t, completeOutput);
-  const { gradeTakeItOfflineResult } = loadGrader();
 
   for (const cell of manifest.cells) {
     const records = await runMatchedEvaluation({
       repositoryRoot: packageRoot,
       manifest,
+      definition,
       caseDefinition: definition.evals[0],
       cell,
       repetition: 1,
@@ -725,20 +782,7 @@ test('complete outcome beats its matched No-Skill control on both hosts', async 
           artifacts: treatment ? [complete.artifact] : [],
         });
       },
-      gradeOutput({ arm, result }) {
-        const grade = gradeTakeItOfflineResult({
-          definition,
-          caseDefinition: definition.evals[0],
-          result,
-          resolveArtifact: continuationArtifactResolver,
-          resolveReference: referenceResolver,
-        });
-        return arm === 'treatment' ? grade : {
-          ...grade,
-          passed: true,
-          status: 'baseline',
-        };
-      },
+      graderRegistry,
     });
 
     const control = records.find(({ arm }) => arm.kind === 'no-skill');
