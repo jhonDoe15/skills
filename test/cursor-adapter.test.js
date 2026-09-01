@@ -248,6 +248,11 @@ test('Cursor Adapter executes the tracer in a pristine project and normalizes ev
       statusSource: 'observed',
     },
   });
+  assert.deepEqual(
+    result.observations.hostAvailableSkills.names,
+    result.observations.preExecutionInventory.skillDefinitions
+      .map(({ name }) => name),
+  );
   assert.deepEqual(result.observations.packageSkills, [
     'agent-writing',
     'writing-foundation',

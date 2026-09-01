@@ -435,10 +435,11 @@ function normalizedObservations(
     };
   });
 
+  const discoveredSkillNames = inventory.skillDefinitions.map(({ name }) => name);
   return {
     packageSkills: [...context.packageSkills],
     hostAvailableSkills: {
-      names: [...context.packageSkills],
+      names: discoveredSkillNames,
       provenance: cursorPackageProvenance(),
     },
     preExecutionInventory: inventory,

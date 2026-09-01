@@ -1,6 +1,6 @@
 ---
 name: skill-evaluation
-description: Private evaluation dependency for Agent Skill behavior claims. Use when Skill Writing needs proportionate role, component, outcome, or trigger evidence with matched controls, deterministic gates, blind judgment, retained evidence, and offline replay.
+description: Private evaluation dependency for Agent Skill behavior claims. Use only when Skill Writing needs proportionate role, component, outcome, or trigger evidence with matched controls, deterministic gates, blind judgment, retained evidence, and offline replay. Do not select for direct user goals or suite-wide release decisions.
 ---
 
 # Skill Evaluation

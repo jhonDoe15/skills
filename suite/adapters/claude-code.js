@@ -850,24 +850,56 @@ function normalizeClaudeExecutionEvidence({
   return evidence;
 }
 
-function hostAvailableSkillNames(context, evidence) {
-  if (!evidence.catalogObserved) return null;
+function analyzeSkillCatalog(context, evidence) {
+  if (evidence.catalogInvalid) {
+    return { status: 'invalid', availableSkillNames: null };
+  }
+  if (!evidence.catalogObserved) {
+    return { status: 'absent', availableSkillNames: null };
+  }
 
   const entries = evidence.availableSkillEntries || [];
-  const unexpected = entries.some(({ name }) => (
+  const duplicateSkill = findDuplicateSkillName(entries);
+  if (duplicateSkill) {
+    return {
+      status: 'duplicate',
+      availableSkillNames: null,
+      skillName: duplicateSkill,
+    };
+  }
+
+  const unexpectedSkill = entries.find(({ name }) => (
     !context.packageSkills.includes(name)
-  ));
-  if (findDuplicateSkillName(entries) || unexpected) return null;
+  ))?.name;
+  if (unexpectedSkill) {
+    return {
+      status: 'unexpected',
+      availableSkillNames: null,
+      skillName: unexpectedSkill,
+    };
+  }
 
   const availableSkills = evidence.availableSkills || new Set();
-  return context.packageSkills.filter((name) => availableSkills.has(name));
+  const availableSkillNames = context.packageSkills.filter(
+    (name) => availableSkills.has(name),
+  );
+  const unavailableSkill = context.packageSkills.find(
+    (name) => !availableSkills.has(name),
+  );
+  return unavailableSkill
+    ? {
+      status: 'missing',
+      availableSkillNames,
+      skillName: unavailableSkill,
+    }
+    : { status: 'valid', availableSkillNames };
 }
 
 function observations(context, invocation, evidence = {}) {
   const responses = evidence.resultText
     ? [{ text: evidence.resultText }]
     : [];
-  const availableSkillNames = hostAvailableSkillNames(context, evidence);
+  const { availableSkillNames } = analyzeSkillCatalog(context, evidence);
   return {
     packageSkills: context.packageSkills,
     hostAvailableSkills: availableSkillNames
@@ -1126,7 +1158,8 @@ function createClaudeCodeAdapter({
           );
         }
 
-        if (evidence.catalogInvalid) {
+        const catalog = analyzeSkillCatalog(context, evidence);
+        if (catalog.status === 'invalid') {
           return fail(
             'result-normalization',
             'claude-skill-catalog-invalid',
@@ -1134,40 +1167,27 @@ function createClaudeCodeAdapter({
           );
         }
 
-        const duplicateSkill = evidence.catalogObserved
-          ? findDuplicateSkillName(evidence.availableSkillEntries)
-          : null;
-        if (duplicateSkill) {
+        if (catalog.status === 'duplicate') {
           return fail(
             'execution',
             'claude-skill-catalog-duplicate',
-            `Claude Code Skill catalog contains duplicate "${duplicateSkill}"`,
+            `Claude Code Skill catalog contains duplicate "${catalog.skillName}"`,
           );
         }
 
-        const unexpectedSkill = evidence.catalogObserved
-          ? evidence.availableSkillEntries.find(({ name }) => (
-            !context.packageSkills.includes(name)
-          ))?.name
-          : null;
-        if (unexpectedSkill) {
+        if (catalog.status === 'unexpected') {
           return fail(
             'execution',
             'claude-skill-catalog-unexpected',
-            `Claude Code discovered unexpected Skill "${unexpectedSkill}"`,
+            `Claude Code discovered unexpected Skill "${catalog.skillName}"`,
           );
         }
 
-        const unavailableSkill = evidence.catalogObserved
-          ? context.packageSkills.find((skillName) => (
-            !evidence.availableSkills.has(skillName)
-          ))
-          : null;
-        if (unavailableSkill) {
+        if (catalog.status === 'missing') {
           return fail(
             'execution',
             'claude-skill-unavailable',
-            `Claude Code did not discover packaged Skill "${unavailableSkill}"`,
+            `Claude Code did not discover packaged Skill "${catalog.skillName}"`,
           );
         }
 
