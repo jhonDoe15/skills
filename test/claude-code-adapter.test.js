@@ -1057,6 +1057,20 @@ test('Claude Code Adapter distinguishes absent, empty, and malformed catalogs', 
       expectedStatus: 'succeeded',
     },
     {
+      label: 'non-Skill slash commands',
+      init: {
+        skills: ['agent-writing', 'writing-foundation'],
+        slash_commands: [
+          '/agent-writing',
+          '/writing-foundation',
+          'clear',
+          'compact',
+        ],
+      },
+      expected: ['agent-writing', 'writing-foundation'],
+      expectedStatus: 'succeeded',
+    },
+    {
       label: 'empty',
       init: { skills: [], slash_commands: [] },
       expected: [],

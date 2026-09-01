@@ -868,8 +868,8 @@ function analyzeSkillCatalog(context, evidence) {
     };
   }
 
-  const unexpectedSkill = entries.find(({ name }) => (
-    !context.packageSkills.includes(name)
+  const unexpectedSkill = entries.find(({ field, name }) => (
+    field === 'skills' && !context.packageSkills.includes(name)
   ))?.name;
   if (unexpectedSkill) {
     return {

@@ -238,20 +238,16 @@ test('Cursor Adapter executes the tracer in a pristine project and normalizes ev
     requestedSkill: 'agent-writing',
     resolvedSkills: ['writing-foundation', 'agent-writing'],
   });
-  assert.deepEqual(result.observations.hostAvailableSkills, {
-    names: ['agent-writing', 'writing-foundation'],
-    provenance: {
-      host: 'cursor',
-      mechanism: 'project-skill-inventory',
-      eventType: 'pre-execution-inventory',
-      observerVersion: '@cursor/sdk@1.0.28',
-      statusSource: 'observed',
-    },
-  });
+  const inventorySkillNames = result.observations.preExecutionInventory
+    .skillDefinitions.map(({ name }) => name);
+  assert.equal(result.observations.hostAvailableSkills, null);
   assert.deepEqual(
-    result.observations.hostAvailableSkills.names,
-    result.observations.preExecutionInventory.skillDefinitions
-      .map(({ name }) => name),
+    inventorySkillNames,
+    ['agent-writing', 'writing-foundation'],
+  );
+  assert.deepEqual(
+    inventorySkillNames,
+    result.observations.packageSkills,
   );
   assert.deepEqual(result.observations.packageSkills, [
     'agent-writing',
@@ -325,7 +321,7 @@ test('Cursor Adapter executes the tracer in a pristine project and normalizes ev
   );
 });
 
-test('Cursor Adapter stages the complete release package', async () => {
+test('Cursor Adapter stages the complete release package without claiming discovery', async () => {
   const observation = {};
   const adapter = createCursorAdapter({
     repositoryRoot: canonicalRepositoryRoot,
@@ -345,9 +341,9 @@ test('Cursor Adapter stages the complete release package', async () => {
     .sort();
 
   assert.deepEqual(stagedSkills, [...expectedSkills].sort());
-  assert.deepEqual(
-    validateReleaseHostDiscovery(canonicalRepositoryRoot, result),
-    expectedSkills,
+  assert.throws(
+    () => validateReleaseHostDiscovery(canonicalRepositoryRoot, result),
+    /host did not report packaged Skill discovery/,
   );
   assert.deepEqual(result.observations.routing.resolvedSkills, [
     'writing-foundation',

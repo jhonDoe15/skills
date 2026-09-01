@@ -212,16 +212,6 @@ function cursorSkillProvenance(runId, statusSource = 'observed') {
   };
 }
 
-function cursorPackageProvenance() {
-  return {
-    host: 'cursor',
-    mechanism: 'project-skill-inventory',
-    eventType: 'pre-execution-inventory',
-    observerVersion: CURSOR_OBSERVER_VERSION,
-    statusSource: 'observed',
-  };
-}
-
 function skillEventsFromReads(skillReads, cancelled) {
   const orderedEvents = [];
   let inferredOrder = Number.MAX_SAFE_INTEGER;
@@ -435,13 +425,9 @@ function normalizedObservations(
     };
   });
 
-  const discoveredSkillNames = inventory.skillDefinitions.map(({ name }) => name);
   return {
     packageSkills: [...context.packageSkills],
-    hostAvailableSkills: {
-      names: discoveredSkillNames,
-      provenance: cursorPackageProvenance(),
-    },
+    hostAvailableSkills: null,
     preExecutionInventory: inventory,
     skillEvents,
     routing: {
