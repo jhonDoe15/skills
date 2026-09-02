@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -62,6 +63,7 @@ function createFakeClaude(t, {
   pluginListStderr = '',
   observerEvents = null,
   captureObserverProjection = false,
+  fixturePaths = [],
 }) {
   const fixtureRoot = fs.mkdtempSync(
     path.join(os.tmpdir(), 'fake-claude-command-'),
@@ -121,6 +123,10 @@ if (isPluginListCommand) {
     cwd: process.cwd(),
     definitions,
     environment,
+    fixtures: Object.fromEntries(${JSON.stringify(fixturePaths)}.map((file) => [
+      file,
+      fs.readFileSync(path.join(process.cwd(), file), 'utf8'),
+    ])),
     skills,
     stdin,
   });
@@ -361,7 +367,7 @@ test('Claude Code Adapter executes the host-local Agent Writing tracer', async (
       execution.args.indexOf('--tools'),
       execution.args.indexOf('--tools') + 2,
     ),
-    ['--tools', 'Skill'],
+    ['--tools', 'Read,Write,Skill'],
   );
   assert.deepEqual(
     execution.args.slice(
@@ -376,6 +382,160 @@ test('Claude Code Adapter executes the host-local Agent Writing tracer', async (
       execution.args.indexOf('--max-budget-usd') + 2,
     ),
     ['--max-budget-usd', '0.25'],
+  );
+});
+
+test('Claude Code Adapter stages and observes a component ablation', async (t) => {
+  const fixtureRoot = createPackageFixture(t);
+  const fakeClaude = createFakeClaude(t, {
+    events: successEvents(['agent-writing']),
+    observerEvents: successfulObserverEvents(),
+  });
+  const adapter = createClaudeCodeAdapter({
+    skillsRoot: path.join(fixtureRoot, 'skills'),
+    command: fakeClaude.commandPath,
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+  const result = await adapter.execute(invocation(), {
+    packageSkills: ['agent-writing', 'writing-foundation'],
+    resolvedSkills: ['agent-writing'],
+    dependencyAblation: {
+      consumer: 'agent-writing',
+      dependency: 'writing-foundation',
+    },
+  });
+  const execution = readCommandLog(fakeClaude.logPath).at(-1);
+
+  assert.equal(result.status, 'succeeded', JSON.stringify(result, null, 2));
+  assert.deepEqual(execution.skills, ['agent-writing']);
+  assert.deepEqual(result.observations.packageSkills, [
+    'agent-writing',
+    'writing-foundation',
+  ]);
+  assert.deepEqual(result.observations.hostAvailableSkills.names, [
+    'agent-writing',
+  ]);
+  assert.deepEqual(
+    result.observations.preExecutionInventory.skillDefinitions
+      .map(({ name }) => name),
+    ['agent-writing'],
+  );
+});
+
+test('Claude Code Adapter stages declared case fixtures in its isolated project', async (t) => {
+  const fixtureRoot = createPackageFixture(t);
+  const sourcePath = path.join(fixtureRoot, 'source.md');
+  fs.writeFileSync(sourcePath, 'fixture contents\n');
+  const destination = 'evals/fixtures/source.md';
+  const fakeClaude = createFakeClaude(t, {
+    events: successEvents(),
+    observerEvents: successfulObserverEvents(),
+    fixturePaths: [destination],
+  });
+  const adapter = createClaudeCodeAdapter({
+    skillsRoot: path.join(fixtureRoot, 'skills'),
+    command: fakeClaude.commandPath,
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+
+  const result = await adapter.execute(invocation(), {
+    packageSkills: ['agent-writing', 'writing-foundation'],
+    resolvedSkills: ['writing-foundation', 'agent-writing'],
+    fixtures: [{
+      sourcePath,
+      destination,
+      provenance: {
+        source: 'source.md',
+        destination,
+        digest: createHash('sha256').update('fixture contents\n').digest('hex'),
+      },
+    }],
+  });
+
+  assert.equal(result.status, 'succeeded');
+  assert.deepEqual(readCommandLog(fakeClaude.logPath).at(-1).fixtures, {
+    [destination]: 'fixture contents\n',
+  });
+});
+
+test('Claude Code Adapter does not duplicate a canonical invocation', async (t) => {
+  const fixtureRoot = createPackageFixture(t);
+  const fakeClaude = createFakeClaude(t, {
+    events: successEvents(),
+    observerEvents: successfulObserverEvents(),
+  });
+  const adapter = createClaudeCodeAdapter({
+    skillsRoot: path.join(fixtureRoot, 'skills'),
+    command: fakeClaude.commandPath,
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+  const request = {
+    ...invocation(),
+    prompt: `/agent-writing\n\n${invocation().prompt}`,
+  };
+  await adapter.execute(request, {
+    packageSkills: ['agent-writing', 'writing-foundation'],
+    resolvedSkills: ['writing-foundation', 'agent-writing'],
+  });
+  const execution = readCommandLog(fakeClaude.logPath).at(-1);
+
+  assert.equal(execution.stdin, request.prompt);
+});
+
+test('Claude Code Adapter preserves ambient trigger prompts as provided', async (t) => {
+  const fixtureRoot = createPackageFixture(t);
+  const fakeClaude = createFakeClaude(t, {
+    events: successEvents(),
+    observerEvents: successfulObserverEvents(),
+  });
+  const adapter = createClaudeCodeAdapter({
+    skillsRoot: path.join(fixtureRoot, 'skills'),
+    command: fakeClaude.commandPath,
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+  const request = {
+    ...invocation(),
+    prompt: 'Write concise agent-facing deployment instructions.',
+  };
+  await adapter.execute(request, {
+    packageSkills: ['agent-writing', 'writing-foundation'],
+    resolvedSkills: ['writing-foundation', 'agent-writing'],
+    usePromptAsProvided: true,
+  });
+  const execution = readCommandLog(fakeClaude.logPath).at(-1);
+
+  assert.equal(execution.stdin, request.prompt);
+});
+
+test('Claude Code Adapter stages a pristine No-Skill control', async (t) => {
+  const fixtureRoot = createPackageFixture(t);
+  const events = successEvents([]).filter((event) => (
+    event.type !== 'assistant'
+      || !event.message?.content.some(({ type }) => type === 'tool_use')
+  ));
+  const fakeClaude = createFakeClaude(t, {
+    events,
+    observerEvents: [],
+  });
+  const adapter = createClaudeCodeAdapter({
+    skillsRoot: path.join(fixtureRoot, 'skills'),
+    command: fakeClaude.commandPath,
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+  const result = await adapter.execute(invocation(), {
+    packageSkills: [],
+    resolvedSkills: [],
+  });
+  const execution = readCommandLog(fakeClaude.logPath).at(-1);
+
+  assert.equal(result.status, 'succeeded', JSON.stringify(result, null, 2));
+  assert.deepEqual(execution.skills, []);
+  assert.equal(execution.stdin, invocation().prompt);
+  assert.deepEqual(result.observations.packageSkills, []);
+  assert.deepEqual(result.observations.hostAvailableSkills.names, []);
+  assert.deepEqual(
+    result.observations.preExecutionInventory.skillDefinitions,
+    [],
   );
 });
 

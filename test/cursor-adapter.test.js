@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -196,6 +197,55 @@ function createSuccessfulSdk(
   return { Agent, JsonlLocalAgentStore };
 }
 
+function createHangingSdk(observation) {
+  class JsonlLocalAgentStore {}
+  return {
+    JsonlLocalAgentStore,
+    Agent: {
+      async create() {
+        const run = {
+          id: 'cursor-timeout-run',
+          status: 'running',
+          supports(operation) {
+            return operation === 'cancel';
+          },
+          async cancel() {
+            observation.cancelled = true;
+            this.status = 'cancelled';
+            observation.release?.();
+          },
+          async *stream() {
+            await new Promise((resolve) => {
+              observation.release = resolve;
+            });
+          },
+          async wait() {
+            return {
+              id: this.id,
+              status: this.status,
+              result: '',
+              model: { id: 'requested-cursor-model' },
+              durationMs: 1,
+            };
+          },
+        };
+        return {
+          agentId: 'cursor-timeout-agent',
+          async send() {
+            return run;
+          },
+          async getUsage() {
+            return { cost: { chargedCents: 0 } };
+          },
+          async [Symbol.asyncDispose]() {
+            observation.disposed = true;
+          },
+        };
+      },
+    },
+  };
+}
+
 function tracerInvocation() {
   return {
     requestId: tracerCase.id,
@@ -203,6 +253,31 @@ function tracerInvocation() {
     prompt: tracerCase.prompt,
     model: 'requested-cursor-model',
   };
+}
+
+async function withWatchdog(promise, timeoutMs = 250) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error('adapter exceeded test watchdog')),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function delay(timeoutMs) {
+  return new Promise((resolve) => setTimeout(resolve, timeoutMs));
+}
+
+function neverResolve() {
+  return new Promise(() => {});
 }
 
 test('Cursor Adapter executes the tracer in a pristine project and normalizes evidence', async (t) => {
@@ -319,6 +394,343 @@ test('Cursor Adapter executes the tracer in a pristine project and normalizes ev
     tracerCase.gateOrder,
     ['deterministic', 'qualitative'],
   );
+});
+
+test('Cursor Adapter stages a real component-ablation project', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const observation = {};
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk(observation, { emitSkillReads: false }),
+  });
+  const result = await adapter.execute(tracerInvocation(), {
+    packageSkills: ['agent-writing', 'writing-foundation'],
+    resolvedSkills: ['agent-writing'],
+    dependencyAblation: {
+      consumer: 'agent-writing',
+      dependency: 'writing-foundation',
+    },
+  });
+
+  assert.deepEqual(observation.projectFilesAtCreate, [
+    '.cursor/skills/agent-writing/SKILL.md',
+  ]);
+  assert.deepEqual(result.observations.packageSkills, [
+    'agent-writing',
+    'writing-foundation',
+  ]);
+  assert.deepEqual(
+    result.observations.preExecutionInventory.skillDefinitions
+      .map(({ name }) => name),
+    ['agent-writing'],
+  );
+});
+
+test('Cursor Adapter stages a pristine No-Skill control', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const observation = {};
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk(observation, { emitSkillReads: false }),
+  });
+  const result = await adapter.execute(tracerInvocation(), {
+    packageSkills: [],
+    resolvedSkills: [],
+  });
+
+  assert.deepEqual(observation.projectFilesAtCreate, []);
+  assert.deepEqual(result.observations.packageSkills, []);
+  assert.deepEqual(
+    result.observations.preExecutionInventory.skillDefinitions,
+    [],
+  );
+});
+
+test('Cursor Adapter stages case fixtures without reporting unchanged inputs as artifacts', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const sourcePath = path.join(repositoryRoot, 'source.md');
+  fs.writeFileSync(sourcePath, 'fixture contents\n');
+  const destination = 'evals/fixtures/source.md';
+  const observation = {};
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk(observation),
+  });
+
+  const result = await adapter.execute(tracerInvocation(), {
+    packageSkills: ['agent-writing', 'writing-foundation'],
+    resolvedSkills: ['writing-foundation', 'agent-writing'],
+    fixtures: [{
+      sourcePath,
+      destination,
+      provenance: {
+        source: 'source.md',
+        destination,
+        digest: createHash('sha256').update('fixture contents\n').digest('hex'),
+      },
+    }],
+  });
+
+  assert.ok(observation.projectFilesAtCreate.includes(destination));
+  assert.equal(
+    resolveArtifacts(result).some(({ path: artifactPath }) => (
+      artifactPath === destination
+    )),
+    false,
+  );
+});
+
+test('Cursor Adapter cancels execution at its configured timeout', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const observation = {};
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createHangingSdk(observation),
+    timeoutMs: 100,
+  });
+  const result = await executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  });
+
+  assert.equal(result.status, 'failed');
+  assert.equal(result.failure.code, 'cursor-execution-timeout');
+  assert.equal(observation.cancelled, true);
+  assert.equal(observation.disposed, true);
+});
+
+test('Cursor Adapter applies its timeout while creating the SDK agent', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const observation = {};
+  const temporaryRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'cursor-create-timeout-'),
+  );
+  t.after(() => fs.rmSync(temporaryRoot, { recursive: true, force: true }));
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    temporaryRoot,
+    timeoutMs: 100,
+    sdk: {
+      JsonlLocalAgentStore: class {},
+      Agent: {
+        async create(options) {
+          observation.projectRoot = options.local.cwd;
+          return neverResolve();
+        },
+      },
+    },
+  });
+
+  const result = await withWatchdog(executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  }), 1_000);
+
+  assert.equal(result.status, 'failed');
+  assert.equal(result.failure.code, 'cursor-execution-timeout');
+});
+
+test('Cursor Adapter bounds SDK loading, send, and usage collection', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const cases = [
+    {
+      name: 'SDK loading',
+      options: {
+        sdkLoader: neverResolve,
+      },
+    },
+    {
+      name: 'send',
+      options: (() => {
+        const sdk = createSuccessfulSdk({});
+        const create = sdk.Agent.create;
+        sdk.Agent.create = async (options) => {
+          const agent = await create(options);
+          agent.send = neverResolve;
+          return agent;
+        };
+        return { sdk };
+      })(),
+    },
+    {
+      name: 'usage',
+      options: (() => {
+        const sdk = createSuccessfulSdk({});
+        const create = sdk.Agent.create;
+        sdk.Agent.create = async (options) => {
+          const agent = await create(options);
+          agent.getUsage = neverResolve;
+          return agent;
+        };
+        return { sdk };
+      })(),
+    },
+  ];
+
+  for (const lifecycleCase of cases) {
+    const adapter = createCursorAdapter({
+      repositoryRoot,
+      timeoutMs: 100,
+      ...lifecycleCase.options,
+    });
+    const result = await withWatchdog(executeProduction({
+      repositoryRoot,
+      adapter,
+      invocation: tracerInvocation(),
+    }), 1_000);
+    assert.equal(result.status, 'failed', lifecycleCase.name);
+    assert.equal(
+      result.failure.code,
+      'cursor-execution-timeout',
+      lifecycleCase.name,
+    );
+  }
+});
+
+test('Cursor Adapter applies one deadline across the execution lifecycle', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const observation = {};
+  const sdk = createSuccessfulSdk(observation);
+  const create = sdk.Agent.create;
+  sdk.Agent.create = async (options) => {
+    await delay(100);
+    const agent = await create(options);
+    const send = agent.send;
+    const getUsage = agent.getUsage;
+    agent.send = async (prompt) => {
+      await delay(100);
+      return send(prompt);
+    };
+    agent.getUsage = async () => {
+      await delay(100);
+      return getUsage();
+    };
+    return agent;
+  };
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk,
+    timeoutMs: 180,
+  });
+
+  const result = await withWatchdog(executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  }), 1_000);
+
+  assert.equal(result.status, 'failed');
+  assert.equal(result.failure.code, 'cursor-execution-timeout');
+});
+
+test('Cursor Adapter bounds the run-start observer callback', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const observation = {};
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk: createSuccessfulSdk(observation),
+    timeoutMs: 250,
+    onRunStarted: neverResolve,
+  });
+
+  const result = await withWatchdog(executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  }), 1_000);
+
+  assert.equal(result.status, 'failed');
+  assert.equal(result.failure.code, 'cursor-execution-timeout');
+  assert.equal(observation.cancelled, true);
+  assert.equal(observation.disposed, true);
+});
+
+test('Cursor Adapter bounds cancellation and retains its cleanup failure', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const observation = { cancelCalls: 0 };
+  const run = {
+    id: 'cursor-run-cancel-hang',
+    status: 'running',
+    supports: () => true,
+    async cancel() {
+      observation.cancelCalls += 1;
+      return neverResolve();
+    },
+    async *stream() {
+      await neverResolve();
+    },
+    async wait() {
+      return {
+        id: this.id,
+        status: 'cancelled',
+        result: '',
+        model: { id: 'requested-cursor-model' },
+        durationMs: 1,
+      };
+    },
+  };
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    timeoutMs: 250,
+    sdk: {
+      JsonlLocalAgentStore: class {},
+      Agent: {
+        async create() {
+          return {
+            model: { id: 'requested-cursor-model' },
+            send: async () => run,
+            getUsage: async () => ({ cost: { chargedCents: 0 } }),
+            async [Symbol.asyncDispose]() {},
+          };
+        },
+      },
+    },
+  });
+
+  const result = await withWatchdog(executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  }), 1_000);
+
+  assert.equal(result.failure.code, 'cursor-execution-timeout');
+  assert.match(result.failure.message, /cursor-run-cleanup-timeout/);
+  assert.equal(observation.cancelCalls, 1);
+});
+
+test('Cursor Adapter bounds disposal and temporary cleanup and retains both', async (t) => {
+  const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
+  const observation = {};
+  const sdk = createSuccessfulSdk(observation);
+  const create = sdk.Agent.create;
+  sdk.Agent.create = async (options) => {
+    const agent = await create(options);
+    agent[Symbol.asyncDispose] = neverResolve;
+    return agent;
+  };
+  const adapter = createCursorAdapter({
+    repositoryRoot,
+    sdk,
+    timeoutMs: 250,
+    removeTemporary: neverResolve,
+  });
+
+  const result = await withWatchdog(executeProduction({
+    repositoryRoot,
+    adapter,
+    invocation: tracerInvocation(),
+  }), 1_000);
+  t.after(() => fs.rmSync(
+    path.dirname(observation.createOptions.local.cwd),
+    { recursive: true, force: true },
+  ));
+
+  assert.equal(result.status, 'failed');
+  assert.equal(result.failure.code, 'cursor-agent-disposal-timeout');
+  assert.match(result.failure.message, /cursor-agent-disposal-timeout/);
+  assert.match(result.failure.message, /cursor-temporary-cleanup-timeout/);
 });
 
 test('Cursor Adapter stages the complete release package without claiming discovery', async () => {
@@ -1074,7 +1486,8 @@ test('Cursor Adapter normalizes post-run exceptions and still disposes resources
   assert.deepEqual(result.failure, {
     stage: 'result-normalization',
     code: 'cursor-result-normalization-failed',
-    message: 'normalization exploded',
+    message: 'normalization exploded; cleanup failures: '
+      + 'cursor-agent-disposal-failed: disposal also failed',
   });
   assert.deepEqual(
     result.observations.skillEvents.map(({ name, status }) => [name, status]),
@@ -1134,19 +1547,13 @@ test('Cursor Adapter preserves Skill reads when post-run collection fails', asyn
 test('Cursor Adapter normalizes cleanup failure after disposing resources', async (t) => {
   const repositoryRoot = createTracerPackage(t, canonicalRepositoryRoot);
   const observation = {};
-  const originalRmSync = fs.rmSync;
-  fs.rmSync = function removeThenReportFailure(target, options) {
-    originalRmSync(target, options);
-    if (path.basename(target).startsWith('cursor-suite-execution-')) {
-      throw new Error(`cleanup failed for ${target}`);
-    }
-  };
-  t.after(() => {
-    fs.rmSync = originalRmSync;
-  });
   const adapter = createCursorAdapter({
     repositoryRoot,
     sdk: createSuccessfulSdk(observation),
+    async removeTemporary(target) {
+      await fs.promises.rm(target, { recursive: true, force: true });
+      throw new Error(`cleanup failed for ${target}`);
+    },
   });
 
   const result = await executeProduction({

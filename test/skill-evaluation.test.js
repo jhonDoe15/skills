@@ -2139,6 +2139,31 @@ test('Incident runner retains wrong-Skill and timeout lifecycle evidence', (t) =
     path.join(os.tmpdir(), 'incident-failure-evaluation-'),
   );
   t.after(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
+  const isolatedRepositoryRoot = path.join(fixtureRoot, 'repository');
+  fs.mkdirSync(isolatedRepositoryRoot);
+  for (const entry of ['skills', 'suite', '.claude-plugin', 'README.md']) {
+    fs.cpSync(
+      path.join(repositoryRoot, entry),
+      path.join(isolatedRepositoryRoot, entry),
+      { recursive: true },
+    );
+  }
+  spawnSync('git', ['init', '--quiet'], { cwd: isolatedRepositoryRoot });
+  const fixtureCommit = spawnSync('git', [
+    '-c',
+    'user.name=Fixture',
+    '-c',
+    'user.email=fixture@example.invalid',
+    'commit',
+    '--allow-empty',
+    '--quiet',
+    '-m',
+    'fixture',
+  ], {
+    cwd: isolatedRepositoryRoot,
+    encoding: 'utf8',
+  });
+  assert.equal(fixtureCommit.status, 0, fixtureCommit.stderr);
   const binDirectory = path.join(fixtureRoot, 'bin');
   fs.mkdirSync(binDirectory, { recursive: true });
   const fakeClaude = path.join(binDirectory, 'claude');
@@ -2178,68 +2203,63 @@ if (mode === 'timeout') {
   fs.chmodSync(fakeClaude, 0o755);
 
   const definitionPath = path.join(
-    repositoryRoot,
+    isolatedRepositoryRoot,
     'skills',
     'incident-investigation',
     'evals',
     'evals.json',
   );
-  const originalDefinition = fs.readFileSync(definitionPath, 'utf8');
-  const definition = JSON.parse(originalDefinition);
+  const definition = readJson(definitionPath);
   definition.config.timeout_ms = 2000;
   definition.config.max_executor_attempts = 1;
   fs.writeFileSync(definitionPath, `${JSON.stringify(definition, null, 2)}\n`);
 
-  try {
-    for (const mode of ['failure', 'timeout']) {
-      const resultsDirectory = path.join(fixtureRoot, mode);
-      const result = spawnSync(process.execPath, [
-        'skills/incident-investigation/scripts/run-evals.js',
-        '--mode',
-        'trigger',
-        '--model',
-        'test-model',
-        '--results-dir',
-        resultsDirectory,
-        '--json',
-      ], {
-        cwd: repositoryRoot,
-        env: {
-          ...process.env,
-          PATH: `${binDirectory}${path.delimiter}${process.env.PATH}`,
-          INCIDENT_LIFECYCLE_FIXTURE: mode,
-        },
-        encoding: 'utf8',
-      });
-      assert.equal(result.status, 1, result.stderr);
-      const evidence = readJson(path.join(
-        resultsDirectory,
-        'triggers',
-        'trigger-explicit',
-        'evidence.json',
-      ));
-      const statuses = evidence.execution.skill_events.map((event) => [
-        event.name,
-        event.operation,
-        event.status,
-      ]);
-      assert.deepEqual(
-        statuses,
-        mode === 'timeout'
-          ? [
-            ['incident-investigation', 'select', 'started'],
-            ['incident-investigation', 'load', 'started'],
-            ['incident-investigation', 'load', 'cancelled'],
-          ]
-          : [
-            ['to-humans', 'select', 'started'],
-            ['to-humans', 'load', 'started'],
-            ['to-humans', 'load', 'unknown'],
-          ],
-      );
-    }
-  } finally {
-    fs.writeFileSync(definitionPath, originalDefinition);
+  for (const mode of ['failure', 'timeout']) {
+    const resultsDirectory = path.join(fixtureRoot, mode);
+    const result = spawnSync(process.execPath, [
+      'skills/incident-investigation/scripts/run-evals.js',
+      '--mode',
+      'trigger',
+      '--model',
+      'test-model',
+      '--results-dir',
+      resultsDirectory,
+      '--json',
+    ], {
+      cwd: isolatedRepositoryRoot,
+      env: {
+        ...process.env,
+        PATH: `${binDirectory}${path.delimiter}${process.env.PATH}`,
+        INCIDENT_LIFECYCLE_FIXTURE: mode,
+      },
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 1, result.stderr);
+    const evidence = readJson(path.join(
+      resultsDirectory,
+      'triggers',
+      'trigger-explicit',
+      'evidence.json',
+    ));
+    const statuses = evidence.execution.skill_events.map((event) => [
+      event.name,
+      event.operation,
+      event.status,
+    ]);
+    assert.deepEqual(
+      statuses,
+      mode === 'timeout'
+        ? [
+          ['incident-investigation', 'select', 'started'],
+          ['incident-investigation', 'load', 'started'],
+          ['incident-investigation', 'load', 'cancelled'],
+        ]
+        : [
+          ['to-humans', 'select', 'started'],
+          ['to-humans', 'load', 'started'],
+          ['to-humans', 'load', 'unknown'],
+        ],
+    );
   }
 });
 

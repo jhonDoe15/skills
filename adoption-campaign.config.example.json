@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "kind": "adoption-campaign-configuration",
+  "candidate": {
+    "identity": {
+      "name": "skills",
+      "version": "1.0.0",
+      "stage": "release-candidate"
+    },
+    "git_revision": "<replace-with-exact-40-character-HEAD-revision>"
+  },
+  "hosts": {
+    "claude-code": {
+      "ordinary": {
+        "model": "<replace-with-exact-claude-code-ordinary-model-id>",
+        "timeout_ms": 180000,
+        "budget_usd": 0.5,
+        "max_attempts": 2
+      },
+      "frontier": {
+        "model": "<replace-with-exact-claude-code-frontier-model-id>",
+        "timeout_ms": 240000,
+        "budget_usd": 1.5,
+        "max_attempts": 2
+      }
+    },
+    "cursor": {
+      "ordinary": {
+        "model": "<replace-with-exact-cursor-ordinary-model-id>",
+        "timeout_ms": 180000,
+        "budget_usd": 0.5,
+        "max_attempts": 2
+      },
+      "frontier": {
+        "model": "<replace-with-exact-cursor-frontier-model-id>",
+        "timeout_ms": 240000,
+        "budget_usd": 1.5,
+        "max_attempts": 2
+      }
+    }
+  },
+  "judge": {
+    "model": "<replace-with-exact-judge-model-id>",
+    "timeout_ms": 180000,
+    "budget_usd": 1,
+    "max_attempts": 2
+  },
+  "repetitions": {
+    "ordinary": 3,
+    "mixed": 5,
+    "critical": 5
+  },
+  "critical_cases": [
+    "code-review-outcome/nontrivial-ticket-outcome",
+    "take-it-offline-role/pressure-and-sensitive-data"
+  ],
+  "human_review": {
+    "passing_sample": [
+      "to-humans-outcome/complete-human-decision"
+    ]
+  }
+}
