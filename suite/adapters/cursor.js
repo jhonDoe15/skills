@@ -1,5 +1,6 @@
 'use strict';
 
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -9,6 +10,7 @@ const {
   buildPreExecutionInventory,
   emptyPreExecutionInventory,
 } = require('../pre-execution-inventory');
+const { stageCaseFixtures } = require('./fixture-staging');
 
 const MAX_ARTIFACT_BYTES = 64 * 1024;
 const MAX_ARTIFACT_FILES = 64;
@@ -25,6 +27,13 @@ function copyPackageSkills(repositoryRoot, projectRoot, packageSkills) {
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.cpSync(source, destination, { recursive: true });
   }
+}
+
+function skillsToStage(context) {
+  const dependency = context.dependencyAblation?.dependency;
+  return dependency
+    ? context.packageSkills.filter((name) => name !== dependency)
+    : context.packageSkills;
 }
 
 function normalizeToolName(name) {
@@ -259,7 +268,15 @@ function mediaTypeFor(filePath) {
   return 'application/octet-stream';
 }
 
-function listGeneratedFiles(directory) {
+function fixtureMatchesDigest(directory, relativePath, expectedDigest) {
+  if (!expectedDigest) return false;
+  const currentDigest = createHash('sha256')
+    .update(fs.readFileSync(path.join(directory, relativePath)))
+    .digest('hex');
+  return currentDigest === expectedDigest;
+}
+
+function listGeneratedFiles(directory, stagedFixtureDigests = new Map()) {
   const files = [];
   let truncated = false;
 
@@ -278,7 +295,10 @@ function listGeneratedFiles(directory) {
         visit(relativePath);
         if (truncated) return;
       } else if (entry.isFile()) {
-        files.push(relativePath.split(path.sep).join('/'));
+        const normalizedPath = relativePath.split(path.sep).join('/');
+        const stagedDigest = stagedFixtureDigests.get(normalizedPath);
+        if (fixtureMatchesDigest(directory, relativePath, stagedDigest)) continue;
+        files.push(normalizedPath);
       }
     }
   }
@@ -544,14 +564,79 @@ function requireCursorSdk(sdk) {
   return sdk;
 }
 
-async function cancelAndWait(run) {
-  if (!run) return null;
-  if (run.status === 'running'
-    && (typeof run.supports !== 'function' || run.supports('cancel'))) {
-    await run.cancel();
+async function cancelRunIfSupported(run) {
+  if (run.status !== 'running') return;
+  if (typeof run.supports === 'function' && !run.supports('cancel')) return;
+  await run.cancel();
+}
+
+function createDeadline(timeoutMs) {
+  const expiresAt = timeoutMs === null ? null : Date.now() + timeoutMs;
+  function timeoutError(label, code) {
+    return Object.assign(
+      new Error(`${label} timed out after ${timeoutMs}ms`),
+      { code },
+    );
   }
-  if (typeof run.wait === 'function') return run.wait();
-  return null;
+  return {
+    async run(
+      operation,
+      label,
+      code = 'cursor-execution-timeout',
+    ) {
+      if (expiresAt === null) return operation();
+      let timer;
+      const remainingMs = Math.max(0, expiresAt - Date.now());
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(timeoutError(label, code)),
+          remainingMs,
+        );
+      });
+      try {
+        const result = await Promise.race([
+          Promise.resolve().then(operation),
+          timeout,
+        ]);
+        if (Date.now() > expiresAt) throw timeoutError(label, code);
+        return result;
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+  };
+}
+
+async function settleRun(run, cleanup) {
+  await cleanup(
+    () => cancelRunIfSupported(run),
+    'Cursor run cancellation',
+    'cursor-run-cleanup-timeout',
+    'cursor-run-cleanup-failed',
+  );
+  if (typeof run.wait !== 'function') return null;
+  return cleanup(
+    () => run.wait(),
+    'Cursor terminal wait',
+    'cursor-run-cleanup-timeout',
+    'cursor-run-cleanup-failed',
+  );
+}
+
+function combinedFailure(primary, cleanupFailures) {
+  if (cleanupFailures.length === 0) return primary;
+  const active = primary || cleanupFailures[0].error;
+  const cleanupMessage = cleanupFailures.map(({ error, fallbackCode }) => (
+    `${error.code || fallbackCode}: ${error.message}`
+  )).join('; ');
+  return Object.assign(
+    new Error(
+      primary
+        ? `${primary.message}; cleanup failures: ${cleanupMessage}`
+        : cleanupMessage,
+    ),
+    { code: active.code },
+  );
 }
 
 function normalizeSdkId(value) {
@@ -569,14 +654,39 @@ async function executeCursor({
   context,
   repositoryRoot,
   sdk,
+  sdkLoader,
   apiKey,
   temporaryRoot,
+  removeTemporary,
   onRunStarted,
+  timeoutMs,
 }) {
   const startedAt = Date.now();
+  const lifecycleDeadline = createDeadline(timeoutMs);
+  let cleanupDeadline = null;
+  const cleanupFailures = [];
+  async function cleanup(
+    operation,
+    label,
+    timeoutCode,
+    fallbackCode,
+  ) {
+    cleanupDeadline ||= createDeadline(timeoutMs);
+    try {
+      return await cleanupDeadline.run(operation, label, timeoutCode);
+    } catch (error) {
+      cleanupFailures.push({ error, fallbackCode });
+      return null;
+    }
+  }
   let cursorSdk;
   try {
-    cursorSdk = requireCursorSdk(sdk || loadCursorSdk());
+    cursorSdk = requireCursorSdk(
+      sdk || await lifecycleDeadline.run(
+        sdkLoader,
+        'Cursor SDK loading',
+      ),
+    );
   } catch (error) {
     return failedResult({
       invocation,
@@ -603,9 +713,10 @@ async function executeCursor({
   let resolvedModel = null;
   let durationMs = null;
   let normalized = null;
-  let cleanupFailure = null;
+  let runSettlementAttempted = false;
   let artifacts = [];
   let artifactScanTruncated = false;
+  let stagedFixtureDigests = new Map();
   let inventory = emptyPreExecutionInventory();
   const calls = new Map();
   const responseTexts = [];
@@ -621,77 +732,105 @@ async function executeCursor({
       projectRoot = path.join(executionRoot, 'project');
       storeRoot = path.join(executionRoot, 'store');
       fs.mkdirSync(projectRoot);
-      copyPackageSkills(repositoryRoot, projectRoot, context.packageSkills);
+      const stagedSkills = skillsToStage(context);
+      copyPackageSkills(repositoryRoot, projectRoot, stagedSkills);
+      stagedFixtureDigests = stageCaseFixtures(projectRoot, context.fixtures);
       inventory = buildPreExecutionInventory({
         projectRoot,
-        skillNames: context.packageSkills,
+        skillNames: stagedSkills,
         relativePathFor: (name) => `.cursor/skills/${name}/SKILL.md`,
       });
       const store = new cursorSdk.JsonlLocalAgentStore(storeRoot);
+      await lifecycleDeadline.run(
+        () => undefined,
+        'Cursor project setup',
+      );
 
       failureStage = 'startup';
       fallbackCode = 'cursor-startup-failed';
-      agent = await cursorSdk.Agent.create({
-        apiKey,
-        model: { id: invocation.model },
-        local: {
-          cwd: projectRoot,
-          settingSources: ['project'],
-          sandboxOptions: { enabled: true },
-          store,
-        },
-      });
+      agent = await lifecycleDeadline.run(
+        () => cursorSdk.Agent.create({
+          apiKey,
+          model: { id: invocation.model },
+          local: {
+            cwd: projectRoot,
+            settingSources: ['project'],
+            sandboxOptions: { enabled: true },
+            store,
+          },
+        }),
+        'Cursor Agent.create',
+      );
 
-      run = await agent.send(invocation.prompt);
+      run = await lifecycleDeadline.run(
+        () => agent.send(invocation.prompt),
+        'Cursor agent send',
+      );
       if (typeof onRunStarted === 'function') {
         try {
-          await onRunStarted({
-            agentId: normalizeSdkId(agent.agentId),
-            runId: normalizeSdkId(run.id),
-          });
-        } catch {
-          // Observability must not change execution semantics.
+          await lifecycleDeadline.run(
+            () => onRunStarted({
+              agentId: normalizeSdkId(agent.agentId),
+              runId: normalizeSdkId(run.id),
+            }),
+            'Cursor run-start observer',
+          );
+        } catch (error) {
+          if (error.code === 'cursor-execution-timeout') throw error;
         }
       }
       failureStage = 'execution';
       fallbackCode = 'cursor-execution-failed';
-      for await (const event of run.stream()) {
-        collectStreamEvidence(
-          event,
-          projectRoot,
-          calls,
-          responseTexts,
-          skillReads,
-          run.id,
-          streamEventOrder,
-        );
-        streamEventOrder += 1;
-      }
-      runResult = await run.wait();
+      runResult = await lifecycleDeadline.run(
+        async () => {
+          for await (const event of run.stream()) {
+            collectStreamEvidence(
+              event,
+              projectRoot,
+              calls,
+              responseTexts,
+              skillReads,
+              run.id,
+              streamEventOrder,
+            );
+            streamEventOrder += 1;
+          }
+          return run.wait();
+        },
+        'Cursor execution',
+      );
     } catch (error) {
       failureError = error;
       if (run) {
-        try {
-          runResult = await cancelAndWait(run);
-        } catch {
-          // The original run failure remains the actionable error.
-        }
+        runSettlementAttempted = true;
+        runResult = await settleRun(run, cleanup);
       }
     }
 
     if (agent) {
       try {
-        const usage = await agent.getUsage();
+        const usage = await lifecycleDeadline.run(
+          () => agent.getUsage(),
+          'Cursor usage collection',
+        );
         costUsd = Number.isFinite(usage.cost?.chargedCents)
           ? usage.cost.chargedCents / 100
           : null;
-      } catch {
+      } catch (error) {
         costUsd = null;
+        if (!failureError && error.code === 'cursor-execution-timeout') {
+          failureError = error;
+          failureStage = 'result-normalization';
+          fallbackCode = 'cursor-result-normalization-failed';
+        }
       }
     }
 
     if (projectRoot && fs.existsSync(projectRoot)) {
-      const generatedFiles = listGeneratedFiles(projectRoot);
+      const generatedFiles = listGeneratedFiles(
+        projectRoot,
+        stagedFixtureDigests,
+      );
       artifacts = generatedFiles.files.map((file) => (
         snapshotArtifact(projectRoot, file)
       ));
@@ -778,35 +917,24 @@ async function executeCursor({
       fallbackCode = 'cursor-result-normalization-failed';
     }
   } finally {
-    if (run && !runResult) {
-      try {
-        runResult = await cancelAndWait(run);
-      } catch (error) {
-        cleanupFailure = {
-          error,
-          fallbackCode: 'cursor-run-cleanup-failed',
-        };
-      }
+    if (run && !runResult && !runSettlementAttempted) {
+      runResult = await settleRun(run, cleanup);
     }
     if (agent) {
-      try {
-        await agent[Symbol.asyncDispose]();
-      } catch (error) {
-        cleanupFailure ||= {
-          error,
-          fallbackCode: 'cursor-agent-disposal-failed',
-        };
-      }
+      await cleanup(
+        () => agent[Symbol.asyncDispose](),
+        'Cursor agent disposal',
+        'cursor-agent-disposal-timeout',
+        'cursor-agent-disposal-failed',
+      );
     }
     if (executionRoot) {
-      try {
-        fs.rmSync(executionRoot, { recursive: true, force: true });
-      } catch (error) {
-        cleanupFailure ||= {
-          error,
-          fallbackCode: 'cursor-temporary-cleanup-failed',
-        };
-      }
+      await cleanup(
+        () => removeTemporary(executionRoot),
+        'Cursor temporary cleanup',
+        'cursor-temporary-cleanup-timeout',
+        'cursor-temporary-cleanup-failed',
+      );
     }
   }
 
@@ -815,14 +943,16 @@ async function executeCursor({
     skillReads,
     runResult?.status === 'cancelled',
   );
-  if (!normalized || (cleanupFailure && !failureError)) {
-    const activeFailure = failureError || cleanupFailure.error;
+  if (!normalized || cleanupFailures.length > 0) {
+    const activeFailure = combinedFailure(failureError, cleanupFailures);
     normalized = failedResult({
       invocation,
       context,
       stage: failureError ? failureStage : 'execution',
       error: activeFailure,
-      fallbackCode: failureError ? fallbackCode : cleanupFailure.fallbackCode,
+      fallbackCode: failureError
+        ? fallbackCode
+        : cleanupFailures[0].fallbackCode,
       executionRoot,
       durationMs,
       costUsd,
@@ -841,12 +971,27 @@ async function executeCursor({
 function createCursorAdapter({
   repositoryRoot,
   sdk = null,
+  sdkLoader = loadCursorSdk,
   apiKey = process.env.CURSOR_API_KEY,
   temporaryRoot = os.tmpdir(),
+  removeTemporary = (directory) => fs.promises.rm(
+    directory,
+    { recursive: true, force: true },
+  ),
   onRunStarted = null,
+  timeoutMs = null,
 } = {}) {
   if (typeof repositoryRoot !== 'string' || repositoryRoot.length === 0) {
     throw new TypeError('Cursor Adapter requires repositoryRoot');
+  }
+  if (timeoutMs !== null
+    && (!Number.isInteger(timeoutMs) || timeoutMs <= 0)) {
+    throw new TypeError('Cursor Adapter timeoutMs must be null or a positive integer');
+  }
+  if (typeof sdkLoader !== 'function' || typeof removeTemporary !== 'function') {
+    throw new TypeError(
+      'Cursor Adapter sdkLoader and removeTemporary must be functions',
+    );
   }
 
   return defineProductionAdapter({
@@ -857,9 +1002,12 @@ function createCursorAdapter({
         context,
         repositoryRoot,
         sdk,
+        sdkLoader,
         apiKey,
         temporaryRoot,
+        removeTemporary,
         onRunStarted,
+        timeoutMs,
       });
     },
   });

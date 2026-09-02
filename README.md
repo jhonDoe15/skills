@@ -123,6 +123,19 @@ The release candidate is ready for the separate 19-Skill adoption campaign.
 Static package validation does not claim that the paid cross-host campaign or
 human adoption decision has run.
 
+Prepare the guarded campaign without creating host or judge clients:
+
+```bash
+cp adoption-campaign.config.example.json /tmp/adoption-campaign.json
+# Replace every placeholder with HEAD and exact available model IDs.
+npm run adoption -- plan --config /tmp/adoption-campaign.json
+```
+
+The plan output prints its exact fingerprint, initial call count, configured
+cost ceiling, and the acknowledgement required by `run`. `replay` and `packet`
+use only retained evidence. The packet leaves the final go/no-go decision
+explicitly pending human adjudication.
+
 ## Evidence and source material
 
 Reusable evaluation cases, schemas, test Adapters, validators, rubrics, and

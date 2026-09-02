@@ -4,6 +4,7 @@
   "description": "Atomic 19-Skill writing, ticketing, implementation, and review suite",
   "private": true,
   "scripts": {
+    "adoption": "node scripts/run-adoption-campaign.js",
     "check:package": "node scripts/check-package.js",
     "test": "node scripts/validate-suite.js"
   },

@@ -13,6 +13,7 @@ const {
   buildPreExecutionInventory,
   emptyPreExecutionInventory,
 } = require('../pre-execution-inventory');
+const { stageCaseFixtures } = require('./fixture-staging');
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1_000;
 const MAX_OUTPUT_BYTES = 20 * 1024 * 1024;
@@ -23,6 +24,7 @@ const HOOK_OBSERVER_VERSION = 'claude-code-hooks-v1';
 const STREAM_OBSERVER_VERSION = 'claude-code-stream-json-v1';
 const OBSERVER_LOG_ENV = 'SUITE_CLAUDE_SKILL_OBSERVER_LOG';
 const EMPTY_MCP_CONFIG = JSON.stringify({ mcpServers: {} });
+const ALLOWED_TOOLS = 'Read,Write,Skill';
 const SKILL_CATALOG_FIELDS = ['skills', 'slash_commands'];
 const BASE_SESSION_SETTINGS = Object.freeze({
   autoMemoryEnabled: false,
@@ -89,7 +91,26 @@ function validateOptions({
   }
 }
 
-function createIsolatedProject(skillsRoot, packageSkills) {
+function skillsToStage(context) {
+  const dependency = context.dependencyAblation?.dependency;
+  return dependency
+    ? context.packageSkills.filter((name) => name !== dependency)
+    : context.packageSkills;
+}
+
+function sessionPrompt(invocation, context) {
+  const canonicalInvocation = `/${invocation.skill}`;
+  const [promptCommand] = invocation.prompt.trimStart().split(/\s+/, 1);
+  const alreadyCanonical = promptCommand === canonicalInvocation;
+  if (context.usePromptAsProvided === true
+    || context.packageSkills.length === 0
+    || alreadyCanonical) {
+    return invocation.prompt;
+  }
+  return `${canonicalInvocation}\n\n${invocation.prompt}`;
+}
+
+function createIsolatedProject(skillsRoot, packageSkills, fixtures) {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), 'claude-code-adapter-'));
   const projectSkillsRoot = path.join(project, '.claude', 'skills');
   fs.mkdirSync(projectSkillsRoot, { recursive: true });
@@ -107,6 +128,7 @@ function createIsolatedProject(skillsRoot, packageSkills) {
         recursive: true,
       });
     }
+    stageCaseFixtures(project, fixtures);
   } catch (error) {
     fs.rmSync(project, { recursive: true, force: true });
     throw error;
@@ -851,6 +873,7 @@ function normalizeClaudeExecutionEvidence({
 }
 
 function analyzeSkillCatalog(context, evidence) {
+  const expectedSkills = skillsToStage(context);
   if (evidence.catalogInvalid) {
     return { status: 'invalid', availableSkillNames: null };
   }
@@ -869,7 +892,7 @@ function analyzeSkillCatalog(context, evidence) {
   }
 
   const unexpectedSkill = entries.find(({ field, name }) => (
-    field === 'skills' && !context.packageSkills.includes(name)
+    field === 'skills' && !expectedSkills.includes(name)
   ))?.name;
   if (unexpectedSkill) {
     return {
@@ -880,10 +903,10 @@ function analyzeSkillCatalog(context, evidence) {
   }
 
   const availableSkills = evidence.availableSkills || new Set();
-  const availableSkillNames = context.packageSkills.filter(
+  const availableSkillNames = expectedSkills.filter(
     (name) => availableSkills.has(name),
   );
-  const unavailableSkill = context.packageSkills.find(
+  const unavailableSkill = expectedSkills.find(
     (name) => !availableSkills.has(name),
   );
   return unavailableSkill
@@ -977,7 +1000,7 @@ function claudeArguments(
     '--no-chrome',
     '--no-session-persistence',
     '--tools',
-    'Skill',
+    ALLOWED_TOOLS,
     '--permission-mode',
     'dontAsk',
     '--model',
@@ -1026,8 +1049,13 @@ function createClaudeCodeAdapter({
       let project = null;
 
       try {
+        const stagedSkills = skillsToStage(context);
         try {
-          project = createIsolatedProject(skillsRoot, context.packageSkills);
+          project = createIsolatedProject(
+            skillsRoot,
+            stagedSkills,
+            context.fixtures,
+          );
         } catch (error) {
           const detail = error instanceof ClaudeProjectSetupError
             ? error.message
@@ -1045,7 +1073,7 @@ function createClaudeCodeAdapter({
         const observer = installClaudeSkillObserver(project);
         const inventory = buildPreExecutionInventory({
           projectRoot: project,
-          skillNames: context.packageSkills,
+          skillNames: stagedSkills,
           relativePathFor: (name) => `.claude/skills/${name}/SKILL.md`,
         });
         const environment = createSanitizedEnvironment(observer.logPath);
@@ -1083,7 +1111,7 @@ function createClaudeCodeAdapter({
             cwd: project,
             env: environment,
             encoding: 'utf8',
-            input: `/${invocation.skill}\n\n${invocation.prompt}`,
+            input: sessionPrompt(invocation, context),
             timeout: timeoutMs,
             killSignal: 'SIGKILL',
             maxBuffer: MAX_OUTPUT_BYTES,
