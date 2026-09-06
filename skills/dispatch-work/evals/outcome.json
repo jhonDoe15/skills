@@ -1,0 +1,102 @@
+{
+  "skill_name": "dispatch-work",
+  "version": 1,
+  "evaluation": {
+    "scope": "dispatch-work-outcome",
+    "layer": "outcome",
+    "skill": "dispatch-work",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "dispatch-work-outcome-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "moving-frontier",
+        "description": "The outcome starts independent eligible tickets concurrently and starts newly unblocked work on completion events rather than fixed barriers."
+      },
+      {
+        "id": "reviewed-result-integrity",
+        "description": "Only complete authoritative reviewed-ticket results advance dependencies; ordinary success never bypasses Take Ticket stages."
+      },
+      {
+        "id": "aggregate-synthesis",
+        "description": "Completed-frontier synthesis consumes compact handoffs and Review briefs, records systematic concerns, and does not repeat Code Review."
+      },
+      {
+        "id": "replay-state",
+        "description": "The retained artifact carries recomputable fingerprints, scheduling, ordered worktree isolation evidence, scoped PR actions, partial failures, synthesis dispositions, and final state for deterministic inspection."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "staggered-newly-unblocked-outcome",
+      "name": "staggered completion advances moving frontier",
+      "prompt": "/dispatch-work\n\nRun the explicitly authorized published ready fixture DAG against the sandboxed repository, tracker, PR, and CI boundaries. Ticket A completes before unrelated C; B depends only on A and D depends on B and C.",
+      "expected_output": "A and C start concurrently, B starts immediately after A's complete reviewed-ticket result while C remains active, and D starts only after B and C complete. Retained synthesis and final state are replayable.",
+      "files": [
+        "test/fixtures/dispatch-work/completed-dispatch.json",
+        "test/fixtures/dispatch-work/resumed-dispatch.json",
+        "test/fixtures/dispatch-work/retained-reviewed-ticket-A.json",
+        "test/fixtures/dispatch-work/canonical-reviewed-ticket.json",
+        "test/fixtures/dispatch-work/collision-dispatch.json",
+        "test/fixtures/dispatch-work/hardened-partial-dispatch.json",
+        "test/fixtures/dispatch-work/held-dispatch.json",
+        "test/fixtures/dispatch-work/mixed-frontier-dispatch.json",
+        "test/fixtures/dispatch-work/published-dag-adapter.js",
+        "test/fixtures/dispatch-work/take-ticket-adapter.js",
+        "test/fixtures/dispatch-work/pr-maintenance-adapter.js",
+        "test/fixtures/dispatch-work/reviewed-ticket-A.json",
+        "test/fixtures/dispatch-work/reviewed-ticket-B.json",
+        "test/fixtures/dispatch-work/reviewed-ticket-C.json",
+        "test/fixtures/dispatch-work/reviewed-ticket-D.json",
+        "test/fixtures/dispatch-work/repository/app.txt",
+        "test/fixtures/dispatch-work/sandbox/tracker.json",
+        "test/fixtures/dispatch-work/sandbox/pr.json",
+        "test/fixtures/dispatch-work/sandbox/ci.json"
+      ],
+      "artifact_checks": [
+        "moving-frontier",
+        "reviewed-lifecycle",
+        "synthesis-timing",
+        "replay-state",
+        "observed-effects"
+      ],
+      "required_skill_loads": [
+        "dispatch-work",
+        "take-ticket",
+        "take-it-offline",
+        "code-review",
+        "implement",
+        "review-coordinator",
+        "review-worker",
+        "engineering-guidance",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "Treatment and No-Skill arms use matched fresh sessions over the same small repository and sandboxed boundaries.",
+        "The treatment retains explicit authorization and published ready DAG identity.",
+        "Resume recomputes retained and current fingerprints, rejects stale, partial, or mismatched evidence, preserves terminal decisions, and skips only resolved complete authoritative lifecycle work bound to the exact ticket.",
+        "Executor precedence, collision deferrals, and ordered worktree isolation evidence remain inspectable without changing DAG edges.",
+        "A and C start concurrently; B starts after A completes and before C completes; D waits for both B and C.",
+        "Every dependency transition cites a complete authoritative reviewed-ticket completion.",
+        "PR maintenance is limited to exact separately authorized repository/action/target tuples without cross-pairing; denied authorization produces no attempted mutation at the bounded test Adapter.",
+        "A failed frontier item blocks its dependents while unrelated work completes and retryable and human-decision states remain distinct.",
+        "Synthesis rejects duplicate evidence ownership and uses only current-or-prior synthesized implementation handoff and Review brief references from at least two ticket identities for every systematic concern, without repeating per-ticket review.",
+        "Generated campaign evidence remains uncommitted."
+      ]
+    }
+  ]
+}

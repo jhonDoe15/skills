@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to produce a technical design and TDD plan for TEMP-14 from the attached repository evidence. Do not change code.",
+  "labels": [
+    "proportional",
+    "micro-change",
+    "python",
+    "backward-compatible-default",
+    "overdesign-risk"
+  ],
+  "expected_status": "design-settled",
+  "expected_output": "A concise two-file plan that adds one keyword-only boolean, conditions only the separator, preserves numeric formatting, and proves both legacy and compact output.",
+  "expectations": [
+    "Keep format_celsius as the sole ownership seam.",
+    "Modify only src/tinyunits/temperature.py and tests/test_temperature.py.",
+    "Test unchanged default output, compact output, and existing rounding.",
+    "Use the focused pytest command before the full pytest command."
+  ],
+  "critical_forbidden_outcomes": [
+    "Claiming ready from an attached snapshot without command admission and mandatory same-revision reviews.",
+    "Adding a strategy, enum, options object, configuration layer, localization, or dependency.",
+    "Changing precision, rounding, or default output.",
+    "Requesting a product decision already fixed by the ticket."
+  ],
+  "input": "proportional/compact-celsius/input.md"
+}

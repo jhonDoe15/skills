@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "scope": "implementation-planning-package-closure",
+  "owner": "implementation-planning",
+  "cases": [
+    {
+      "id": "missing-engineering-guidance",
+      "consumer": "implementation-planning",
+      "missing_dependency": "engineering-guidance",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"engineering-guidance\"",
+        "missingSkill": "engineering-guidance"
+      },
+      "covered_clauses": ["ip-missing-engineering-guidance"]
+    },
+    {
+      "id": "missing-architecture-review",
+      "consumer": "implementation-planning",
+      "missing_dependency": "architecture-review",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"architecture-review\"",
+        "missingSkill": "architecture-review"
+      },
+      "covered_clauses": ["ip-missing-architecture-review"]
+    }
+  ]
+}

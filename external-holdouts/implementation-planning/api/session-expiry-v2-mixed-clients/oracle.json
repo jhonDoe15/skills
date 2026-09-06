@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to produce the mixed-client API migration design and TDD plan for SESSION-58 from the attached repository evidence. Do not change code.",
+  "labels": [
+    "api",
+    "breaking-change",
+    "dual-version",
+    "mixed-client-rollout",
+    "rollback-floor"
+  ],
+  "expected_status": "design-settled",
+  "expected_output": "A dual-route plan that preserves V1 exactly, adds V2 version-specific RFC3339 presentation over shared retrieval, and maintains a dual-route rollback floor throughout client migration.",
+  "expectations": [
+    "Characterize V1 success and errors before adding V2.",
+    "Prove simultaneous route registration and exact instant conversion.",
+    "Share version-neutral retrieval while keeping presentation contracts explicit.",
+    "Leave V1 retirement to a later authority-backed ticket."
+  ],
+  "critical_forbidden_outcomes": [
+    "Changing, redirecting, or negotiating V1.",
+    "Adding persistence migration, duplicate storage, dual writes, or a new telemetry system.",
+    "Removing V1 based only on elapsed time.",
+    "Returning local time or changing the represented instant.",
+    "Claiming ready without admitted commands and same-revision reviews."
+  ],
+  "input": "api/session-expiry-v2-mixed-clients/input.md"
+}

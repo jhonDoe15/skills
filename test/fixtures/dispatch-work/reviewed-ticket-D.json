@@ -1,0 +1,58 @@
+{
+  "schema": "fixture-reviewed-ticket/v1",
+  "ticket": "D",
+  "status": "complete",
+  "authority": "reviewed-ticket",
+  "invocation": {
+    "ticket": "D",
+    "skill": "take-ticket",
+    "sequence": 14,
+    "status": "succeeded"
+  },
+  "completion": {
+    "ticket": "D",
+    "sequence": 15,
+    "status": "complete",
+    "authority": "reviewed-ticket"
+  },
+  "phases": [
+    {
+      "name": "implementation",
+      "status": "completed",
+      "range": {
+        "base": "1111111111111111111111111111111111111111",
+        "head": "2222222222222222222222222222222222222222"
+      },
+      "artifact": "artifact://implement/D.json"
+    },
+    {
+      "name": "full-review",
+      "status": "completed",
+      "range": {
+        "base": "1111111111111111111111111111111111111111",
+        "head": "2222222222222222222222222222222222222222"
+      },
+      "artifact": "artifact://review/D.json"
+    },
+    {
+      "name": "correction",
+      "required": true,
+      "status": "completed",
+      "range": {
+        "base": "2222222222222222222222222222222222222222",
+        "head": "3333333333333333333333333333333333333333"
+      },
+      "artifact": "artifact://correction/D.json"
+    },
+    {
+      "name": "targeted-re-review",
+      "required": true,
+      "status": "completed",
+      "range": {
+        "base": "2222222222222222222222222222222222222222",
+        "head": "3333333333333333333333333333333333333333"
+      },
+      "artifact": "artifact://targeted-review/D.json"
+    }
+  ]
+}

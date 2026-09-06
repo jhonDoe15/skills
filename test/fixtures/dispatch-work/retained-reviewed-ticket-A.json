@@ -1,0 +1,18 @@
+{
+  "schema": "dispatch-retained-reviewed-ticket/v1",
+  "ticket": "A",
+  "result_reference": "fixture://canonical-reviewed-ticket/A",
+  "invocation": {
+    "ticket": "A",
+    "skill": "take-ticket",
+    "status": "succeeded",
+    "reference": "artifact://take-ticket/invocation/A.json"
+  },
+  "completion": {
+    "ticket": "A",
+    "status": "complete",
+    "authority": "reviewed-ticket",
+    "result_reference": "fixture://canonical-reviewed-ticket/A",
+    "reference": "artifact://take-ticket/completion/A.json"
+  }
+}

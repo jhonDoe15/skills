@@ -1,0 +1,39 @@
+# Skill Evaluation contracts
+
+`suite/evaluation/index.js` is the host-neutral evaluation module for the
+canonical suite. It keeps evaluation behavior behind one interface while host
+Adapters own project setup, execution, normalization, and cleanup.
+
+The module provides:
+
+- matched treatment and No-Skill execution after canonical package closure;
+- paired complete-consumer and dependency-ablated component execution through
+  the existing test-only Adapter seam;
+- versioned definition, run-evidence, and judgment-evidence schemas;
+- deterministic lower-gate enforcement before seeded blind comparison;
+- execution, output, comparison, and complete-record fingerprints;
+- fail-closed resume assessment, outcome/component replay, and trigger replay;
+- report-only Adoption report rendering.
+
+Production package closure always runs against the unmodified canonical graph
+before either matched arm or a component ablation. A missing dependency reports
+its exact canonical name. The evaluator never converts that failure into a
+No-Skill or ablated arm. Each component case declares `ablated_dependency` in
+the versioned definition; the campaign fingerprint covers that identity, and
+execution and replay reject retained arms that name a different dependency.
+
+`replayCampaign` and `replayTriggerCampaign` accept retained JSON values and
+have no host or judge callback. They validate complete cells, fingerprints,
+deterministic grades, activation boundaries, judgments, and tracer scope.
+Thresholds are enforced independently for every host/model cell. Trigger
+replay requires its retained manifest and definition whenever the authoritative
+definition declares trigger cases. `buildAdoptionReport` renders those replay
+results, including the exact retained run and judgment fingerprints behind its
+verdict and costs, but does not write them or make a suite release decision.
+Outcome reports retain No-Skill/Treatment labels. Component reports identify
+the complete consumer, dependency-ablated control, and declared dependency.
+
+The Incident Investigation runner is the first live tracer. It stages the
+canonical Incident Investigation package in pristine projects and retains
+shared evidence. Claude Code and Cursor transports remain separate production
+Adapter implementations.

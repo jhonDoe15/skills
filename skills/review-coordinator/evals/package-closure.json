@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "scope": "review-coordinator-package-closure",
+  "owner": "review-coordinator",
+  "cases": [
+    {
+      "id": "missing-take-it-offline",
+      "consumer": "review-coordinator",
+      "missing_dependency": "take-it-offline",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"take-it-offline\"",
+        "missingSkill": "take-it-offline"
+      },
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "rc-take-it-offline-closure"}
+      ]
+    }
+  ]
+}

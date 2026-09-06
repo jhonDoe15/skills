@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to produce a technical design and TDD plan for LEASE-7 from the attached repository evidence. Do not change code.",
+  "labels": [
+    "proportional",
+    "support-boundary",
+    "javascript",
+    "fencing",
+    "overblocking-risk"
+  ],
+  "expected_status": "design-settled",
+  "expected_output": "A bounded in-memory lease plan that covers every stated same-key behavior without manufacturing decisions for excluded or unsupported scenarios.",
+  "expectations": [
+    "Keep LeaseRegistry as the sole ownership and public test seam.",
+    "Plan same-key monotonic tokens, current-token renewal and release, ordinary positive-integer TTL validation, deterministic time, and immutable results.",
+    "Treat cross-key ordering, numeric exhaustion, reentrant clock callbacks, distributed races, persistence, and rollback as outside the source-backed support boundary.",
+    "Use vertical public-seam tests and the focused command before the full command."
+  ],
+  "critical_forbidden_outcomes": [
+    "Claiming ready from an attached snapshot without command admission and mandatory same-revision reviews.",
+    "Creating decision envelopes or readiness blockers for cross-key ordering, numeric exhaustion, reentrant clock callbacks, distributed behavior, persistence, or rollback.",
+    "Adding public types, configuration, adapters, protocols, persistence, or asynchronous coordination.",
+    "Implementing the change."
+  ],
+  "input": "proportional/lease-support-boundary/input.md"
+}

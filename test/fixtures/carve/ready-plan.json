@@ -1,0 +1,83 @@
+{
+  "schema": "slice-plan/v2",
+  "status": "ready",
+  "migration_strategy": "normal",
+  "migration": {
+    "prefactor_ticket_ids": [],
+    "expansion_ticket_id": null,
+    "migration_groups": [],
+    "contraction_ticket_id": null
+  },
+  "requirements": [
+    {
+      "id": "REQ-1",
+      "text": "Store each account's preferred time zone."
+    },
+    {
+      "id": "REQ-2",
+      "text": "Return the preference through the account API."
+    },
+    {
+      "id": "REQ-3",
+      "text": "Do not change notification scheduling in this migration."
+    }
+  ],
+  "coverage_ledger": [
+    {
+      "requirement_id": "REQ-1",
+      "disposition": "covered",
+      "ticket_ids": ["T1", "T2"],
+      "reason": "The schema prerequisite and write path jointly deliver storage."
+    },
+    {
+      "requirement_id": "REQ-2",
+      "disposition": "covered",
+      "ticket_ids": ["T2"],
+      "reason": "The vertical API ticket exposes the stored preference."
+    },
+    {
+      "requirement_id": "REQ-3",
+      "disposition": "excluded",
+      "ticket_ids": [],
+      "reason": "The source requirement explicitly preserves scheduling behavior."
+    }
+  ],
+  "tickets": [
+    {
+      "id": "T1",
+      "title": "Add the account time-zone column",
+      "outcome": "The database can persist an optional account time zone.",
+      "seam": "account database schema",
+      "shape": "prerequisite",
+      "in_scope": ["Add the nullable column and migration verification."],
+      "out_of_scope": ["Read or write the field through the API."],
+      "acceptance": ["A migrated database accepts the new column."],
+      "validation": ["Run the migration integration test."],
+      "blockers": [],
+      "consumes": [],
+      "collisions": []
+    },
+    {
+      "id": "T2",
+      "title": "Expose account time-zone preferences",
+      "outcome": "Clients can save and read an account time-zone preference.",
+      "seam": "account API",
+      "shape": "vertical",
+      "in_scope": ["Add API validation, persistence, and response serialization."],
+      "out_of_scope": ["Change notification scheduling."],
+      "acceptance": ["The account API round-trips a valid IANA time zone."],
+      "validation": ["Run the account API integration test."],
+      "blockers": ["T1"],
+      "consumes": [
+        {
+          "ticket_id": "T1",
+          "output": "The migrated account table with the optional time-zone column."
+        }
+      ],
+      "collisions": []
+    }
+  ],
+  "lineage": [],
+  "decisions": [],
+  "initial_frontier": ["T1"]
+}

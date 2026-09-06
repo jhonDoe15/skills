@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "expected_tickets": [
+    "01-json-export",
+    "02-csv-export"
+  ],
+  "ticket_graph": [
+    {
+      "id": "01-json-export",
+      "blockers": [],
+      "collisions": []
+    },
+    {
+      "id": "02-csv-export",
+      "blockers": [],
+      "collisions": []
+    }
+  ],
+  "commands": [
+    "node --test test/*.test.js",
+    "node --test /hidden/hidden.oracle.cjs"
+  ],
+  "allowed_paths": [
+    "src/order.js",
+    "src/export-orders-as-json.js",
+    "src/export-orders-as-csv.js",
+    "test/order.test.js",
+    "test/export-orders-as-json.test.js",
+    "test/export-orders-as-csv.test.js"
+  ],
+  "requirements": [
+    "independently importable JSON export",
+    "independently importable RFC 4180-compatible CSV export",
+    "public field projection",
+    "input order and immutability",
+    "non-array input rejection"
+  ],
+  "maximum_review_findings": {
+    "blocker": 0,
+    "major": 0
+  }
+}

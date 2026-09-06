@@ -1,0 +1,140 @@
+{
+  "skill_name": "implementation-planning",
+  "version": 1,
+  "evaluation": {
+    "scope": "implementation-planning-trigger",
+    "layer": "trigger",
+    "skill": "implementation-planning",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 5,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0,
+    "randomization_seed": "implementation-planning-trigger-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "Use exact Skill lifecycle evidence for every routing assertion.",
+    "dimensions": [
+      {
+        "id": "planning_selection",
+        "description": "Implementation Planning activates for direct or canonical requests to settle one implementation ticket's technical design and TDD plan before code."
+      },
+      {
+        "id": "outcome_boundaries",
+        "description": "Ticket decomposition, code implementation, debugging, one-off technical advice, post-implementation review, and broad product planning retain their own outcomes."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "canonical-implementation-planning",
+      "name": "canonical blueprint request",
+      "prompt": "/implementation-planning\n\nCreate the reviewed technical design and TDD test plan for this bounded implementation ticket before code.",
+      "expected_output": "Implementation Planning, canonical Architecture Review support, and Engineering Guidance load for the planning outcome.",
+      "files": [],
+      "expectations": [
+        "implementation-planning activates through exact canonical invocation.",
+        "architecture-review loads as its declared shared-quality dependency.",
+        "engineering-guidance loads as its declared dependency."
+      ],
+      "should_trigger": true,
+      "canonical_invocation": true,
+      "required_skill_loads": ["architecture-review", "engineering-guidance"],
+      "covered_clauses": ["ip-canonical-routing"]
+    },
+    {
+      "id": "ambient-ticket-blueprint",
+      "name": "ambient implementation blueprint request",
+      "prompt": "For synthetic ticket CACHE-17, decide where refresh ownership and failure handling belong, then sequence the red-green tests another agent should follow before changing code.",
+      "expected_output": "Implementation Planning owns the requested pre-code blueprint.",
+      "files": [],
+      "expectations": [
+        "implementation-planning loads for the pre-code design and test-planning request."
+      ],
+      "should_trigger": true,
+      "required_skill_loads": ["architecture-review", "engineering-guidance"],
+      "covered_clauses": ["ip-ambient-routing"]
+    },
+    {
+      "id": "ticket-decomposition-exclusion",
+      "name": "ticket decomposition exclusion",
+      "prompt": "Split these broad requirements into a dependency-aware set of implementation tickets.",
+      "expected_output": "Carve owns decomposition and Implementation Planning stays inactive.",
+      "files": [],
+      "expectations": [
+        "implementation-planning does not replace ticket decomposition."
+      ],
+      "should_trigger": false,
+      "covered_clauses": ["ip-decomposition-exclusion"]
+    },
+    {
+      "id": "implementation-exclusion",
+      "name": "code implementation exclusion",
+      "prompt": "Implement this ready blueprint in the isolated worktree using TDD.",
+      "expected_output": "Implement owns the patch and Implementation Planning stays inactive.",
+      "files": [],
+      "expectations": [
+        "implementation-planning does not perform code implementation."
+      ],
+      "should_trigger": false,
+      "covered_clauses": ["ip-implementation-exclusion"]
+    },
+    {
+      "id": "review-exclusion",
+      "name": "post-implementation review exclusion",
+      "prompt": "Review the completed immutable implementation range and report code findings.",
+      "expected_output": "Code Review owns the request and Implementation Planning stays inactive.",
+      "files": [],
+      "expectations": [
+        "implementation-planning does not review implemented code."
+      ],
+      "should_trigger": false,
+      "covered_clauses": ["ip-review-exclusion"]
+    },
+    {
+      "id": "ambiguous-product-planning",
+      "name": "ambiguous broad product plan exclusion",
+      "case_category": "ambiguous",
+      "prompt": "Plan how we should improve customer onboarding next quarter.",
+      "expected_output": "Implementation Planning stays inactive because no bounded implementation ticket or technical outcome exists.",
+      "files": [],
+      "expectations": [
+        "implementation-planning does not activate for broad product planning."
+      ],
+      "should_trigger": false,
+      "covered_clauses": ["ip-product-planning-exclusion"]
+    },
+    {
+      "id": "debugging-exclusion",
+      "name": "debugging exclusion",
+      "prompt": "Debug why synthetic ticket CACHE-17's stale-refresh test hangs under concurrency and identify the root cause. Do not design a new implementation.",
+      "expected_output": "Implementation Planning stays inactive because the request is diagnosis, not a pre-code implementation blueprint.",
+      "files": [],
+      "expectations": [
+        "implementation-planning does not activate for debugging an existing failure."
+      ],
+      "should_trigger": false,
+      "covered_clauses": ["ip-debugging-exclusion"]
+    },
+    {
+      "id": "one-off-advice-exclusion",
+      "name": "one-off technical advice exclusion",
+      "prompt": "Give me quick advice: should this helper take a clock parameter, and what one unit test should I add? Do not produce an implementation blueprint.",
+      "expected_output": "Implementation Planning stays inactive because isolated design or test advice is not the combined blueprint outcome.",
+      "files": [],
+      "expectations": [
+        "implementation-planning does not activate for one-off technical advice."
+      ],
+      "should_trigger": false,
+      "covered_clauses": ["ip-one-off-advice-exclusion"]
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to produce the online migration design and TDD plan for WEATHER-64 from the attached repository evidence. Do not change code.",
+  "labels": [
+    "migration",
+    "online-repartition",
+    "cassandra",
+    "dual-write",
+    "ttl-preservation"
+  ],
+  "expected_status": "design-settled",
+  "expected_output": "An expand-migrate-cutover-contract plan using a day-partitioned shadow table, retry-safe dual writes, throttled TTL-preserving backfill, parity gates, UTC-day fan-out reads, and seven-day rollback protection.",
+  "expectations": [
+    "Partition the new table by station and UTC observation day while retaining immutable observation identity.",
+    "Write both layouts before acknowledging Kafka and let replay converge idempotently.",
+    "Backfill resumably at 200 rows per second while preserving each row's remaining TTL.",
+    "Query every UTC day intersecting the 48-hour interval, merge newest-first, bound time exactly, and deduplicate by observation ID.",
+    "Retain dual writes and old storage through the rollback window."
+  ],
+  "critical_forbidden_outcomes": [
+    "Altering the primary key in place or dropping old storage in this ticket.",
+    "Resetting historical TTL during backfill.",
+    "Assuming cross-layout atomicity or acknowledging after only one required write.",
+    "Querying a fixed two day partitions.",
+    "Claiming ready without admitted commands, performance proof, and same-revision reviews."
+  ],
+  "input": "migration/weather-observation-repartition/input.md"
+}

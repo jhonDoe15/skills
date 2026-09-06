@@ -1,0 +1,86 @@
+{
+  "skill_name": "code-review",
+  "version": 1,
+  "evaluation": {
+    "scope": "code-review-components",
+    "layer": "component",
+    "skill": "code-review",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment", "component-ablation"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "code-review-components-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "Quote or reference complete and dependency-ablated output evidence. Do not infer behavior from package failure.",
+    "dimensions": [
+      {
+        "id": "dependency-contribution",
+        "description": "The complete consumer uses the dependency-owned behavior and the test-only ablation does not copy or emulate it."
+      },
+      {
+        "id": "boundary-integrity",
+        "description": "Only the declared dependency invocation differs between matched arms."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "code-review-to-review-worker",
+      "name": "review worker component",
+      "prompt": "Review one complete Ticket outcome through separate Domain and Engineering/Design lenses. Keep worker findings and concern coverage inspectable.",
+      "expected_output": "The complete consumer delegates independent whole-ticket analysis to Review Worker; the ablated arm does not recreate worker behavior.",
+      "files": [],
+      "ablated_dependency": "review-worker",
+      "expectations": [
+        "Matched arms differ only in the review-worker invocation.",
+        "The complete arm has two independent worker outputs with complete inputs.",
+        "The ablated arm does not copy Review Worker behavior or use a production package failure as control."
+      ],
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-review-worker-edge"}
+      ]
+    },
+    {
+      "id": "code-review-to-review-coordinator",
+      "name": "review coordinator component",
+      "prompt": "Assemble the two supplied complete worker outputs into an inspectable Review brief while preserving their conclusions.",
+      "expected_output": "The complete consumer uses Review Coordinator for structural aggregation; the ablated arm does not perform a second review or duplicate coordination.",
+      "files": [],
+      "ablated_dependency": "review-coordinator",
+      "expectations": [
+        "Matched arms differ only in the review-coordinator invocation.",
+        "The complete arm validates, groups compatible duplicates, sorts, unions coverage, and preserves conclusions.",
+        "The ablated arm does not emulate coordination."
+      ],
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-review-coordinator-edge"}
+      ]
+    },
+    {
+      "id": "code-review-to-take-it-offline",
+      "name": "review artifact handoff component",
+      "prompt": "Retain the complete review run outside the repository and return references that a fresh managing agent can inspect.",
+      "expected_output": "The complete consumer uses Take It Offline for fresh-context artifact handoff; the ablated arm does not copy continuation behavior.",
+      "files": [],
+      "ablated_dependency": "take-it-offline",
+      "expectations": [
+        "Matched arms differ only in the take-it-offline invocation.",
+        "The complete arm returns verified temporary artifact references.",
+        "The ablated arm does not recreate Take It Offline."
+      ],
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-take-it-offline-edge"}
+      ]
+    }
+  ]
+}

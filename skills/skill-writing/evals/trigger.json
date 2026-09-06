@@ -1,0 +1,132 @@
+{
+  "skill_name": "skill-writing",
+  "version": 1,
+  "evaluation": {
+    "scope": "skill-writing-trigger",
+    "layer": "trigger",
+    "skill": "skill-writing",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 5,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 1,
+    "randomization_seed": "skill-writing-trigger-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "routing",
+        "description": "Selects Skill Writing for creating or revising Agent Skills and respects its specialized exclusions and canonical invocation."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "skill-writing-positive",
+      "name": "create-agent-skill",
+      "prompt": "Create an Agent Skill for recurring deployment triage, including SKILL.md and evaluation cases.",
+      "expected_output": "Skill Writing activates for creating an Agent Skill.",
+      "files": [],
+      "expectations": [
+        "The host records Skill Writing and its canonical dependency closure."
+      ],
+      "covered_clauses": ["sw-routing-positive"],
+      "should_trigger": true,
+      "required_skill_loads": [
+        "agent-writing",
+        "writing-foundation",
+        "skill-mechanics",
+        "skill-evaluation"
+      ]
+    },
+    {
+      "id": "skill-writing-revision",
+      "name": "revise-agent-skill",
+      "prompt": "Revise this existing Agent Skill so its trigger boundaries and completion criteria are observable.",
+      "expected_output": "Skill Writing activates for revising an Agent Skill.",
+      "files": [],
+      "expectations": [
+        "The host records Skill Writing and its canonical dependency closure."
+      ],
+      "covered_clauses": ["sw-routing-positive"],
+      "should_trigger": true,
+      "required_skill_loads": [
+        "agent-writing",
+        "writing-foundation",
+        "skill-mechanics",
+        "skill-evaluation"
+      ]
+    },
+    {
+      "id": "skill-writing-agent-artifact-exclusion",
+      "name": "general-agent-artifact-exclusion",
+      "prompt": "Write an operating procedure for an automation agent; this is not an Agent Skill package.",
+      "expected_output": "Skill Writing stays inactive because Agent Writing owns general agent-facing artifacts.",
+      "files": [],
+      "expectations": [
+        "The host does not record Skill Writing activation."
+      ],
+      "covered_clauses": ["sw-routing-agent-artifact-exclusion"],
+      "should_trigger": false
+    },
+    {
+      "id": "skill-writing-handoff-exclusion",
+      "name": "fresh-context-handoff-exclusion",
+      "prompt": "Prepare a handoff that lets a fresh agent context continue this work.",
+      "expected_output": "Skill Writing stays inactive because Take It Offline owns fresh-context handoffs.",
+      "files": [],
+      "expectations": [
+        "The host does not record Skill Writing activation."
+      ],
+      "covered_clauses": ["sw-routing-handoff-exclusion"],
+      "should_trigger": false
+    },
+    {
+      "id": "skill-writing-install-exclusion",
+      "name": "skill-installation-exclusion",
+      "prompt": "Install the existing incident-investigation Skill into my user Skill directory.",
+      "expected_output": "Skill Writing stays inactive because installation is not Skill authoring.",
+      "files": [],
+      "expectations": [
+        "The host does not record Skill Writing activation."
+      ],
+      "covered_clauses": ["sw-routing-installation-exclusion"],
+      "should_trigger": false
+    },
+    {
+      "id": "skill-writing-publication-exclusion",
+      "name": "skill-publication-and-marketplace-exclusion",
+      "prompt": "Publish the existing Skill to our marketplace without changing its behavior or representation.",
+      "expected_output": "Skill Writing stays inactive because publication and marketplace operations are separate requests.",
+      "files": [],
+      "expectations": [
+        "The host does not record Skill Writing activation."
+      ],
+      "covered_clauses": ["sw-routing-publication-exclusion"],
+      "should_trigger": false
+    },
+    {
+      "id": "skill-writing-canonical",
+      "name": "canonical-direct-invocation",
+      "prompt": "/skill-writing\n\nCreate a small Agent Skill from this decided recurring behavior.",
+      "expected_output": "Direct canonical invocation selects Skill Writing and its dependency closure.",
+      "files": [],
+      "expectations": [
+        "The host records invocation of Skill Writing by its canonical name."
+      ],
+      "covered_clauses": ["sw-routing-canonical"],
+      "should_trigger": true,
+      "required_skill_loads": [
+        "agent-writing",
+        "writing-foundation",
+        "skill-mechanics",
+        "skill-evaluation"
+      ],
+      "canonical_invocation": true
+    }
+  ]
+}

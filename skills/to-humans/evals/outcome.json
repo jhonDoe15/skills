@@ -1,0 +1,73 @@
+{
+  "skill_name": "to-humans",
+  "version": 1,
+  "evaluation": {
+    "scope": "to-humans-outcome",
+    "layer": "outcome",
+    "skill": "to-humans",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "to-humans-outcome-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every assertion and dimension, the blind judge must quote or reference specific output evidence. Labels or unsupported conclusions are not evidence.",
+    "dimensions": [
+      {
+        "id": "decision_quality",
+        "description": "Checks a distinct recommendation, basis, material uncertainty, and change condition with source-correct proposition meaning."
+      },
+      {
+        "id": "reader_effort",
+        "description": "Checks answer-first ordering, clarity, scan structure, and non-hollow prose without requiring fixed headings."
+      },
+      {
+        "id": "fidelity",
+        "description": "Checks source-grounded facts, polarity, direction, uncertainty, requested breadth, and non-prose work products."
+      },
+      {
+        "id": "natural_voice",
+        "description": "Checks contextual voice without filler, token stuffing, or standardized prose."
+      }
+    ]
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "evals": [
+    {
+      "id": "complete-human-decision",
+      "name": "complete human-facing deployment decision",
+      "prompt": "Recommend a deployment approach to the release owner. A staged rollout has verified rollback. It starts with a limited first cohort, which contains exposure. Peak traffic remains untested. The noon load test passes when p95 latency stays under 200 ms; a passing result supports moving to full deployment, while a miss means keeping the staged rollout. Include the basis, the untested condition that matters, and what result would change the recommendation.",
+      "expected_output": "The treatment provides a complete source-grounded human-facing decision, while the matched No-Skill control receives the same scenario without writing Skills.",
+      "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
+      "expectations": [
+        "Answer first: the recommendation appears before supporting detail.",
+        "The recommendation explicitly chooses a deployment approach.",
+        "The basis correctly links verified rollback and contained exposure to the staged rollout and limited first cohort.",
+        "Material uncertainty clearly states that peak traffic remains untested.",
+        "The change condition preserves the supplied pass/fail, under/over 200 ms, and staged/full deployment direction.",
+        "Recommendation, basis, material uncertainty, and change condition each have distinct substantive evidence.",
+        "Source-grounded proposition meaning remains correct under alternate wording.",
+        "Clarity is non-hollow and free of repeated tokens, keyword soup, or field labels without substance.",
+        "The treatment contains no em dash."
+      ],
+      "covers": [
+        "matched-no-skill-control",
+        "decision-support",
+        "answer-first",
+        "requested-breadth",
+        "no-em-dash"
+      ],
+      "forbidden_patterns": ["—"]
+    }
+  ]
+}

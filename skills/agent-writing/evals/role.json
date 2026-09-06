@@ -1,0 +1,80 @@
+{
+  "skill_name": "agent-writing",
+  "version": 1,
+  "evaluation": {
+    "scope": "agent-writing-role",
+    "layer": "role",
+    "skill": "agent-writing",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "agent-writing-role-v1"
+  },
+  "signals": {
+    "aw-artifact-name": ["deploy-status\\.json"],
+    "aw-terminology": ["`?DAG frontier`?"],
+    "aw-input-mode": ["`?read-only`?"],
+    "aw-environment-source": ["`?environment`?"]
+  },
+  "global_required_signals": [
+    "aw-artifact-name",
+    "aw-terminology",
+    "aw-input-mode",
+    "aw-environment-source"
+  ],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "agent-executability",
+        "description": "Semantically assess whether activation, intended outcome, success and failure branches, missing-input behavior, and completion are executable and observable. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "agent-information-design",
+        "description": "Semantically assess whether failure-only reference stays off the success path, branch authority is co-located, the environment value remains a lookup rather than a cache or persisted fact, and retained prose is relevant. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "agent-writing-owned-contract",
+      "name": "isolated-agent-writing-behavior",
+      "prompt": "Create instructions for a deployment-status agent from the supplied `evals/fixtures/deploy-status-source.json`. It activates after deploy-status.json appears, reports the canonical `DAG frontier` state, follows a success or failure branch without changing the file, reads retry limits from the environment, and finishes only after reporting the observed status. Keep branch-only troubleshooting reference off the success path. Return an executable procedure; headings and labels are optional.",
+      "expected_output": "An executable agent-facing contract with an observable trigger and outcome, explicit branches, ordered steps separate from reference, conditional disclosure, co-located authority, exact terminology and read-only semantics, environment lookups, failure behavior, pruning, and terminal checks.",
+      "files": ["evals/fixtures/deploy-status-source.json"],
+      "expectations": [
+        "The deterministic gate establishes only the exact source literals deploy-status.json, DAG frontier, read-only, and environment.",
+        "The blind judge assesses activation, intended outcome, branch predicates, ordered actions, missing-input behavior, and completion.",
+        "The blind judge verifies that failure-only reference is disclosed only on failure and remains off the success path.",
+        "The blind judge verifies that the retry limit remains an environment lookup instead of a cached or persisted value.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness.",
+        "Failed critical mechanical gates are non-overridable."
+      ],
+      "covered_clauses": [
+        "aw-accepted-context",
+        "aw-activation",
+        "aw-intended-outcomes",
+        "aw-branches",
+        "aw-completion",
+        "aw-steps-reference",
+        "aw-branch-disclosure",
+        "aw-co-located-authority",
+        "aw-instruction-form",
+        "aw-context-load",
+        "aw-behavioral-pruning",
+        "aw-terminology",
+        "aw-execution-semantics",
+        "aw-environment-source",
+        "aw-failure-behavior"
+      ],
+      "required_signals": []
+    }
+  ]
+}

@@ -1,169 +1,190 @@
 # skills
 
-One Claude Code plugin with eight agent skills:
+Version 1.0.0 release candidate for one atomic 23-Skill suite. Install the
+package as a unit. Partial or domain-only subsets are not release candidates.
 
-- **Lean** — model-invoked writing guidance for response density and shape.
-- **`ticket-scope`** — internal model-invoked evaluation of cohesive, independently verifiable ticket and PR units.
-- **`/carve`** — explicitly invoked to size a spec-derived ticket set so each piece fits one main subagent.
-- **`pr-carver`** — model-invoked PR size and structure guidance for parallel and stacked pull requests.
-- **`/dispatch-work`** — explicitly invoked to run an already-sized tracker in parallel and carry each piece through implementation, review, and PR approval.
-- **`/incident-investigation`** — explicitly invoked, investigation-only guidance for evidence-led production incident and hard-to-localize bug analysis.
-- **`agents-file-writer`** — model-invoked guidance for private and project-scoped agent files.
-- **`maintaining-agent-guidance`** — model-invoked final-change gate for durable agent-guidance updates.
+The suite covers project agent guidance, human and agent writing, ticket
+planning, implementation planning, implementation, architecture and code
+review, DAG dispatch, and explicit read-only incident investigation.
+`to-humans` is an Audience outcome
+selected independently from substantive Primary outcomes. Artifact flow does
+not create an invocation dependency.
 
-Lean, ticket-scope, pr-carver, agents-file-writer, and maintaining-agent-guidance
-are selected automatically by the model when their descriptions match the work.
-Carve, dispatch-work, and incident-investigation run only when the user invokes
-them.
+`carve` turns authoritative requirements into either a validated ready ticket
+DAG or a needs-decision plan. It publishes only after separate authorization.
+
+## Canonical inventory
+
+Public Primary outcomes:
+
+- `agent-writing`
+- `agents-file-writer`
+- `architecture-review`
+- `carve`
+- `code-review`
+- `dispatch-work`
+- `engineering-guidance`
+- `implement`
+- `implementation-planning`
+- `incident-investigation`
+- `pr-carver`
+- `skill-writing`
+- `take-it-offline`
+- `take-ticket`
+
+Public Audience outcome:
+
+- `to-humans`
+
+Private dependency Modules:
+
+- `maintaining-agent-guidance`
+- `review-coordinator`
+- `review-worker`
+- `skill-evaluation`
+- `skill-mechanics`
+- `slice-plan`
+- `ticket-scope`
+- `writing-foundation`
+
+`skills/` is the only package source. The repository contains no host-specific
+copies, generated variants, symlinked definitions, or compatibility aliases.
+`lean` was replaced by `to-humans` and is not shipped.
 
 ## Install
 
-As a Claude Code plugin:
+The three external prerequisites are not bundled or installed automatically:
 
-```
+- `autopilot`, consumed by `dispatch-work` and `pr-carver`
+- `split-to-prs`, consumed by `pr-carver`
+- `tdd`, consumed by `implement`
+
+Their source, tested content revision, license status, and consumers are pinned
+in `suite/canonical-suite.json`.
+
+Install the Claude Code plugin:
+
+```text
 /plugin marketplace add jhonDoe15/skills
-/plugin install lean@jhonDoe15
+/plugin install skills@jhonDoe15
 ```
 
-Or with the `skills` CLI, for any agent that reads `SKILL.md`:
-
-```
-npx skills add -g jhonDoe15/skills    # ~/.claude/skills — every project
-npx skills add jhonDoe15/skills       # ./.claude/skills — this project only
-```
-
-`-g` installs the skills for your user. Without it, they are installed into the
-current repository. Lean uses normal model skill selection and needs no hook or
-generated card setup.
-
-The repository layout supports both installers: each skill lives under
-`skills/<name>/SKILL.md`, while `.claude-plugin/` exposes the tree as one
-Claude Code marketplace plugin.
-
-The workflow skills reference companion skills when their branches are used:
-`/to-tickets`, `/to-spec`, `/grill-with-docs`, `/wayfinder`, `/implement`,
-`/code-review`, `/tdd`, `/handoff`, `/autopilot`, and `/split-to-prs`. Install
-those separately in the host that runs the workflows.
-
-### Upgrading from hook/card releases
-
-If an older installation registered Lean's `UserPromptSubmit` or `PostCompact`
-hook, or wrote Lean's generated card into `AGENTS.md` or another always-loaded
-rule file, remove those stale entries when upgrading. Current Lean uses normal
-model skill discovery and registers no hook or card.
-
-## Lean — response density and shape
-
-Lean optimises the reader's scanning time, not raw token count. It compresses
-depth, never breadth: if an answer touches eight things, it names all eight and
-reduces only the elaboration around each.
-
-Failures, skipped steps, assumptions, and unverified claims are never
-compressed away. Neither is the work product: density governs the conversation,
-not requested code, docs, reports, or files.
-
-Lean shapes output for skimming: answer first, sets as lists with identifiers
-leading, content grouped by what the reader must act on, and no ceremony on a
-short answer.
-
-The density levels are `terse`, `default`, and `full`. The model chooses the
-level from the request and the detail the reader needs.
-
-## `ticket-scope` — shared unit evaluation
-
-Ticket-scope is the shared internal evaluator used by carve and pr-carver. It
-checks outcome, seam, shape, acceptance, validation, uncertainty, risk,
-breadth, blockers, and collisions. Vertical slices are preferred; constrained
-layered slices are valid when a real contract or migration order requires them.
-
-## `agents-file-writer` — scoped agent guidance
-
-Agents-file-writer creates, migrates, and refines private or project-scoped
-agent guidance. It derives rules from observed failures, preserves
-non-derivable facts during migrations, and moves subject-specific detail behind
-triggered references so broad instruction files stay focused.
-
-## `maintaining-agent-guidance` — final-change guidance gate
-
-Maintaining-agent-guidance runs once when a substantial project change reaches a
-stable finish or merge boundary. It ignores routine changes and code-derivable
-facts, then dispatches one isolated worker to use agents-file-writer when the
-change introduced durable agent-facing knowledge.
-
-## `/carve` — size the work
-
-Carve layers sizing and collision coordination onto a spec-derived ticket set.
-It uses ticket-scope first, then requires each resulting piece to fit one main
-subagent. Work that does not fit is split; an open design choice or risk
-boundary is flagged for a human. Related pieces record dependencies and
-shared-resource collisions so dispatch-work can parallelise safely.
-
-Invoke `/carve` explicitly after the work has been reduced to a spec and ticket
-set.
-
-## `pr-carver` — size and structure PRs
-
-PR Carver independently measures additions and deletions and raises size-watch
-bands at 500 and 1000 changed lines. It uses ticket-scope to recommend
-independent PRs first, then GitHub native stacked PRs, ordinary stacked Git
-PRs, hybrid combinations, or one PR when splitting adds no value. Keeping a
-Band 3 PR as one unit requires confirmation; branch and PR mutations always
-require authorization.
-
-## `/dispatch-work` — run the tracker
-
-Dispatch-work takes an already-carved tracker and keeps a small batch of
-independent pieces in flight. Each piece is implemented, independently
-reviewed, and babysat through PR approval in separate subagent contexts.
-Invoking it again resumes from live tracker, branch, and PR state.
-
-Invoke `/dispatch-work` explicitly.
-
-Carve and dispatch-work use the repository model policy when one exists.
-Otherwise they read `subagent.model` and `subagent.effort` from the active
-`lean.config.json`. Those values apply to every implementation, review, and
-PR-babysitting spawn; there is no routing ladder. Lean, ticket-scope, and
-pr-carver do not read that config.
-
-## `/incident-investigation` — isolate incident causes
-
-Incident-investigation maps the user-visible request path, inventories
-available evidence, narrows the failing boundary with high-information checks,
-and drills from symptoms to a supported causal mechanism. It is read-only:
-mitigation and remediation remain decisions for the authorized owner.
-
-Its eval suite follows Anthropic's `evals/evals.json` core schema and uses one
-dependency-free harness for static validation, explicit/ambient invocation,
-fresh without-skill/with-skill runs, deterministic direction checks, and blind
-LLM judging:
+For Cursor or another Agent Skills host:
 
 ```bash
-node skills/incident-investigation/scripts/run-evals.js --mode static
-node skills/incident-investigation/scripts/run-evals.js --mode all
+npx skills add -g jhonDoe15/skills
+npx skills add jhonDoe15/skills
 ```
 
-The default is static-only and incurs no model cost. Full runs use isolated
-project workspaces, no tools, per-call budgets, and ignored result directories.
+The global form installs for the current user. The project form installs for
+one repository. Both consume the same canonical `skills/` tree. The Claude
+plugin manifest also points directly to `./skills`.
 
-## What was measured
+Before installation, inventory only the project and user discovery roots
+configured for the target host. Stop if a canonical name already has another
+owner, or if a predecessor such as `lean`, `unslop`, `writing-for-agents`,
+`writing-great-skills`, or `handoff` is active. Remove or relocate conflicts
+manually. The package never scans arbitrary user locations and never deletes a
+user-managed installation.
 
-Eighteen paired subagent runs on Claude Opus 5, with and without Lean, across
-nine evals produced chat responses **45–52% shorter at identical coverage**:
-24 of 24 scan findings were named either way, and all six release-note claims
-were verified either way.
+## Validate
 
-On the eval with real breadth pressure, the unaided baseline dropped a finding,
-emitted a YAML block mid-answer, and scored 2/5 against Lean's 5/5.
+Install development dependencies, then run the complete static release gate:
 
-Two limits:
+```bash
+npm ci
+npm test
+```
 
-- A smaller-model breadth eval retained 17 of 24 findings with density guidance
-  and 14 without it. Density guidance helps but cannot overcome a model's
-  capability ceiling.
-- Each eval cell had one run. The length effect was large and consistent across
-  all nine evals; pass-rate differences on easier evals were not
-  distinguishable from noise.
+The package-only precondition is:
 
-## Licence
+```bash
+npm run check:package
+```
 
-MIT — see [LICENSE](LICENSE).
+To reject collisions from a caller-scoped inventory:
+
+```bash
+node scripts/check-package.js --installation-inventory inventory.json
+```
+
+The JSON file is an array of `{ "name": "...", "source": "..." }` records from
+the target host's configured project and user discovery roots. The check
+reports every conflicting owner and predecessor, then exits nonzero.
+
+It verifies the 1.0.0 identity, exact 23-Skill inventory, package-wide
+dependency closure, and component coverage for every declared runtime edge.
+Missing suite-owned dependencies fail with the exact canonical name. Collision
+checks use explicit installation inventories supplied by the caller.
+
+The host evaluation adapters install the complete canonical package in pristine
+Cursor and Claude Code projects. They retain package inventory, discovered
+Skills where the host exposes them, requested and resolved Skills, lifecycle
+events, responses, artifacts, tool use, attempted mutations, model identity,
+duration, cost, and failure state. Component ablation remains available only
+through the test Adapter boundary.
+
+The release candidate is ready for the separate 23-Skill adoption campaign.
+Static package validation does not claim that the paid cross-host campaign or
+human adoption decision has run.
+
+Prepare the guarded campaign without creating host or judge clients:
+
+```bash
+cp adoption-campaign.config.example.json /tmp/adoption-campaign.json
+# Replace every placeholder with HEAD and exact available model selections.
+npm run adoption -- plan --config /tmp/adoption-campaign.json
+```
+
+Every model is configured as `{ "id": "...", "params": [...] }`. Keep Claude
+Code host and judge `params` empty. For Cursor, use `Cursor.models.list()` for
+the executing API key and configure every parameter declared by the exact
+catalog model ID; parameter IDs and values are account-scoped and must not be
+inferred from aliases or defaults. Parameter order is normalized
+deterministically, while every explicit value remains part of the campaign and
+evidence fingerprints.
+
+Structured selections use adoption artifact schema v2 and evaluation retained
+evidence schema v3. Plans, acknowledgements, run indexes, and evidence produced
+by earlier schema versions must be regenerated because they did not retain
+parameter-level model identity.
+
+The plan output prints its exact fingerprint, initial call count, configured
+cost ceiling, and the acknowledgement required by `run`. `replay` and `packet`
+use only retained evidence. The packet leaves the final go/no-go decision
+explicitly pending human adjudication.
+
+Focused external holdouts use a separate partial-assessment plan and the
+materialized `external-holdouts/implementation-planning/manifest.json` corpus:
+
+```bash
+npm run adoption -- plan --config /tmp/adoption-campaign.json \
+  --external-holdouts \
+  --case proportional/compact-celsius \
+  --model-cell claude-code:ordinary
+npm run adoption -- run --plan .artifacts/adoption/<fingerprint>/plan.json \
+  --acknowledge-paid-execution '<value printed by plan>'
+npm run adoption -- replay --plan .artifacts/adoption/<fingerprint>/plan.json
+npm run adoption -- packet --plan .artifacts/adoption/<fingerprint>/plan.json
+```
+
+`--case`, `--domain`, `--host`, and `--model-cell` are repeatable plan-time
+selectors. Values within a selector category are unioned and categories
+intersect; the sealed plan fixes the exact cases and cells for run/replay.
+Focused artifacts are always labeled `partial-holdout-assessment` and cannot
+satisfy canonical release or adoption gates. Cursor cells can be planned, but
+paid Cursor execution is blocked by default because the SDK has no enforceable
+per-run budget cap. Only `run` accepts
+`--allow-unbounded-cursor-execution`; its run index retains the exception, and
+resume requires the same exception policy. Focused runs stage only the resolved
+runtime Skill closure and immutable input bytes; oracle content remains
+runner/judge side.
+
+## Evidence and source material
+
+Reusable evaluation cases, schemas, test Adapters, validators, rubrics, and
+source fixtures stay versioned. Generated package checks, reviews, transcripts,
+model runs, temporary workspaces, evaluation output, and reports stay ignored.
+
+See `THIRD_PARTY_NOTICES.md` for pinned sources, licenses, and affected suite
+Modules. The package is MIT licensed. See `LICENSE`.

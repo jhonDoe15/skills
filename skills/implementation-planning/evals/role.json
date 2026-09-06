@@ -1,0 +1,573 @@
+{
+  "skill_name": "implementation-planning",
+  "version": 1,
+  "evaluation": {
+    "scope": "implementation-planning-role",
+    "layer": "role",
+    "skill": "implementation-planning",
+    "hosts": [
+      "claude-code",
+      "cursor"
+    ],
+    "arms": [
+      "no-skill",
+      "treatment"
+    ]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "implementation-planning-role-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [
+      0,
+      2
+    ],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every assertion and dimension, quote or reference concrete ticket, repository, technical-design, test-plan, review, or publication evidence.",
+    "dimensions": [
+      {
+        "id": "grounded_design",
+        "description": "The technical design separates controlling authority, mechanical constraints, descriptive base-bound repository evidence, and mandatory quality defaults while tracing requirements, ownership, interfaces, invariants, lifecycle scenarios, affected symbols, and bounded implementation slices."
+      },
+      {
+        "id": "architecture_quality",
+        "description": "Each affected module and the whole blueprint show a supported consumer contract, coherent ownership and locality, earned depth, real seams, justified dependency direction, and proportional vertical change using ticket and repository evidence rather than doctrine labels."
+      },
+      {
+        "id": "effective_behavioral_coverage",
+        "description": "Every supported consumer action, requirement, interface promise, invariant, compatibility promise, and applicable lifecycle, effect, or failure risk has a discriminating proof, justified non-test proof, evidenced not-applicable disposition, or explicit blocker with independently derived expected values."
+      },
+      {
+        "id": "authority_control",
+        "description": "Every source-observable in-scope ambiguity and required contract or capability gap names its owner. Each is either settled by controlling authority plus verified capability evidence or retained as an unranked decision envelope. Unobserved implementation freedom and unsupported or pathological extensions remain non-design-bounded within a source-backed support boundary rather than becoming manufactured blockers. Option-varying in-scope work stays in a non-executable decision matrix."
+      },
+      {
+        "id": "executable_test_plan",
+        "description": "The TDD plan uses approved seams, green characterization locks, ordered vertical red-green slices, exact commands, deterministic effects, and complete requirement/invariant traceability."
+      },
+      {
+        "id": "adversarial_review",
+        "description": "Independent Spec, Standards, Architecture, mandatory Uncle Bob/Clean Architecture, mandatory John Ousterhout/APOSD, and required specialist lenses review the same revision; uncertain interfaces receive materially different alternatives before central integration and fresh re-review."
+      },
+      {
+        "id": "finding_disposition",
+        "description": "Every credible in-scope finding is integrated regardless of size, severity, or pre-existing status. The only other dispositions are disproved with stronger evidence, source-backed out-of-scope, or readiness-blocking needs-decision."
+      },
+      {
+        "id": "lossless_finding_accounting",
+        "description": "Every source finding retains identity and conclusion, compatible groups preserve all source IDs, disagreements remain separate, PASS means zero findings, and each source receives exactly one evidence-backed disposition and closure."
+      },
+      {
+        "id": "tier_and_boundary_control",
+        "description": "Model routing follows residual uncertainty, low-tier briefs stop on hidden decisions, code remains unchanged, and only the authorized implementation ticket may receive the canonical blueprint."
+      },
+      {
+        "id": "executor_readiness",
+        "description": "Ready status is granted only when every implementation slice is settled, all proof commands are safely admitted for headless execution, and a fresh implementation agent can start from the ticket and immutable base without hidden setup or invented design."
+      },
+      {
+        "id": "agent_navigability",
+        "description": "The plan keeps production artifacts dual-audience while making bounded cohesive artifacts, distinctive domain names, language-appropriate contracts/types, predictable paths, contextual diagnostics, noninteractive idempotent setup, and durable rationale navigable without arbitrary size, coverage, or search-result thresholds."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "reviewed-blueprint-role",
+      "name": "reviewed technical and TDD planning role",
+      "prompt": "Plan synthetic implementation ticket PAY-42 from the attached immutable repository snapshot before any code is written. Produce a reviewed implementation blueprint for a fresh low-cost implementation agent. Do not edit repository files, branches, or pull requests.",
+      "expected_output": "The planner identifies the concurrency and crash windows, chooses durable request identity, atomic reservation or uniqueness, and gateway idempotency at the payment boundary, then derives an executable vertical TDD plan and publishes one ready blueprint only after all lenses pass the same revision.",
+      "files": [
+        "evals/fixtures/payment-retry.md"
+      ],
+      "required_skill_loads": [
+        "implementation-planning",
+        "engineering-guidance"
+      ],
+      "expectations": [
+        "The mandatory engineering baseline is loaded and every guideline receives an artifact-specific applicability disposition before review, even when repository authority is absent, weak, or stale.",
+        "The authority ledger keeps controlling authority, mechanical constraints, descriptive repository evidence, and quality defaults distinct for every affected path.",
+        "Every repository citation is verified at the immutable base, and search closure covers symbols, callers, effects, configuration, schemas, tests, documentation, similar copies, proposed-name collisions, and meaningful no-hit results as applicable.",
+        "The initial complete immutable Architecture Review brief supplies covered discovery evidence; independent Spec, Standards, Architecture, and specialist investigations fill only named gaps before design authoring.",
+        "Architecture separately covers dynamic lifecycle/concurrency behavior and static ownership/seam structure, assigning a separate reviewer to each concern when either is high-risk.",
+        "A separate Uncle Bob/Clean Architecture reviewer runs on every blueprint and grounds SOLID and Clean Architecture findings in concrete ticket and repository evidence.",
+        "A separate John Ousterhout/APOSD reviewer runs on every blueprint and applies its explicit complexity, deep-module, information-hiding, complexity-downward, pass-through, temporal-decomposition, abstraction-level, error-elimination, consistency, obviousness, and design-comment principles to concrete evidence.",
+        "The retry seam and late-settlement lifecycle receive at least three materially different designs; the selected design closes both concurrent read-before-insert duplicates and crash-after-gateway-acceptance ambiguity.",
+        "The selected design owns durable request identity at the payment boundary, uses an atomic uniqueness or reservation mechanism, and propagates requestId as the gateway idempotency key.",
+        "The technical design names ownership, invariants, interfaces, lifecycle paths, compatibility, exact change areas, and ordered slices.",
+        "Lifecycle and effect categories map to executable scenarios or evidence-backed not-applicable dispositions, and no material assumption survives into ready.",
+        "Effectful or variable dependencies use deliberate injection seams, and duplicated knowledge or policy has one authoritative owner without speculative abstraction.",
+        "Non-obvious constraints name a durable rationale destination, provenance source, and revalidation or removal condition.",
+        "The TDD plan starts with existing green locks and then covers sequential retry, concurrent retry, gateway acceptance followed by local failure, gateway failure, and public-result compatibility through ordered vertical red-green slices.",
+        "Every proof command records source, working directory, prerequisites, services or credentials, duration/output, headless suitability, and a safe noninteractive, nonmutating planning-time smoke check whose worktree state is compared before and after.",
+        "Every requirement and invariant maps to a test or justified non-test proof.",
+        "Every rabbit hole is retired with falsifying evidence or proof; a material-unresolved rabbit hole blocks ready status.",
+        "Production artifacts remain dual-audience and are planned as bounded cohesive artifacts with distinctive searchable domain names, language-appropriate explicit contracts/types, predictable paths, contextual diagnostics, agent-runnable noninteractive idempotent setup, and durable rationale without fixed size, coverage, or grep thresholds.",
+        "After each correction pass, the complete integrated blueprint is reread before the next revision identity or review dispatch.",
+        "Investigation and review records preserve identity, requested and resolved model or tier, fresh or resumed context, and immutable evidence base.",
+        "Every credible in-scope finding is integrated and mapped to proof regardless of size, severity, or pre-existing status.",
+        "Every other finding is disproved with stronger evidence, source-backed out-of-scope, or readiness-blocking needs-decision; no deferred or nice-to-have disposition exists.",
+        "Fresh Spec, Standards, dynamic and static Architecture, Uncle Bob/Clean Architecture, and John Ousterhout/APOSD review passes the same final revision with evidence-bearing zero-finding coverage; Architecture Review owns the artifact-to-activity mapping: review for existing code and design for technical designs.",
+        "Only the authorized ticket is mutated, and the final instructions start implementation in a fresh isolated context."
+      ],
+      "covered_clauses": [
+        "ip-ground-inputs",
+        "ip-engineering-baseline",
+        "ip-tier-routing",
+        "ip-independent-discovery",
+        "ip-technical-design",
+        "ip-design-it-twice",
+        "ip-tdd-plan",
+        "ip-fresh-rereview",
+        "ip-mandatory-clean-architecture",
+        "ip-mandatory-ousterhout",
+        "ip-fix-or-block-findings",
+        "ip-ticket-publication",
+        "ip-fresh-implementation-context"
+      ]
+    },
+    {
+      "id": "minor-finding-must-integrate",
+      "name": "credible minor finding cannot be deferred",
+      "prompt": "Review a draft implementation blueprint whose required Uncle Bob reviewer reports F-minor: an in-scope pre-existing responsibility leak in a file already changed by the ticket. The finding cites the exact source lines, mandatory baseline guideline, maintenance consequence, safe correction, and acceptance proof. It is labeled Minor and nice-to-have because the fix is small and not named by an acceptance criterion. Dispose the finding and determine blueprint readiness.",
+      "expected_output": "The credible in-scope Minor finding is integrated into the design, implementation slices, and proof plan; its size, pre-existing status, and nice-to-have label do not permit deferral.",
+      "files": [],
+      "required_skill_loads": [
+        "implementation-planning",
+        "engineering-guidance"
+      ],
+      "expectations": [
+        "F-minor retains its source identity, evidence, severity, confidence, scope, correction, and acceptance proof.",
+        "The finding receives integrated disposition and revision-linked closure.",
+        "No deferred, nice-to-have, optional, superseded, or won't-fix disposition is created.",
+        "Ready status is withheld until the corrected revision receives every mandatory fresh review PASS."
+      ],
+      "covered_clauses": [
+        "ip-fix-or-block-findings",
+        "ip-source-finding-retention",
+        "ip-no-severity-deferral"
+      ]
+    },
+    {
+      "id": "credible-claim-uncertain-correction",
+      "name": "uncertain correction blocks readiness",
+      "prompt": "Review a blueprint finding whose claim is supported by direct source and test evidence, but two incompatible fix directions remain and neither has sufficient evidence. The finding is within the ticket specification. Determine its disposition without selecting or postponing a correction.",
+      "expected_output": "The supported claim remains visible, the uncertain fix direction receives needs-decision, and the blueprint cannot be ready until the choice is resolved and rereviewed.",
+      "files": [],
+      "required_skill_loads": [
+        "implementation-planning",
+        "engineering-guidance"
+      ],
+      "expectations": [
+        "Finding confidence and fix-direction confidence remain distinct.",
+        "The source finding receives needs-decision with the exact unresolved choice and owner.",
+        "The blueprint is not ready and does not use deferred, optional, or out-of-scope as an escape.",
+        "Needs-decision status does not waive mandatory review: request every required lens to assess authority handling, decision envelopes, decision-independent work, and blocker routing. Completed reviews return evidence-bearing PASS or concrete findings; unavailable, failed, or partial reviews record INCOMPLETE with cause, owner, and recovery condition and block ready."
+      ],
+      "covered_clauses": [
+        "ip-fix-direction-confidence",
+        "ip-needs-decision-blocks-ready"
+      ]
+    },
+    {
+      "id": "lossless-finding-accounting",
+      "name": "grouping and PASS remain lossless",
+      "prompt": "Coordinate one blueprint revision with findings F1, F2, and F3. F1 and F2 identify the same problem with compatible severity, confidence, scope, evidence, consequence, and correction. F3 has the same topic but a different affected scope and correction. One reviewer returns PASS with nits containing F3, and a planner proposes marking F3 out-of-scope because it is costly. Return the valid finding accounting and readiness result.",
+      "expected_output": "F1 and F2 may share one correction while retaining both source IDs and dispositions; F3 remains separate, PASS with nits is rejected, cost cannot establish out-of-scope, and readiness remains blocked until F3 is integrated, disproved, source-backed out-of-scope, or needs-decision.",
+      "files": [],
+      "required_skill_loads": [
+        "implementation-planning",
+        "engineering-guidance"
+      ],
+      "expectations": [
+        "Compatible grouping preserves F1 and F2 source identities and gives each one a disposition and closure.",
+        "F3 remains separate because scope and correction disagree.",
+        "PASS with nits is invalid because PASS means zero findings on the exact revision.",
+        "Cost, severity, priority, and optional labels cannot establish out-of-scope.",
+        "Every source finding is accounted for exactly once before ready."
+      ],
+      "covered_clauses": [
+        "ip-source-finding-retention",
+        "ip-compatible-grouping",
+        "ip-disagreement-preservation",
+        "ip-pass-means-zero-findings",
+        "ip-source-backed-scope"
+      ]
+    },
+    {
+      "id": "low-tier-readiness-gates",
+      "name": "low-tier executor receives no hidden guesswork",
+      "prompt": "Assess a candidate ready blueprint in a repository with weak local authority. One repository citation came from a dirty file rather than the named base; a material assumption about an indirect caller remains; the focused test command requires undocumented manual database seeding; and the Standards reviewer returned bare PASS without coverage or evidence IDs. Return the planning status and exact recovery work.",
+      "expected_output": "The blueprint becomes needs-decision until evidence is rebound to the immutable base, search and assumption closure are complete, the command has verified noninteractive setup or a named prerequisite, and Standards supplies evidence-bearing zero-finding PASS on the corrected revision.",
+      "files": [],
+      "required_skill_loads": [
+        "implementation-planning",
+        "engineering-guidance"
+      ],
+      "expectations": [
+        "Dirty or drifting source content is not accepted as immutable-base evidence.",
+        "The material caller assumption remains needs-decision until falsified or verified.",
+        "Hidden human setup or an unverified command leaves the slice unsettled.",
+        "Bare PASS is invalid without coverage IDs, evidence IDs, searches or diagnostics, contrary evidence considered, and unresolved none.",
+        "The recovery plan preserves the mandatory baseline and persona reviews.",
+        "Needs-decision status does not waive mandatory review: request every required lens to assess authority handling, decision envelopes, decision-independent work, and blocker routing. Completed reviews return evidence-bearing PASS or concrete findings; unavailable, failed, or partial reviews record INCOMPLETE with cause, owner, and recovery condition and block ready."
+      ],
+      "covered_clauses": [
+        "ip-base-bound-evidence",
+        "ip-search-and-assumption-closure",
+        "ip-command-admission",
+        "ip-evidence-bearing-pass",
+        "ip-low-tier-handoff"
+      ]
+    },
+    {
+      "id": "unavailable-ticket-publication",
+      "name": "unavailable publication returns exact target draft",
+      "prompt": "Plan implementation ticket CACHE-22 through final reviewed readiness, but the ticket writer is unavailable and no ticket mutation is authorized. Return the result without editing code or claiming a publication.",
+      "expected_output": "The planner returns the complete canonical blueprint draft and names CACHE-22 as the exact publication target while explicitly reporting that publication was unavailable.",
+      "files": [],
+      "required_skill_loads": [
+        "implementation-planning",
+        "engineering-guidance"
+      ],
+      "expectations": [
+        "The complete proposed blueprint is returned with both normative plans and the exact target ticket CACHE-22.",
+        "The response states that publication was unavailable and does not claim that the ticket was updated.",
+        "No repository or ticket mutation is attempted.",
+        "The final integrated draft is reread before its revision identity and return."
+      ],
+      "covered_clauses": [
+        "ip-ticket-publication-unavailable",
+        "ip-exact-target-draft",
+        "ip-post-write-reread"
+      ]
+    },
+    {
+      "id": "zero-downtime-column-migration",
+      "name": "expand-contract migration planning",
+      "prompt": "Plan synthetic implementation ticket PROFILE-9 from the attached immutable repository snapshot before code is written. Produce the zero-downtime technical design, rollout plan, and executable TDD plan without changing code or the public API.",
+      "expected_output": "The planner chooses an additive expand-and-contract migration, mixed-version-compatible reads and writes, restartable backfill, rollback proof, and a later destructive cleanup phase.",
+      "files": [
+        "evals/fixtures/profile-column-migration.md"
+      ],
+      "required_skill_loads": [
+        "implementation-planning",
+        "engineering-guidance"
+      ],
+      "expectations": [
+        "The plan rejects in-place rename or immediate full_name removal because old and new versions overlap.",
+        "The expansion phase adds nullable display_name before application rollout.",
+        "The compatibility phase reads display_name with full_name fallback and writes both columns while old versions remain.",
+        "The backfill is bounded, restartable, and idempotent rather than an unqualified full-table update.",
+        "The public { id, displayName } result and rollback to the old application remain valid.",
+        "Dropping full_name is a later contract phase gated on old-version and rollback retirement.",
+        "The TDD plan covers old, new, and mixed rows, dual writes, restartable backfill, mixed-version rollout, and rollback.",
+        "Every implementation slice names exact repository, migration, backfill, and test areas without modifying them during planning."
+      ],
+      "covered_clauses": [
+        "ip-technical-design",
+        "ip-data-movement",
+        "ip-compatibility",
+        "ip-tdd-plan",
+        "ip-risk-retirement"
+      ]
+    },
+    {
+      "id": "payment-retry-design-path",
+      "name": "retry and crash-window design decisions",
+      "prompt": "Choose the implementation path for synthetic ticket PAY-42 from the attached immutable repository snapshot. Resolve the concurrency and crash-window design, identify exact code areas and TDD scenarios, and report evidence that still blocks readiness. Do not change code.",
+      "expected_output": "The planner chooses gateway idempotency plus database-enforced request uniqueness and canonical result convergence, rejects unsafe local-only alternatives, and preserves unverified operational details as readiness blockers.",
+      "files": [
+        "evals/fixtures/payment-retry.md"
+      ],
+      "required_skill_loads": [
+        "implementation-planning",
+        "engineering-guidance"
+      ],
+      "expectations": [
+        "The design identifies concurrent read-before-insert duplication and crash-after-gateway-acceptance ambiguity.",
+        "The design propagates requestId as the gateway idempotency key on the first attempt and retries.",
+        "The SQL store owns an atomic unique operation that converges callers on one canonical result per requestId.",
+        "The existing Promise<{ chargeId, status }> result remains unchanged.",
+        "Rejected alternatives explain why a single-layer or caller-owned solution fails to close both failure windows.",
+        "The TDD plan covers existing result, normal capture, sequential retry, concurrent retry, gateway rejection, and persistence failure after gateway acceptance.",
+        "The change map names payment service, SQL store, schema migration, service tests, and SQL integration tests without modifying them.",
+        "Unknown gateway replay guarantees, duplicate-row migration policy, and SQL integration commands remain explicit readiness blockers."
+      ],
+      "covered_clauses": [
+        "ip-technical-design",
+        "ip-dynamic-behavior",
+        "ip-tdd-plan",
+        "ip-risk-retirement"
+      ]
+    },
+    {
+      "id": "cache-refresh-design-path",
+      "name": "bounded cache refresh design decisions",
+      "prompt": "Choose the implementation path for synthetic ticket CACHE-17 from the attached immutable repository snapshot. Resolve refresh ownership, timing, concurrency, failure behavior, code areas, and deterministic TDD scenarios. Report evidence that still blocks readiness and do not change code.",
+      "expected_output": "The planner chooses process-local per-key single-flight refresh ownership inside MemoryCache, deterministic time control, bounded stale behavior, and observable failure handling while preserving the public API.",
+      "files": [
+        "evals/fixtures/cache-refresh.md"
+      ],
+      "required_skill_loads": [
+        "implementation-planning",
+        "engineering-guidance"
+      ],
+      "expectations": [
+        "MemoryCache retains ownership of refresh acceptance and process-local per-key in-flight state.",
+        "The get(key, loader) signature and Promise<Value> result remain unchanged.",
+        "A deliberate clock seam and controllable loaders replace real sleeps and Date.now-dependent tests.",
+        "Fresh, stale-through-30-seconds, and too-old paths have explicit boundary behavior.",
+        "Concurrent stale and too-old reads for one key share one refresh, while different keys remain independent.",
+        "Background failure retains stale data, uses the existing logger contract, cleans in-flight state, and avoids unhandled rejection.",
+        "The TDD plan covers boundaries, concurrency, threshold crossing, success, failure, retry, cleanup, and compatibility.",
+        "Missing logger details and command smoke evidence block readiness instead of being invented."
+      ],
+      "covered_clauses": [
+        "ip-technical-design",
+        "ip-dynamic-behavior",
+        "ip-dependency-injection",
+        "ip-tdd-plan",
+        "ip-risk-retirement"
+      ]
+    },
+    {
+      "id": "proportional-simple-change",
+      "name": "proportional pure-function planning",
+      "prompt": "Plan synthetic ticket SLUG-4 from the attached immutable repository snapshot. Produce the smallest maintainable implementation and TDD plan without changing code.",
+      "expected_output": "The planner keeps the change inside the existing pure function and table-driven tests without inventing abstractions, dependencies, configuration, or unrelated work.",
+      "files": [
+        "evals/fixtures/simple-slug-normalization.md"
+      ],
+      "required_skill_loads": [
+        "implementation-planning",
+        "engineering-guidance"
+      ],
+      "expectations": [
+        "The design preserves normalizeSlug(value) and its string result while using one direct normalization pipeline.",
+        "The behavior remains limited to ASCII trimming, lowercasing, and separator-run collapse.",
+        "Table-driven tests cover surrounding whitespace, uppercase, repeated spaces, repeated hyphens, mixed separators, and normalized input.",
+        "Only src/normalize-slug.js and test/normalize-slug.test.js are implementation change areas.",
+        "No module, class, interface, injection seam, configuration, dependency, migration, or integration test is proposed.",
+        "Mandatory reviews stay proportional and unavailable command evidence is not invented.",
+        "Settled design is not labeled ready and implementation is not started before command-admission, mandatory-review, and finding-closure evidence exist on the same revision.",
+        "Planning does not implement the change."
+      ],
+      "covered_clauses": [
+        "ip-proportional-design",
+        "ip-tdd-plan",
+        "ip-no-speculative-abstraction"
+      ]
+    },
+    {
+      "id": "unimplementable-exactly-once",
+      "name": "impossible delivery guarantee blocks planning",
+      "prompt": "Plan synthetic ticket HOOK-8 from the attached immutable repository snapshot. Determine whether its exactly-once guarantee is implementable and return the correct planning status without changing code.",
+      "expected_output": "The planner proves the supplied events are observationally indistinguishable, blocks readiness, and requests stable event identity or revised delivery semantics.",
+      "files": [
+        "evals/fixtures/webhook-exactly-once.md"
+      ],
+      "required_skill_loads": [
+        "implementation-planning",
+        "engineering-guidance"
+      ],
+      "expectations": [
+        "The plan proves that no supplied value distinguishes a retry from a separate byte-identical event.",
+        "Body hashes, changing headers, process locks, and content-derived database uniqueness are rejected as exact identities.",
+        "The blueprint remains needs-decision and names the owner of the missing contract decision.",
+        "The decision asks for a stable provider identity or an explicitly weaker semantic guarantee.",
+        "A conditional atomic inbox design is described only for the stable-identity branch.",
+        "The public response and existing authentication boundary remain unchanged.",
+        "No executable implementation slices are claimed before the contract decision.",
+        "Needs-decision status does not waive mandatory review: request every required lens to assess authority handling, decision envelopes, decision-independent work, and blocker routing. Completed reviews return evidence-bearing PASS or concrete findings; unavailable, failed, or partial reviews record INCOMPLETE with cause, owner, and recovery condition and block ready."
+      ],
+      "covered_clauses": [
+        "ip-material-unresolved",
+        "ip-needs-decision-blocks-ready",
+        "ip-no-invented-authority"
+      ]
+    },
+    {
+      "id": "ambiguous-timeout-contract",
+      "name": "timeout semantics and cancellation ownership",
+      "prompt": "Plan synthetic ticket EXPORT-12 from the attached immutable repository snapshot. Resolve what can be designed now, identify decisions that block implementation, and do not change code.",
+      "expected_output": "The planner separates timeout result semantics from cooperative cancellation, rejects timer racing as cancellation, and blocks readiness on the unresolved public contract and renderer capability.",
+      "files": [
+        "evals/fixtures/export-timeout-contract.md"
+      ],
+      "required_skill_loads": [
+        "implementation-planning",
+        "engineering-guidance"
+      ],
+      "expectations": [
+        "The plan identifies the conflicting rejection and partial-result caller expectations.",
+        "Timeout outcome remains an unranked needs-decision owned by the requirement owner rather than being guessed.",
+        "Promise.race or a timer is rejected as a cancellation mechanism because renderer work can continue.",
+        "Cancellation capability remains a separate evidence question for the renderer owner; cancellation is not promised before that capability is verified.",
+        "Existing success and renderer-failure behavior become characterization locks.",
+        "Option-varying timeout outcomes stay in a non-executable decision matrix, and timeout-specific red-green slices remain blocked.",
+        "No partial-result type, timeout configuration owner, or executable cancellation design is fabricated.",
+        "Needs-decision status does not waive mandatory review: request every required lens to assess authority handling, decision envelopes, decision-independent work, and blocker routing. Completed reviews return evidence-bearing PASS or concrete findings; unavailable, failed, or partial reviews record INCOMPLETE with cause, owner, and recovery condition and block ready."
+      ],
+      "covered_clauses": [
+        "ip-material-unresolved",
+        "ip-dynamic-behavior",
+        "ip-interface-decision",
+        "ip-needs-decision-blocks-ready"
+      ]
+    },
+    {
+      "id": "ambiguous-pagination-contract",
+      "name": "pagination semantics remain owner decisions",
+      "prompt": "Plan synthetic ticket LIST-21 from the attached immutable repository snapshot. Resolve what can be planned now, preserve unresolved public semantics for their owner, and do not change code.",
+      "expected_output": "The planner records decision envelopes for snapshot-versus-live behavior and datastore capability, then blocks affected design and TDD detail without inventing a cursor protocol.",
+      "files": [
+        "evals/fixtures/pagination-consistency-contract.md"
+      ],
+      "required_skill_loads": [
+        "implementation-planning",
+        "engineering-guidance"
+      ],
+      "expectations": [
+        "The conflicting audit-export and live-feed collection semantics are explicit.",
+        "Snapshot-versus-live behavior is needs-decision and names the requirement owner.",
+        "Cross-request snapshot capability and retention are separate evidence questions for the database owner.",
+        "Alternatives remain unranked at behavior level with no recommended winner; option-varying outcomes stay in a non-executable decision matrix.",
+        "No cursor encoding, collection version, snapshot token, isolation level, schema, or retention period is invented.",
+        "Executable work proceeds before resolution only when its setup, result, timing, effects, cleanup, and production responsibility are identical under every option.",
+        "The blueprint remains blocked and no code is implemented.",
+        "Needs-decision status does not waive mandatory review: request every required lens to assess authority handling, decision envelopes, decision-independent work, and blocker routing. Completed reviews return evidence-bearing PASS or concrete findings; unavailable, failed, or partial reviews record INCOMPLETE with cause, owner, and recovery condition and block ready."
+      ],
+      "covered_clauses": [
+        "ip-authority-gate",
+        "ip-material-unresolved",
+        "ip-interface-decision",
+        "ip-no-invented-authority"
+      ]
+    },
+    {
+      "id": "ambiguous-upload-contract",
+      "name": "upload lifecycle remains owner decisions",
+      "prompt": "Plan synthetic ticket UPLOAD-15 from the attached immutable repository snapshot. Resolve what can be planned now, preserve unresolved public and storage contracts for their owners, and do not change code.",
+      "expected_output": "The planner records decision envelopes for cancellation outcome, retention policy, and storage capability, then blocks affected implementation planning without inventing a protocol.",
+      "files": [
+        "evals/fixtures/upload-cancellation-contract.md"
+      ],
+      "required_skill_loads": [
+        "implementation-planning",
+        "engineering-guidance"
+      ],
+      "expectations": [
+        "The editor cleanup and offline-sync resumability conflict is explicit.",
+        "Cancellation outcome and partial retention are needs-decision and name the requirement owner.",
+        "Abort, resume, and cleanup capability are evidence questions for the storage owner.",
+        "Alternatives remain unranked at behavior level with no recommended winner; option-varying outcomes stay in a non-executable decision matrix.",
+        "No caller mode, result variant, resume token, multipart state, storage method, cleanup job, schema, or retention period is invented.",
+        "Successful-result characterization proceeds only because its setup, result, timing, effects, cleanup, and production responsibility are identical under every option.",
+        "The blueprint remains blocked and no code is implemented.",
+        "Needs-decision status does not waive mandatory review: request every required lens to assess authority handling, decision envelopes, decision-independent work, and blocker routing. Completed reviews return evidence-bearing PASS or concrete findings; unavailable, failed, or partial reviews record INCOMPLETE with cause, owner, and recovery condition and block ready."
+      ],
+      "covered_clauses": [
+        "ip-authority-gate",
+        "ip-material-unresolved",
+        "ip-interface-decision",
+        "ip-no-invented-authority"
+      ]
+    },
+    {
+      "id": "consumer-contract-depth-and-coverage",
+      "name": "consumer contract, module depth, and effective coverage",
+      "prompt": "Plan synthetic ticket CACHE-17 from the attached immutable repository snapshot. Produce a reviewed module architecture and consumer-behavior TDD plan, including evidence for each changed module and the blueprint as a whole. Do not change code.",
+      "expected_output": "The blueprint keeps cache policy local behind the existing consumer interface, proves that each changed module earns its depth and seams, and maps every supported consumer action and lifecycle risk to discriminating proof.",
+      "files": [
+        "evals/fixtures/cache-refresh.md"
+      ],
+      "required_skill_loads": [
+        "implementation-planning",
+        "engineering-guidance"
+      ],
+      "expectations": [
+        "Each supported cache behavior traces consumer, goal, action, interface or seam, and observable result.",
+        "The affected-area scan reports caller bouncing, pass-through or leaked knowledge, locality, test friction, deletion-test results, and contrary evidence without widening the ticket.",
+        "MemoryCache remains the single owner of refresh acceptance, stale policy, and per-key in-flight state; reason-for-change and information-hiding evidence are evaluated separately.",
+        "Every retained or proposed module explains what supported complexity its interface hides and what deleting it would redistribute to consumers.",
+        "Each seam names its semantic contract, owner, composition path, present variation or effect need, applicable adapters, failure translation, and contract proof; a manufactured fake alone does not establish a seam.",
+        "The plan chooses the smallest architecture that preserves get(key, loader), using consumer-observable vertical slices unless a separately proved ordering constraint requires otherwise.",
+        "Every supported action, interface promise, invariant, compatibility promise, and applicable lifecycle, effect, or failure risk maps to a discriminating test, justified non-test proof, evidenced not-applicable disposition, or explicit blocker.",
+        "Expected values are derived independently; duplicate scenarios and implementation-mirroring tests add no effective coverage.",
+        "Current and proposed architecture plus behavior views use the blueprint's module, scenario, and proof terms; unchanged topology is explicitly evidenced rather than embellished.",
+        "Mandatory persona reviews argue from concrete blueprint evidence and contrary evidence; naming Clean Architecture, APOSD, deep modules, or TDD alone earns no finding or pass."
+      ],
+      "covered_clauses": [
+        "ip-supported-consumer-contract",
+        "ip-effective-behavioral-coverage",
+        "ip-coherent-ownership-locality",
+        "ip-earned-depth",
+        "ip-real-seam",
+        "ip-proportional-change"
+      ]
+    },
+    {
+      "id": "incomplete-review-recovery",
+      "name": "unavailable and partial required reviews",
+      "prompt": "Use $implementation-planning to return revision B4 of a bounded blueprint. Spec and both Architecture reviews completed with evidence-bearing PASS. Standards cannot start because its reviewer service is unavailable. The Ousterhout reviewer returned evidence for two claims and then failed before completing coverage. The independent Uncle Bob reviewer is available. Preserve the actual state and provide a recoverable handoff; do not invent review results.",
+      "expected_output": "Returns a needs-decision blueprint with Standards and Ousterhout INCOMPLETE records, preserves completed and partial evidence, runs the available required lens, and names recovery actions. Implementation remains blocked until every required review passes the final revision.",
+      "files": [],
+      "expectations": [
+        "Standards and Ousterhout each have an INCOMPLETE row tied to B4 with the actual cause, owner, and recovery condition; missing provenance is marked unavailable, not invented.",
+        "Retains the partial Ousterhout evidence and completed PASS evidence without converting partial coverage or service failure into findings or PASS.",
+        "Requests the available Uncle Bob review and retains all mandatory and triggered independent lenses despite needs-decision status.",
+        "Blocks ready and implementation-start until incomplete reviews recover and every required lens provides complete evidence-bearing zero-finding PASS on the same final revision."
+      ],
+      "covered_clauses": [
+        "ip-fresh-rereview",
+        "ip-needs-decision-blocks-ready"
+      ],
+      "required_signals": []
+    },
+    {
+      "id": "conditional-baseline-loading",
+      "name": "conditional baseline loading and trigger recovery",
+      "prompt": "Use $implementation-planning to assess baseline applicability for a bounded pure local normalization change over trusted application-generated labels. It changes a consumer-visible result but has no external reachability, identity, sensitive data, I/O, asynchronous operation, production-service objective, schema, or persisted data. Then assess a revised ticket that also migrates a persisted label column during overlapping old/new deployments. Show which baseline references each stage requires and preserve every guideline disposition.",
+      "expected_output": "Dispositions all 12 guidelines at both revisions. The first loads compatibility details (11), leaving security, reliability, and data-migration details unloaded with evidenced non-applicability. The revision additionally loads data-migration details (12), uses their sources and counterweights, and recalculates specialist triggers.",
+      "files": [],
+      "expectations": [
+        "Records an artifact-specific disposition for all 12 mandatory-index guidelines rather than treating conditional disclosure as optional baseline coverage.",
+        "Loads engineering-compatibility.md for the consumer-visible change; does not load engineering-security.md, engineering-reliability.md, or engineering-data-migration.md while their triggers are evidenced absent.",
+        "On the revised persisted-column ticket loads engineering-data-migration.md and compatibility guidance before design/review, retaining source citations, datastore-version verification, contraction ownership, and rollback counterweights.",
+        "Investigates uncertain applicability or records a blocker; it does not skip a reference merely because its trigger is unresolved.",
+        "Preserves all mandatory independent architecture/persona reviews in both revisions."
+      ],
+      "covered_clauses": [
+        "ip-engineering-baseline"
+      ],
+      "required_signals": []
+    },
+    {
+      "id": "retained-architecture-discovery",
+      "name": "reuse complete architecture discovery",
+      "prompt": "Use $implementation-planning with an initial complete Architecture Review brief at the ticket immutable base. Its scope covers all affected modules, consumers, authority, symbols, tests, validation commands, dynamic/static concerns, both persona lenses, findings, and limitations. The sole uncovered obligation is whether prerequisite ticket PRE-8 acceptance evidence authorizes a compatibility exception. Identify the remaining discovery and subsequent review work. If the initial brief instead ended with an incomplete specialist review, state how the handoff changes.",
+      "expected_output": "Reuses the base-bound brief, dispatches only a bounded independent Spec gap investigation for PRE-8, and retains fresh mandatory independent reviews of the proposed design and final blueprint.",
+      "files": [],
+      "expectations": [
+        "Checks the retained brief content identity, immutable base, ticket scope, evidence coverage, and limitations before reusing its completed discovery.",
+        "Dispatches only the named PRE-8 authority gap with sources and a closure condition; does not launch blanket Spec, Standards, or dynamic/static architecture rediscovery.",
+        "Carries retained architecture findings and provenance into the blueprint and preserves unresolved findings for disposition.",
+        "Invokes fresh Architecture Review plus independent Spec, Standards, and triggered specialists against the proposed design revision and again against the final technical-plus-TDD blueprint revision.",
+        "If the initial brief is incomplete, preserves verified partial evidence and recovery blockers, investigates only independent named gaps, and returns needs-decision rather than treating partial coverage as a completed mandatory review."
+      ],
+      "covered_clauses": [
+        "ip-independent-discovery",
+        "ip-fresh-rereview"
+      ],
+      "required_signals": []
+    }
+  ]
+}

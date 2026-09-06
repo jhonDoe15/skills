@@ -1,0 +1,70 @@
+{
+  "skill_name": "implementation-planning",
+  "version": 1,
+  "evaluation": {
+    "scope": "implementation-planning-to-engineering-guidance",
+    "layer": "component",
+    "skill": "implementation-planning",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment", "component-ablation"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "implementation-planning-guidance-component-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "Quote or reference output and lifecycle evidence showing the contribution of canonical Engineering Guidance to the architecture review.",
+    "dimensions": [
+      {
+        "id": "guidance_contribution",
+        "description": "The complete consumer receives source-cited coverage of all nine engineering concerns for the current design revision rather than substituting copied generic advice."
+      },
+      {
+        "id": "planning_ownership",
+        "description": "Engineering Guidance remains advisory while Implementation Planning owns design authoring, findings integration, the test plan, ticket publication, and readiness."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "architecture-review-guidance-ablation",
+      "name": "canonical guidance in architecture review",
+      "prompt": "Create the reviewed implementation blueprint for a bounded cache invalidation ticket. Repository authority, source requirements, current code, and validation commands are available. The Architecture lens must assess responsibilities, dependencies, state, failure, compatibility, and evidence before the blueprint can be ready. Let Architecture Review select the canonical Engineering Guidance activity from the reviewed artifact. Do not change code.",
+      "expected_output": "The complete consumer invokes Architecture Review, which maps existing-code discovery to Engineering Guidance activity review and technical-design review to activity design; the ablated arm cannot replace it and cannot mark the blueprint ready.",
+      "files": [],
+      "expectations": [
+        "Treatment lifecycle records implementation-planning, architecture-review, and engineering-guidance loads; Architecture Review selects activity review for immutable existing-code discovery and activity design for the proposed blueprint.",
+        "The Architecture review receives all nine source-cited concern dispositions for the same blueprint revision.",
+        "Implementation Planning retains ownership of design, test plan, findings integration, and publication.",
+        "Component ablation removes only the declared dependency and fails closed instead of copying guidance."
+      ],
+      "covered_clauses": ["ip-engineering-guidance-edge"],
+      "ablated_dependency": "engineering-guidance",
+      "required_signals": []
+    },
+    {
+      "id": "shared-architecture-quality-ablation",
+      "name": "shared architecture quality in blueprint review",
+      "prompt": "Create the reviewed implementation blueprint for a bounded cache invalidation ticket. Repository authority, source requirements, current code, and validation commands are available. Use the canonical shared Architecture Review quality reference for the six quality claims and four mandatory architecture lenses. Do not copy the reference or change code.",
+      "expected_output": "The complete consumer loads canonical Architecture Review support for shared architecture-quality language; the ablated arm cannot replace it and cannot mark the blueprint ready.",
+      "files": [],
+      "expectations": [
+        "Treatment lifecycle records implementation-planning and architecture-review package loads.",
+        "The blueprint evaluates all six shared architecture-quality claims and all four mandatory architecture lenses.",
+        "Implementation Planning retains ownership of design, test plan, findings integration, and publication.",
+        "Component ablation removes only architecture-review and fails closed instead of copying shared quality guidance."
+      ],
+      "covered_clauses": ["ip-architecture-review-edge"],
+      "ablated_dependency": "architecture-review",
+      "required_signals": []
+    }
+  ]
+}

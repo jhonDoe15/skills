@@ -1,0 +1,72 @@
+{
+  "skill_name": "pr-carver",
+  "version": 1,
+  "evaluation": {
+    "scope": "pr-carver-trigger",
+    "layer": "trigger",
+    "skill": "pr-carver",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 5,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 1,
+    "randomization_seed": "pr-carver-trigger-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "routing",
+        "description": "Selects PR Carver for existing branch or pull-request topology assessment, including exact canonical invocation, and stays inactive for unrelated size-only requests."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "existing-pr-topology",
+      "name": "automatic existing PR assessment",
+      "prompt": "Review this existing pull request's prerequisite edges, migration strategy, mergeable seams, and collisions, then recommend its PR topology without changing it.",
+      "expected_output": "The host records PR Carver and its canonical Ticket Scope dependency.",
+      "files": [],
+      "expectations": [
+        "PR Carver activates for an existing pull-request topology assessment."
+      ],
+      "covered_clauses": ["pc-automatic-activation"],
+      "should_trigger": true,
+      "required_skill_loads": ["ticket-scope"]
+    },
+    {
+      "id": "canonical-pr-carver",
+      "name": "canonical PR Carver request",
+      "prompt": "/pr-carver\n\nAssess this existing branch and recommend read-only PR topology.",
+      "expected_output": "The host records exact canonical PR Carver selection and its Ticket Scope dependency.",
+      "files": [],
+      "expectations": [
+        "PR Carver activates through exact canonical invocation."
+      ],
+      "covered_clauses": ["pc-canonical-activation"],
+      "should_trigger": true,
+      "canonical_invocation": true,
+      "required_skill_loads": ["ticket-scope"]
+    },
+    {
+      "id": "unrelated-size-request",
+      "name": "unrelated size-only request",
+      "prompt": "Shorten this prose document to a fixed number of lines.",
+      "expected_output": "PR Carver remains inactive because no existing branch or pull-request topology is being assessed.",
+      "files": [],
+      "expectations": [
+        "No PR Carver selection or load is attempted."
+      ],
+      "covered_clauses": ["pc-negative-activation"],
+      "should_trigger": false
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to assess CALLBACK-18 from the attached repository evidence. Do not infer an authentication protocol or change code.",
+  "labels": [
+    "security",
+    "authentication",
+    "underspecified-contract",
+    "secret-handling",
+    "decision-envelope"
+  ],
+  "expected_status": "needs-decision",
+  "expected_output": "Separate unranked envelopes for authentication evidence, ingress preservation, credential lifecycle, replay semantics, and failure behavior, while preserving the pre-effect authentication invariant.",
+  "expectations": [
+    "Name behavior and capability owners separately.",
+    "Block verifier interfaces, credential adapters, replay storage, and option-specific tests.",
+    "Allow only characterization of current callback success as descriptive evidence.",
+    "Route owner decisions and capability evidence back into implementation planning.",
+    "Run every mandatory independent reviewer on the needs-decision revision; each returns evidence-bearing PASS or concrete findings about authority handling, decision envelopes, decision-independent work, and blocker routing."
+  ],
+  "critical_forbidden_outcomes": [
+    "Inventing an algorithm, header, certificate mode, canonicalization rule, timestamp, nonce, or failure status.",
+    "Assuming a shared secret because a secret provider exists.",
+    "Parsing or applying the callback before authentication.",
+    "Adding replay storage without a replay contract.",
+    "Marking the blueprint ready or design-settled.",
+    "Recording any mandatory reviewer as pending, not run, or blocked because the blueprint is needs-decision."
+  ],
+  "input": "security/callback-auth-contract-gap/input.md"
+}

@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to design and sequence the TDD work for VIDEO-27 from the attached repository evidence. Do not change code.",
+  "labels": [
+    "concurrency",
+    "lease-fencing",
+    "cancellation",
+    "late-settlement",
+    "crash-window"
+  ],
+  "expected_status": "design-settled",
+  "expected_output": "A lease-fenced state-machine plan using durable attempt epochs, conditional transitions, terminal cancellation, and queue acknowledgement only after durable completion.",
+  "expectations": [
+    "Make the store own atomic claim and matching-epoch completion or failure.",
+    "Advance the epoch when cancellation enters terminal cancelled state.",
+    "Treat AbortSignal as resource control rather than correctness.",
+    "Test concurrent claim, expiry takeover, stale completion, late post-cancel settlement, and completion-before-ack crash deterministically."
+  ],
+  "critical_forbidden_outcomes": [
+    "Allowing a stale worker to overwrite a newer result or resurrect cancelled work.",
+    "Depending solely on in-memory cancellation.",
+    "Rendering again after a durable ready result is redelivered.",
+    "Moving queue retry timing into the rendition module.",
+    "Claiming ready without admitted commands and same-revision reviews."
+  ],
+  "input": "concurrency/video-lease-fencing/input.md"
+}

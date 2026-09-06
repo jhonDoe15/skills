@@ -1,0 +1,76 @@
+{
+  "skill_name": "agents-file-writer",
+  "version": 1,
+  "evaluation": {
+    "scope": "agents-file-writer-outcome",
+    "layer": "outcome",
+    "skill": "agents-file-writer",
+    "hosts": [
+      "claude-code",
+      "cursor"
+    ],
+    "arms": [
+      "no-skill",
+      "treatment"
+    ]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "agents-file-writer-outcome-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [
+      0,
+      2
+    ],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every semantic score, quote or reference concrete output evidence; a valid file shape alone does not prove a complete guidance outcome.",
+    "dimensions": [
+      {
+        "id": "executable-guidance-result",
+        "description": "Assess whether the outcome gives the agent a complete, scoped procedure from discovery through presentation, including Create/Improve/Review classification, source-backed decisions, branch-specific references, and observable completion. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "ownership-and-safety",
+        "description": "Assess whether the outcome preserves applicable facts, protects unrelated worktree state, stops at authorization boundaries, handles collisions and destructive operations, and distinguishes load edges from read-when pointers. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "complete-guidance-maintenance-outcome",
+      "name": "complete repository guidance maintenance",
+      "prompt": "Update the supplied repository's agent guidance for the new deployment workflow. AGENTS.md currently contains the standard test command, a durable prohibition on production data in fixtures, and a long deployment section. docs/deployment.md now owns the deployment procedure, including required rollback evidence; AGENTS.md still names the retired deployment command. CLAUDE.md points to AGENTS.md. The user has approved replacing the duplicated deployment section with a route to its canonical procedure while retaining other rules. All scoped paths are clean, tracked regular files. A separate untracked sketch.md belongs to another task. Produce the revised guidance and a report of the changes and validation.",
+      "expected_output": "A reviewable repository guidance result with an evidence-led workflow, complete migration and mutation accounting, safe authorization boundaries, resolved pointer/load relationships, and verification in effective load order.",
+      "files": [],
+      "required_skill_loads": [
+        "agents-file-writer"
+      ],
+      "expectations": [
+        "The treatment produces an executable project-guidance outcome rather than a generic README or a copied template.",
+        "The outcome classifies Create, Improve, or Review from actual applicable instructions and preserves source-backed ownership, compatibility, workflow, safety, and environment facts.",
+        "Every retained, moved, or deleted section has a ledger disposition and every write has an in-scope mutation manifest entry.",
+        "The outcome checks target collisions, symlinks, Git state, and destructive or scope-expanding operations before writing, while preserving unrelated changes.",
+        "References are routed with explicit read-when triggers and are not described as automatic imports unless the host guarantees that behavior.",
+        "The final result reports effective-load-order verification, tested host/model boundaries, and untested gaps without overstating product or model correctness.",
+        "The matched No-Skill control receives the same task without the package."
+      ],
+      "covered_clauses": [
+        "afw-project-outcome",
+        "afw-scope-classification",
+        "afw-authority-resolution",
+        "afw-lossless-migration",
+        "afw-safe-mutation",
+        "afw-pointer-routing",
+        "afw-completion-evidence"
+      ],
+      "required_signals": []
+    }
+  ]
+}

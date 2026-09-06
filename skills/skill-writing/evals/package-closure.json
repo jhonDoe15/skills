@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "scope": "skill-writing-package-closure",
+  "owner": "skill-writing",
+  "cases": [
+    {
+      "id": "missing-agent-writing",
+      "consumer": "skill-writing",
+      "missing_dependency": "agent-writing",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"agent-writing\"",
+        "missingSkill": "agent-writing"
+      },
+      "covered_clauses": ["sw-missing-dependencies"]
+    },
+    {
+      "id": "missing-skill-evaluation",
+      "consumer": "skill-writing",
+      "missing_dependency": "skill-evaluation",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"skill-evaluation\"",
+        "missingSkill": "skill-evaluation"
+      },
+      "covered_clauses": ["sw-missing-dependencies"]
+    },
+    {
+      "id": "missing-skill-mechanics",
+      "consumer": "skill-writing",
+      "missing_dependency": "skill-mechanics",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"skill-mechanics\"",
+        "missingSkill": "skill-mechanics"
+      },
+      "covered_clauses": ["sw-missing-dependencies"]
+    }
+  ]
+}

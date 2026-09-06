@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to produce the migration design and TDD plan for CATALOG-18 from the attached repository evidence. Do not change code.",
+  "labels": [
+    "migration",
+    "additive-schema",
+    "mysql",
+    "mixed-version",
+    "restartable-backfill"
+  ],
+  "expected_status": "design-settled",
+  "expected_output": "An expand-and-backfill plan with nullable online DDL, explicit new-writer population, bounded idempotent batches, final catch-up after old writers retire, and application-only rollback.",
+  "expectations": [
+    "Add origin_kind as nullable before deploying application code.",
+    "Keep reads and the public response unchanged while new writers store registry.",
+    "Batch deterministically at no more than 500 rows with an origin_kind is null guard.",
+    "Keep the column nullable until old workers and rollback eligibility are retired."
+  ],
+  "critical_forbidden_outcomes": [
+    "Adding NOT NULL, archive behavior, or a destructive contract migration.",
+    "Using one unbounded update or assuming the first pass remains complete.",
+    "Dropping the column during application rollback.",
+    "Changing the OpenAPI response.",
+    "Claiming ready without admitted commands and same-revision reviews."
+  ],
+  "input": "migration/release-origin-kind/input.md"
+}

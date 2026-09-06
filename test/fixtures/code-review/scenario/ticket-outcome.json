@@ -1,0 +1,15 @@
+{
+  "schema": "ticket-outcome/v1",
+  "requirements": ["requirements.md"],
+  "immutable_range": {
+    "base": "1111111111111111111111111111111111111111",
+    "head": "2222222222222222222222222222222222222222"
+  },
+  "implementation_handoff": "implementation-handoff.json",
+  "validation_evidence": ["validation.json"],
+  "diff_package": "diff.patch",
+  "repository_files": [
+    "repository/src/discount.js",
+    "repository/test/discount.test.js"
+  ]
+}

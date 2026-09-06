@@ -1,0 +1,67 @@
+{
+  "skill_name": "carve",
+  "version": 1,
+  "evaluation": {
+    "scope": "carve-trigger",
+    "layer": "trigger",
+    "skill": "carve",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 5,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 1,
+    "randomization_seed": "carve-trigger-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "routing",
+        "description": "Selects Carve only through exact canonical invocation and rejects ambient planning or unresolved-idea activation."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "canonical-carve",
+      "name": "canonical-settled-planning-request",
+      "prompt": "/carve\n\nTurn these settled migration requirements into a ready ticket DAG.",
+      "expected_output": "The host records Carve and its complete canonical dependency closure.",
+      "files": [],
+      "expectations": ["Carve activates through exact canonical invocation."],
+      "covered_clauses": ["cv-canonical-only-activation"],
+      "should_trigger": true,
+      "canonical_invocation": true,
+      "required_skill_loads": [
+        "slice-plan",
+        "ticket-scope",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ]
+    },
+    {
+      "id": "ambient-planning-request",
+      "name": "ambient-settled-planning-request",
+      "prompt": "Turn these settled migration requirements into implementation tickets.",
+      "expected_output": "Carve stays inactive because it requires exact canonical invocation.",
+      "files": [],
+      "expectations": ["The host records no Carve selection or load."],
+      "covered_clauses": ["cv-canonical-only-activation"],
+      "should_trigger": false
+    },
+    {
+      "id": "unsettled-idea",
+      "name": "canonical-unsettled-idea-boundary",
+      "prompt": "I have a vague idea for improving account preferences. Break it into tickets.",
+      "expected_output": "Carve stays inactive because the request is neither canonical nor backed by settled requirements.",
+      "files": [],
+      "expectations": ["The host records no Carve selection or load."],
+      "covered_clauses": ["cv-unsettled-input-exclusion"],
+      "should_trigger": false
+    }
+  ]
+}

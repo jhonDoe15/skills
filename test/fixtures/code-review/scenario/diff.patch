@@ -1,0 +1,17 @@
+diff --git a/src/discount.js b/src/discount.js
+new file mode 100644
+--- /dev/null
++++ b/src/discount.js
+@@ -0,0 +1,12 @@
++'use strict';
++
++function calculateDiscount({ subtotal }) {
++  return subtotal >= 100 ? subtotal * 0.1 : 0;
++}
++
++function quoteOrder(order) {
++  order.discount = calculateDiscount(order);
++  return order;
++}
++
++module.exports = { calculateDiscount, quoteOrder };

@@ -1,0 +1,77 @@
+{
+  "skill_name": "maintaining-agent-guidance",
+  "version": 1,
+  "evaluation": {
+    "scope": "maintaining-agent-guidance-role",
+    "layer": "role",
+    "skill": "maintaining-agent-guidance",
+    "hosts": [
+      "claude-code",
+      "cursor"
+    ],
+    "arms": [
+      "no-skill",
+      "treatment"
+    ]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "maintaining-agent-guidance-role-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [
+      0,
+      2
+    ],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every semantic score, quote or reference concrete maintenance-flow output evidence; dispatch or lifecycle labels alone do not prove the checkpoint.",
+    "dimensions": [
+      {
+        "id": "significance-gate",
+        "description": "Assess whether the outcome enters only for a materially worse future project decision and rejects facts cheaply derivable from source or configuration, with the exact no-change result when the test fails. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "finish-boundary",
+        "description": "Assess whether a stable change produces a compact evidence-bearing packet, one isolated worker mandate, the required agents-file-writer Improve route, and a checkpoint that preserves authorization and validation limits. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "durable-guidance-gap-at-finish",
+      "name": "finish a change with durable guidance review",
+      "prompt": "Finish the supplied worker-dispatch change and update project agent guidance if warranted. The implementation is stable at revision aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, and the supplied validation record reports the worker contract suite passed. docs/decisions/staging-owner.md records a required coordination rule: staging migration checks must use the team's reserved deployment slot, because overlapping checks can invalidate each other's results. That policy is not encoded in source or configuration. Root AGENTS.md currently mentions only unit tests and gives no route to this decision. Scoped guidance files are clean and tracked; an unrelated design draft must be preserved. The request authorizes ordinary project-guidance edits but no Git or external publication actions. Return the finishing result and its evidence.",
+      "expected_output": "A complete finishing gate that distinguishes no-change from changed guidance, records the significance evidence, gives one isolated worker a verifiable packet and mandate, routes a confirmed gap through Agents File Writer Improve mode, and returns the required checkpoint without staging, committing, publishing, or merging.",
+      "files": [],
+      "required_skill_loads": [
+        "maintaining-agent-guidance",
+        "agents-file-writer"
+      ],
+      "expectations": [
+        "There are no deterministic output-text signals; workflow quality requires evidence-based semantic judging and observed actions.",
+        "The blind judge verifies that the significance test precedes worker dispatch and rejects routine summaries or cheaply derivable facts as durable guidance.",
+        "The packet includes outcome, authority, stable diff, validation, scope, candidate knowledge, future triggers, unchanged or out-of-scope areas, and authorization limits without broad repository reconstruction.",
+        "Exactly one isolated worker receives the complete packet and must verify the gap before editing; worker self-report is not accepted as proof.",
+        "A confirmed gap invokes Agents File Writer in Improve mode and preserves its collision, authorization, verification, and presentation workflow.",
+        "The checkpoint reports changed paths, guidance graph, Keep/Move/Delete, validation, untested gaps, and authorization blockers without staging, committing, pushing, publishing, or merging.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness."
+      ],
+      "covered_clauses": [
+        "mag-significance",
+        "mag-finish-boundary",
+        "mag-packet",
+        "mag-isolated-worker",
+        "mag-agents-file-writer-route",
+        "mag-checkpoint",
+        "mag-authorization-boundary"
+      ],
+      "required_signals": []
+    }
+  ]
+}

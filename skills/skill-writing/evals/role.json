@@ -1,0 +1,88 @@
+{
+  "skill_name": "skill-writing",
+  "version": 1,
+  "evaluation": {
+    "scope": "skill-writing-role",
+    "layer": "role",
+    "skill": "skill-writing",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "skill-writing-role-v1"
+  },
+  "signals": {
+    "sw-artifact": ["skills/deployment-triage/SKILL\\.md"],
+    "sw-agent-writing": ["agent-writing"],
+    "sw-skill-mechanics": ["skill-mechanics"],
+    "sw-skill-evaluation": ["skill-evaluation"],
+    "sw-mechanics-result": ["Mechanics:"],
+    "sw-behavioral-result": ["Behavioral evidence:"]
+  },
+  "global_required_signals": [
+    "sw-artifact",
+    "sw-agent-writing",
+    "sw-skill-mechanics",
+    "sw-skill-evaluation",
+    "sw-mechanics-result",
+    "sw-behavioral-result"
+  ],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "skill-justification-and-contract",
+        "description": "Semantically assess whether the Skill is justified against existing Skills, recurrence, and cheap environment lookup before trigger boundaries, branches, completion, dependencies, degrees of freedom, and evidence needs are decided. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "authoring-and-verification",
+        "description": "Semantically assess whether the workflow invokes all three canonical dependencies without fallback copies, creates or revises the Skill, and reports mechanics separately from proportionate behavioral evidence or explicit unverified status. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "skill-writing-owned-contract",
+      "name": "justified-contract-before-production-prose",
+      "prompt": "Use the supplied `evals/fixtures/skill-request.json` to create or revise the `deployment-triage` Agent Skill. Check whether an existing Skill or cheap environment lookup already owns the need, decide an observable contract and evidence plan before production prose, invoke named dependencies, and return the artifact plus a concise verification result. Do not install or publish it.",
+      "expected_output": "A justified Skill-writing workflow that decides behavior before prose, composes the three canonical dependencies, produces skills/deployment-triage/SKILL.md, and reports mechanics and behavioral evidence as separate conclusions.",
+      "files": ["evals/fixtures/skill-request.json"],
+      "required_skill_loads": [
+        "skill-writing",
+        "agent-writing",
+        "writing-foundation",
+        "skill-mechanics",
+        "skill-evaluation"
+      ],
+      "expectations": [
+        "The deterministic gate establishes only the artifact path, exact canonical dependency names, and separate verification labels.",
+        "The blind judge assesses justification, trigger boundaries, branches, completion criteria, dependencies, degrees of freedom, evidence needs, and authoring order.",
+        "The blind judge verifies that dependency behavior is invoked rather than copied and that absent behavioral evidence is reported as unverified.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness.",
+        "Failed critical mechanical gates are non-overridable."
+      ],
+      "covered_clauses": [
+        "sw-justification",
+        "sw-behavior-contract",
+        "sw-trigger-boundaries",
+        "sw-branches",
+        "sw-completion-criteria",
+        "sw-dependencies",
+        "sw-degrees-of-freedom",
+        "sw-evidence-needs",
+        "sw-authoring-workflow",
+        "sw-canonical-composition",
+        "sw-output",
+        "sw-verification-separation",
+        "sw-completion"
+      ],
+      "required_signals": []
+    }
+  ]
+}

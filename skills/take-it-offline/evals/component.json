@@ -1,0 +1,65 @@
+{
+  "skill_name": "take-it-offline",
+  "version": 1,
+  "evaluation": {
+    "scope": "take-it-offline-to-agent-writing",
+    "layer": "component",
+    "skill": "take-it-offline",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment", "component-ablation"]
+  },
+  "config": {
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "take-it-offline-component-v1"
+  },
+  "signals": {
+    "resume_condition": [
+      "^\\s*Resume when:\\s+\\S"
+    ],
+    "next_action": [
+      "^\\s*Next action:\\s+\\S"
+    ]
+  },
+  "global_required_signals": [
+    "resume_condition",
+    "next_action"
+  ],
+  "global_order": [
+    ["resume_condition"],
+    ["next_action"]
+  ],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "dependency_contribution",
+        "description": "The complete consumer invokes Agent Writing by canonical name and produces an agent-facing continuation."
+      },
+      {
+        "id": "consumer_ownership",
+        "description": "Take It Offline retains the continuation-specific state and resume contract without copying Agent Writing behavior."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "agent-writing-ablation",
+      "name": "agent-writing-canonical-dependency",
+      "prompt": "Carry the verified task state into one temporary continuation document for a fresh agent.",
+      "expected_output": "The complete consumer records Agent Writing composition and a resumable continuation; the test-only ablation exposes the missing contribution without becoming a package failure.",
+      "files": [
+        "test/fixtures/take-it-offline/artifacts/status.json"
+      ],
+      "expectations": [
+        "The treatment invokes agent-writing by canonical name.",
+        "The component control removes only the take-it-offline to agent-writing edge.",
+        "The Agent Writing fixture contributes only an invocation trace and no production writing behavior."
+      ],
+      "ablated_dependency": "agent-writing",
+      "requires_verified_references": true
+    }
+  ]
+}

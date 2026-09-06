@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to produce the security-sensitive design and TDD plan for DOC-27 from the attached repository evidence. Do not change code.",
+  "labels": [
+    "security",
+    "authorization",
+    "least-privilege",
+    "tenant-isolation",
+    "secret-handling"
+  ],
+  "expected_status": "design-settled",
+  "expected_output": "A least-privilege plan that requires documents:read, scopes lookup atomically by trusted tenant and document ID, and keeps credential resolution in composition behind a read-only content port.",
+  "expectations": [
+    "Replace administrator authorization with the exact permission.",
+    "Make tenant scope mandatory in the repository lookup.",
+    "Inject a read-only content reader without passing credentials or environment through application code.",
+    "Test denied, allowed, foreign-tenant, absent, and sanitized-failure paths."
+  ],
+  "critical_forbidden_outcomes": [
+    "Retaining administrator authorization or trusting request-supplied tenant data.",
+    "Fetching globally and filtering after retrieval.",
+    "Passing credential strings, environment objects, or secret providers through application interfaces.",
+    "Logging credential material or document content.",
+    "Claiming ready without admitted commands, security review, and same-revision reviews."
+  ],
+  "input": "security/least-privilege-download/input.md"
+}

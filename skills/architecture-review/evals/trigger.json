@@ -1,0 +1,143 @@
+{
+  "skill_name": "architecture-review",
+  "version": 1,
+  "evaluation": {
+    "scope": "architecture-review-trigger",
+    "layer": "trigger",
+    "skill": "architecture-review",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 5,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0,
+    "randomization_seed": "architecture-review-trigger-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "Use exact Skill lifecycle evidence for every routing assertion.",
+    "dimensions": [
+      {
+        "id": "architecture_selection",
+        "description": "Architecture Review activates for canonical invocation, bounded existing-code architecture audits, supplied technical-design assessments, and architecture-focused immutable pull-request review."
+      },
+      {
+        "id": "outcome_boundaries",
+        "description": "Complete ticket Code Review, pre-code implementation planning, remediation, implementation, debugging, and generic advice retain their owning outcomes."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "ambient-technical-design-architecture",
+      "name": "architecture assessment of a supplied technical design",
+      "prompt": "Review the architecture of supplied docs/designs/scheduler.md revision 3 against immutable repository base 7777777777777777777777777777777777777777. Assess the proposed ownership, interfaces, lifecycle, and validation obligations. Return findings on this design without authoring a new design or implementation plan.",
+      "expected_output": "Architecture Review owns the supplied design assessment and invokes Engineering Guidance with activity design.",
+      "files": [],
+      "expectations": [
+        "architecture-review loads for assessment of the supplied technical design.",
+        "engineering-guidance uses activity design; the target retains both the numbered design artifact and repository base.",
+        "implementation-planning does not replace the requested assessment with design authoring."
+      ],
+      "should_trigger": true,
+      "required_skill_loads": ["engineering-guidance"],
+      "covered_clauses": ["ar-technical-design-routing"]
+    },
+    {
+      "id": "canonical-architecture-review",
+      "name": "canonical architecture review",
+      "prompt": "/architecture-review\n\nReview this bounded existing-code architecture at the supplied immutable revision.",
+      "expected_output": "Architecture Review and canonical Engineering Guidance load for the read-only outcome.",
+      "files": [],
+      "expectations": [
+        "architecture-review activates through exact canonical invocation.",
+        "engineering-guidance loads as its declared dependency."
+      ],
+      "should_trigger": true,
+      "canonical_invocation": true,
+      "required_skill_loads": ["engineering-guidance"],
+      "covered_clauses": ["ar-canonical-routing"]
+    },
+    {
+      "id": "ambient-existing-architecture",
+      "name": "ambient existing architecture audit",
+      "prompt": "Review the architecture of src/cache at commit abc123: assess module depth, ownership, dependencies, seams, and consumer-behavior coverage without changing code.",
+      "expected_output": "Architecture Review owns the bounded existing-code audit.",
+      "files": [],
+      "expectations": [
+        "architecture-review loads for the architecture-specific existing-code request."
+      ],
+      "should_trigger": true,
+      "required_skill_loads": ["engineering-guidance"],
+      "covered_clauses": ["ar-existing-code-routing"]
+    },
+    {
+      "id": "ambient-pr-architecture",
+      "name": "ambient pull-request architecture review",
+      "prompt": "Review only the architecture of immutable PR range base123..head456. Focus on ownership, deep modules, dependency direction, and behavioral proof; do not perform a general code review.",
+      "expected_output": "Architecture Review owns the architecture-focused change-range review.",
+      "files": [],
+      "expectations": [
+        "architecture-review loads for the explicitly architecture-only PR review."
+      ],
+      "should_trigger": true,
+      "required_skill_loads": ["engineering-guidance"],
+      "covered_clauses": ["ar-pr-routing"]
+    },
+    {
+      "id": "complete-code-review-exclusion",
+      "name": "complete ticket code review exclusion",
+      "prompt": "Review this completed ticket range for requirements, architecture, correctness, code quality, and validation findings.",
+      "expected_output": "Code Review owns the complete ticket outcome and Architecture Review stays inactive.",
+      "files": [],
+      "expectations": [
+        "architecture-review does not replace complete ticket code-review."
+      ],
+      "should_trigger": false,
+      "covered_clauses": ["ar-code-review-exclusion"]
+    },
+    {
+      "id": "implementation-planning-exclusion",
+      "name": "pre-code blueprint exclusion",
+      "prompt": "Design this bounded ticket before code and produce the executable consumer-behavior TDD plan.",
+      "expected_output": "Implementation Planning owns the pre-code blueprint and Architecture Review stays inactive as a direct outcome.",
+      "files": [],
+      "expectations": [
+        "architecture-review does not replace implementation-planning."
+      ],
+      "should_trigger": false,
+      "covered_clauses": ["ar-planning-exclusion"]
+    },
+    {
+      "id": "remediation-exclusion",
+      "name": "architecture remediation exclusion",
+      "prompt": "Refactor these shallow modules, run the tests, and commit the architecture cleanup.",
+      "expected_output": "An implementation flow owns mutation and Architecture Review stays inactive.",
+      "files": [],
+      "expectations": [
+        "architecture-review does not implement or commit remediation."
+      ],
+      "should_trigger": false,
+      "covered_clauses": ["ar-remediation-exclusion"]
+    },
+    {
+      "id": "ambiguous-review-request",
+      "name": "ambiguous general review request",
+      "case_category": "ambiguous",
+      "prompt": "Review this PR and tell me what should change.",
+      "expected_output": "Architecture Review stays inactive because the request does not bound the outcome to architecture.",
+      "files": [],
+      "expectations": [
+        "architecture-review does not claim an ambiguous general PR review."
+      ],
+      "should_trigger": false,
+      "covered_clauses": ["ar-ambiguous-review-exclusion"]
+    }
+  ]
+}

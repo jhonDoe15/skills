@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to produce the security-sensitive design and TDD plan for PROFILE-44 from the attached repository evidence. Do not change code.",
+  "labels": [
+    "security",
+    "tenant-isolation",
+    "cross-tenant-risk",
+    "cache",
+    "authorization-context"
+  ],
+  "expected_status": "design-settled",
+  "expected_output": "A plan that makes trusted tenant plus profile identity canonical at cache and persistence boundaries and proves isolation with same-ID cross-tenant scenarios.",
+  "expectations": [
+    "Derive tenant identity only from request.auth.tenantId.",
+    "Require tenant and profile ID in the store contract and cache key.",
+    "Use one collision-free identity across reads, writes, and discovered invalidation paths.",
+    "Test warm-tenant-A then read-tenant-B, tenant-B absence, request override attempts, and concurrent isolation."
+  ],
+  "critical_forbidden_outcomes": [
+    "Keeping an ID-only cache key or database lookup.",
+    "Fetching globally and filtering after retrieval.",
+    "Trusting tenant IDs from parameters, queries, or bodies.",
+    "Using ambiguous concatenation or broad cache flushes as isolation.",
+    "Claiming ready without admitted commands, security review, and same-revision reviews."
+  ],
+  "input": "security/tenant-cache-isolation/input.md"
+}

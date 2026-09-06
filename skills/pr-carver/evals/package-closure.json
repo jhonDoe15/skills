@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "scope": "pr-carver-package-closure",
+  "owner": "pr-carver",
+  "cases": [
+    {
+      "id": "missing-ticket-scope",
+      "consumer": "pr-carver",
+      "missing_dependency": "ticket-scope",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"ticket-scope\"",
+        "missingSkill": "ticket-scope"
+      },
+      "covered_clauses": ["pc-missing-ticket-scope"]
+    }
+  ]
+}

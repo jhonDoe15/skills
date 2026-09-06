@@ -1,0 +1,45 @@
+{
+  "requested_name": "deployment-triage",
+  "recurring_need": "Three repositories use the same triage sequence after a deployment health check fails.",
+  "existing_skills": [
+    {
+      "name": "incident-investigation",
+      "coverage": "Investigates a hard-to-localize failure after a concrete investigation request."
+    }
+  ],
+  "cheap_environment_lookups": [
+    {
+      "source": "deployment manifest",
+      "facts": ["health-check command", "service owner", "rollback authorization"]
+    }
+  ],
+  "behavior": {
+    "activation": "A deployment health check reports failed.",
+    "outcome": "The failing boundary and next authorized investigation are reported.",
+    "branches": [
+      {
+        "predicate": "The boundary is localized",
+        "completion": "The boundary and incident-investigation result are reported."
+      },
+      {
+        "predicate": "The boundary is not localized",
+        "completion": "Missing evidence and the smallest next check are reported."
+      }
+    ],
+    "dependencies": ["incident-investigation"],
+    "degrees_of_freedom": {
+      "sequence": "low",
+      "evidence_selection": "medium",
+      "wording": "high"
+    }
+  },
+  "evidence_request": {
+    "mechanics": "Validate frontmatter, canonical name, dependency declaration, and reference reachability.",
+    "behavior": "Define fresh-session Skill and No-Skill cases, but do not run model evaluations."
+  },
+  "limits": [
+    "Do not install or publish the Skill.",
+    "Do not mutate deployments.",
+    "Do not claim host or model support from structural checks."
+  ]
+}

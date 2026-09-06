@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "kind": "implementation-outcome-holdouts",
+  "runtime": "runtime/matt-pocock/runtime.json",
+  "cases": [
+    {
+      "id": "lease-fencing",
+      "feature": "lease-fencing/feature.md",
+      "fixture": "lease-fencing/fixture",
+      "tickets": [
+        "lease-fencing/tickets/01-fenced-leases.md"
+      ],
+      "hidden_tests": "lease-fencing/oracle/hidden.oracle.cjs",
+      "oracle": "lease-fencing/oracle/oracle.json"
+    },
+    {
+      "id": "parallel-exports",
+      "feature": "parallel-exports/feature.md",
+      "fixture": "parallel-exports/fixture",
+      "tickets": [
+        "parallel-exports/tickets/01-json-export.md",
+        "parallel-exports/tickets/02-csv-export.md"
+      ],
+      "hidden_tests": "parallel-exports/oracle/hidden.oracle.cjs",
+      "oracle": "parallel-exports/oracle/oracle.json"
+    },
+    {
+      "id": "delivery-contract",
+      "feature": "delivery-contract/feature.md",
+      "fixture": "delivery-contract/fixture",
+      "tickets": [
+        "delivery-contract/tickets/01-stable-email-result.md",
+        "delivery-contract/tickets/02-webhook-delivery.md"
+      ],
+      "hidden_tests": "delivery-contract/oracle/hidden.oracle.cjs",
+      "oracle": "delivery-contract/oracle/oracle.json"
+    }
+  ]
+}

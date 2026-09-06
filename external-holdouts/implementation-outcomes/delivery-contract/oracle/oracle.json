@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "expected_tickets": [
+    "01-stable-email-result",
+    "02-webhook-delivery"
+  ],
+  "ticket_graph": [
+    {
+      "id": "01-stable-email-result",
+      "blockers": [],
+      "collisions": []
+    },
+    {
+      "id": "02-webhook-delivery",
+      "blockers": [
+        "01-stable-email-result"
+      ],
+      "collisions": []
+    }
+  ],
+  "commands": [
+    "node --test test/*.test.js",
+    "node --test /hidden/hidden.oracle.cjs"
+  ],
+  "allowed_paths": [
+    "src/delivery-result.js",
+    "src/deliver-email.js",
+    "src/deliver-webhook.js",
+    "test/deliver-email.test.js",
+    "test/deliver-webhook.test.js"
+  ],
+  "requirements": [
+    "shared immutable delivery result",
+    "stable DeliveryError with original cause",
+    "unchanged email provider request",
+    "webhook provider request",
+    "provider details hidden from callers"
+  ],
+  "maximum_review_findings": {
+    "blocker": 0,
+    "major": 0
+  }
+}

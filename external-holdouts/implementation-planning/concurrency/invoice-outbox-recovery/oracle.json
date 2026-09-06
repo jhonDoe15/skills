@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to design and sequence the TDD work for BILL-64 from the attached repository evidence. Do not change code.",
+  "labels": [
+    "concurrency",
+    "transactional-outbox",
+    "retry-identity",
+    "publisher-lease",
+    "crash-window"
+  ],
+  "expected_status": "design-settled",
+  "expected_output": "An atomic invoice-plus-outbox design with unique request identity, stable event identity, leased publication, conditional acknowledgement, and broker deduplication across unknown outcomes.",
+  "expectations": [
+    "Create or read the canonical invoice and its outbox row in one transaction.",
+    "Remove direct broker publication from createInvoice while preserving its result.",
+    "Reuse one stored event ID as the broker deduplication key on every attempt.",
+    "Test concurrent create, pre-publish crash, post-publish crash, timeout with late success, lease takeover, and stale acknowledgement."
+  ],
+  "critical_forbidden_outcomes": [
+    "Committing an invoice without recoverable event work.",
+    "Using a new event identity on retry.",
+    "Treating publication timeout as confirmed failure.",
+    "Relying on process-local locking or direct dual writes.",
+    "Claiming ready without admitted commands and same-revision reviews."
+  ],
+  "input": "concurrency/invoice-outbox-recovery/input.md"
+}

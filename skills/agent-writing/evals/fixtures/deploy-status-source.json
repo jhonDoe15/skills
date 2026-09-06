@@ -1,0 +1,8 @@
+{
+  "artifact": "deploy-status.json",
+  "activation": "appears",
+  "frontierLabel": "DAG frontier",
+  "branches": ["success", "failure"],
+  "retryLimitSource": "environment",
+  "inputMode": "read-only"
+}

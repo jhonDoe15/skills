@@ -1,0 +1,227 @@
+{
+  "version": 1,
+  "clauses": [
+    {
+      "id": "wf-accepted-context",
+      "owner": "writing-foundation",
+      "kind": "behavior",
+      "cases": [{ "scope": "writing-foundation-role", "id": "foundation-complete-contract" }]
+    },
+    {
+      "id": "wf-coverage",
+      "owner": "writing-foundation",
+      "kind": "behavior",
+      "cases": [{ "scope": "writing-foundation-role", "id": "foundation-complete-contract" }]
+    },
+    {
+      "id": "wf-grounding",
+      "owner": "writing-foundation",
+      "kind": "behavior",
+      "cases": [{ "scope": "writing-foundation-role", "id": "foundation-complete-contract" }]
+    },
+    {
+      "id": "wf-uncertainty",
+      "owner": "writing-foundation",
+      "kind": "behavior",
+      "cases": [{ "scope": "writing-foundation-role", "id": "foundation-complete-contract" }]
+    },
+    {
+      "id": "wf-structure",
+      "owner": "writing-foundation",
+      "kind": "behavior",
+      "cases": [{ "scope": "writing-foundation-role", "id": "foundation-complete-contract" }]
+    },
+    {
+      "id": "wf-terminology",
+      "owner": "writing-foundation",
+      "kind": "behavior",
+      "cases": [{ "scope": "writing-foundation-role", "id": "foundation-complete-contract" }]
+    },
+    {
+      "id": "wf-relevance",
+      "owner": "writing-foundation",
+      "kind": "behavior",
+      "cases": [{ "scope": "writing-foundation-role", "id": "foundation-complete-contract" }]
+    },
+    {
+      "id": "wf-work-product-fidelity",
+      "owner": "writing-foundation",
+      "kind": "behavior",
+      "cases": [{ "scope": "writing-foundation-role", "id": "foundation-complete-contract" }]
+    },
+    {
+      "id": "wf-behavioral-pruning",
+      "owner": "writing-foundation",
+      "kind": "behavior",
+      "cases": [{ "scope": "writing-foundation-role", "id": "foundation-complete-contract" }]
+    },
+    {
+      "id": "wf-exclusions",
+      "owner": "writing-foundation",
+      "kind": "exclusion",
+      "cases": [{ "scope": "writing-foundation-role", "id": "foundation-complete-contract" }]
+    },
+    {
+      "id": "wf-failure-behavior",
+      "owner": "writing-foundation",
+      "kind": "failure",
+      "cases": [{ "scope": "writing-foundation-role", "id": "foundation-complete-contract" }]
+    },
+    {
+      "id": "wf-completion",
+      "owner": "writing-foundation",
+      "kind": "behavior",
+      "cases": [{ "scope": "writing-foundation-role", "id": "foundation-complete-contract" }]
+    },
+    {
+      "id": "wf-canonical-private-reach",
+      "owner": "writing-foundation",
+      "kind": "routing-boundary",
+      "cases": [{ "scope": "writing-foundation-trigger", "id": "foundation-canonical-dependency" }]
+    },
+    {
+      "id": "wf-private-routing-exclusion",
+      "owner": "writing-foundation",
+      "kind": "routing-boundary",
+      "cases": [{ "scope": "writing-foundation-trigger", "id": "foundation-private-false-activation" }]
+    },
+    {
+      "id": "aw-accepted-context",
+      "owner": "agent-writing",
+      "kind": "behavior",
+      "cases": [{ "scope": "agent-writing-role", "id": "agent-writing-owned-contract" }]
+    },
+    {
+      "id": "aw-activation",
+      "owner": "agent-writing",
+      "kind": "behavior",
+      "cases": [{ "scope": "agent-writing-role", "id": "agent-writing-owned-contract" }]
+    },
+    {
+      "id": "aw-intended-outcomes",
+      "owner": "agent-writing",
+      "kind": "behavior",
+      "cases": [{ "scope": "agent-writing-role", "id": "agent-writing-owned-contract" }]
+    },
+    {
+      "id": "aw-branches",
+      "owner": "agent-writing",
+      "kind": "behavior",
+      "cases": [{ "scope": "agent-writing-role", "id": "agent-writing-owned-contract" }]
+    },
+    {
+      "id": "aw-completion",
+      "owner": "agent-writing",
+      "kind": "behavior",
+      "cases": [{ "scope": "agent-writing-role", "id": "agent-writing-owned-contract" }]
+    },
+    {
+      "id": "aw-steps-reference",
+      "owner": "agent-writing",
+      "kind": "behavior",
+      "cases": [{ "scope": "agent-writing-role", "id": "agent-writing-owned-contract" }]
+    },
+    {
+      "id": "aw-branch-disclosure",
+      "owner": "agent-writing",
+      "kind": "behavior",
+      "cases": [{ "scope": "agent-writing-role", "id": "agent-writing-owned-contract" }]
+    },
+    {
+      "id": "aw-co-located-authority",
+      "owner": "agent-writing",
+      "kind": "behavior",
+      "cases": [{ "scope": "agent-writing-role", "id": "agent-writing-owned-contract" }]
+    },
+    {
+      "id": "aw-instruction-form",
+      "owner": "agent-writing",
+      "kind": "behavior",
+      "cases": [{ "scope": "agent-writing-role", "id": "agent-writing-owned-contract" }]
+    },
+    {
+      "id": "aw-context-load",
+      "owner": "agent-writing",
+      "kind": "behavior",
+      "cases": [{ "scope": "agent-writing-role", "id": "agent-writing-owned-contract" }]
+    },
+    {
+      "id": "aw-behavioral-pruning",
+      "owner": "agent-writing",
+      "kind": "behavior",
+      "cases": [{ "scope": "agent-writing-role", "id": "agent-writing-owned-contract" }]
+    },
+    {
+      "id": "aw-terminology",
+      "owner": "agent-writing",
+      "kind": "behavior",
+      "cases": [{ "scope": "agent-writing-role", "id": "agent-writing-owned-contract" }]
+    },
+    {
+      "id": "aw-execution-semantics",
+      "owner": "agent-writing",
+      "kind": "behavior",
+      "cases": [{ "scope": "agent-writing-role", "id": "agent-writing-owned-contract" }]
+    },
+    {
+      "id": "aw-environment-source",
+      "owner": "agent-writing",
+      "kind": "behavior",
+      "cases": [{ "scope": "agent-writing-role", "id": "agent-writing-owned-contract" }]
+    },
+    {
+      "id": "aw-failure-behavior",
+      "owner": "agent-writing",
+      "kind": "failure",
+      "cases": [{ "scope": "agent-writing-role", "id": "agent-writing-owned-contract" }]
+    },
+    {
+      "id": "aw-routing-positive",
+      "owner": "agent-writing",
+      "kind": "routing-boundary",
+      "cases": [{ "scope": "agent-writing-trigger", "id": "agent-writing-positive" }]
+    },
+    {
+      "id": "aw-routing-agent-skill-exclusion",
+      "owner": "agent-writing",
+      "kind": "routing-boundary",
+      "cases": [{ "scope": "agent-writing-trigger", "id": "agent-writing-skill-exclusion" }]
+    },
+    {
+      "id": "aw-routing-handoff-exclusion",
+      "owner": "agent-writing",
+      "kind": "routing-boundary",
+      "cases": [{ "scope": "agent-writing-trigger", "id": "agent-writing-handoff-exclusion" }]
+    },
+    {
+      "id": "aw-routing-human-exclusion",
+      "owner": "agent-writing",
+      "kind": "routing-boundary",
+      "cases": [{ "scope": "agent-writing-trigger", "id": "agent-writing-human-exclusion" }]
+    },
+    {
+      "id": "aw-routing-ambiguous",
+      "owner": "agent-writing",
+      "kind": "routing-boundary",
+      "cases": [{ "scope": "agent-writing-trigger", "id": "agent-writing-ambiguous" }]
+    },
+    {
+      "id": "aw-routing-canonical",
+      "owner": "agent-writing",
+      "kind": "routing-boundary",
+      "cases": [{ "scope": "agent-writing-trigger", "id": "agent-writing-canonical" }]
+    },
+    {
+      "id": "aw-foundation-edge",
+      "owner": "agent-writing",
+      "kind": "dependency-edge",
+      "cases": [{ "scope": "agent-writing-to-writing-foundation", "id": "complete-consumer-versus-foundation-ablation" }]
+    },
+    {
+      "id": "aw-missing-dependency",
+      "owner": "agent-writing",
+      "kind": "failure",
+      "cases": [{ "scope": "agent-writing-package-closure", "id": "missing-writing-foundation" }]
+    }
+  ]
+}

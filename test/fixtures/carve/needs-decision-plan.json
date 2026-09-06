@@ -1,0 +1,32 @@
+{
+  "schema": "slice-plan/v2",
+  "status": "needs-decision",
+  "migration_strategy": null,
+  "migration": null,
+  "requirements": [
+    {
+      "id": "REQ-1",
+      "text": "Move account time-zone storage without an agreed compatibility window."
+    }
+  ],
+  "coverage_ledger": [
+    {
+      "requirement_id": "REQ-1",
+      "disposition": "unresolved",
+      "ticket_ids": [],
+      "reason": "Ticket Scope flagged the missing compatibility-window decision."
+    }
+  ],
+  "tickets": [],
+  "lineage": [],
+  "decisions": [
+    {
+      "id": "DEC-1",
+      "source": "ticket-scope",
+      "requirement_ids": ["REQ-1"],
+      "choice": "Choose the compatibility window for legacy and replacement storage.",
+      "owner": "account domain maintainer"
+    }
+  ],
+  "initial_frontier": []
+}

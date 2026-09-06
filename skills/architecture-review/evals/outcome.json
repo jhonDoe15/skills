@@ -1,0 +1,157 @@
+{
+  "skill_name": "architecture-review",
+  "version": 1,
+  "evaluation": {
+    "scope": "architecture-review-outcome",
+    "layer": "outcome",
+    "skill": "architecture-review",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "architecture-review-outcome-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "Quote the returned brief and lifecycle evidence for each dimension. A list of generic principles is not an architecture review.",
+    "dimensions": [
+      {
+        "id": "brief_completeness",
+        "description": "The brief identifies the immutable target, current and applicable proposed architecture, evidence and scope, every module and whole-target quality claim, specialist coverage, findings, context limits, and next owner. Incomplete target or required reviewer coverage produces an incomplete status."
+      },
+      {
+        "id": "architectural_reasoning",
+        "description": "Conclusions connect supported consumers and behavior to ownership, locality, module depth, seam reality, dependency direction, and proportionality with supporting and contrary evidence."
+      },
+      {
+        "id": "lossless_review",
+        "description": "Independent lens conclusions and source finding identities survive reconciliation; every credible in-scope finding is reported and no evidence-free PASS or optional deferral hides work."
+      },
+      {
+        "id": "read_only",
+        "description": "The outcome keeps the reviewed target unchanged and distinguishes architecture findings from remediation. It returns a draft by default; any publication is limited to the explicitly authorized brief or review comments, with the destination and observed result recorded."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "review-bound-technical-design",
+      "name": "review a supplied design against its repository base",
+      "prompt": "Use architecture-review on fictional design artifact docs/designs/scheduler.md revision 3, frozen for this review and bound to repository revision 7777777777777777777777777777777777777777. The fixture scope is Scheduler and its HTTP consumer. Requirements permit one active run per key and cancellation before queued execution. Existing base evidence: the consumer calls reserve then enqueue separately; Scheduler exposes both methods and has method-level tests only. The proposed design gives Scheduler one atomic schedule operation, owns lifecycle state inside Scheduler, and preserves the HTTP response contract. Revision 3 proposes concurrency and cancellation tests; those tests have not been written or run. Review this supplied design without authoring a replacement or changing the repository. Return the brief as a draft.",
+      "expected_output": "The brief identifies the design artifact and numbered revision plus its immutable repository base, and separates existing architecture from proposed contracts and planned proof. Architecture Review invokes Engineering Guidance with activity design, runs the mandatory independent lenses on this same target, evaluates every quality claim, and records specialist coverage. Planned tests are validation obligations, never executed proof. The reviewed design stays unchanged and publication status is returned-draft.",
+      "files": [],
+      "required_skill_loads": ["architecture-review", "engineering-guidance"],
+      "expectations": [
+        "The technical-design target retains docs/designs/scheduler.md revision 3 and repository base 7777777777777777777777777777777777777777 as separate identity fields.",
+        "Engineering Guidance is invoked with activity design according to Architecture Review's target mapping.",
+        "Observed reserve/enqueue behavior and method-level tests are distinguished from the proposed atomic schedule contract and planned concurrency/cancellation tests.",
+        "All four mandatory independent lenses receive the same design revision and repository base.",
+        "Every affected module and the whole target receive quality-claim coverage; concrete risks have evidence-backed specialist coverage dispositions.",
+        "The brief contains the proposed-architecture fields and never claims that planned tests ran or that remediation was implemented.",
+        "The output is a returned-draft with no external publication."
+      ],
+      "covers": ["technical-design", "design-base-binding", "guidance-activity", "proposed-versus-observed-proof", "draft-default"]
+    },
+    {
+      "id": "design-missing-repository-base",
+      "name": "retain an incomplete design review when its base is unknown",
+      "prompt": "Review the supplied fictional docs/designs/scheduler.md revision 3 for architecture. It proposes atomic schedule and cancellation operations. The design does not identify a repository base, and no immutable base can be resolved from the supplied evidence. Give the bounded architecture assessment supported by these facts without inventing a base or substituting the current checkout.",
+      "expected_output": "Architecture Review retains the named design revision and available evidence but returns an incomplete brief because the immutable repository base is unresolved. It does not claim base-bound consumer proof or a complete review. Any Engineering Guidance assessment of this supplied design uses activity design.",
+      "files": [],
+      "required_skill_loads": ["architecture-review"],
+      "expectations": [
+        "The design artifact and revision are retained while the repository base is explicitly unresolved.",
+        "The brief has status incomplete and names missing target identity as the cause.",
+        "The output identifies the evidence needed to bind the design base without inventing an immutable revision.",
+        "Any Engineering Guidance invocation uses activity design; unresolved admission does not require downstream analysis.",
+        "The available evidence remains visible, with no fabricated current architecture, executed tests, complete coverage, or publication."
+      ],
+      "covers": ["technical-design", "missing-target-identity", "incomplete-review"]
+    },
+    {
+      "id": "specialist-coverage-unavailable",
+      "name": "keep unresolved specialist coverage visible",
+      "prompt": "Use architecture-review on fictional revision 8888888888888888888888888888888888888888. Scope: an encrypted job queue and its worker. Source and requirements establish two concrete risks: concurrent workers must reserve a job once, and a custom key-rotation protocol must preserve decryptability across retries. The mandatory dynamic reviewer can assess reservation ordering and has relevant source/test evidence. All four mandatory architecture lenses are available. None has the expertise to assess the custom cryptographic protocol; a cryptography specialist is unavailable. The protocol's safety therefore remains unknown. Return the architecture brief without changing code.",
+      "expected_output": "The specialist ledger records concurrency as covered-by-existing-lenses only with the returned dynamic review's evidence, and cryptographic protocol coverage as unavailable with its missing expertise, consequence, and resolution evidence. The same immutable target is used across the four mandatory lenses. The overall brief is incomplete despite those completed lenses, and retains findings and partial evidence.",
+      "files": [],
+      "required_skill_loads": ["architecture-review", "engineering-guidance"],
+      "expectations": [
+        "Engineering Guidance uses activity review for the existing-code target.",
+        "The specialist ledger associates each concrete risk with target evidence and needed expertise.",
+        "covered-by-existing-lenses cites the mandatory dynamic reviewer's actual returned concurrency coverage.",
+        "Unknown cryptography coverage remains an unavailable disposition and a context limit, not a PASS or an unsupported covered disposition.",
+        "The brief remains incomplete because required specialist coverage is unavailable, while retaining the completed mandatory lens results.",
+        "The brief names the cryptographic assessment evidence needed to resolve the gap and makes no remediation or publication claim."
+      ],
+      "covers": ["specialist-coverage", "unknown-expertise", "incomplete-review", "guidance-activity"]
+    },
+    {
+      "id": "authorized-review-publication",
+      "name": "allow only the authorized review publication",
+      "prompt": "Review architecture for the fictional immutable range 9999999999999999999999999999999999999999..aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, scoped to the queue and worker. The supplied source evidence says the change moves reservation policy into Queue.reserve; the worker calls that public entry point and existing concurrency tests prove one reservation per job. All four mandatory reviewers and the scoped evidence are available. I explicitly authorize publishing the resulting architecture brief as a review comment only to the evaluation's supplied test review destination; no other repository or tracker action is authorized. If that destination or a publication capability is unavailable, return the draft and report that publication could not be completed. Use only the supplied test destination, never a real external destination inferred from context.",
+      "expected_output": "Architecture Review assesses the change range with Engineering Guidance activity review. It treats the user's authorization as permitting publication of the brief to the supplied test destination, without treating read-only review as a blanket publication ban. Publication status follows an observed receipt: published-with-authorization after success, or returned-draft with the limitation if publication is unavailable. The code, branch, issue state, and remediation remain unchanged.",
+      "files": [],
+      "required_skill_loads": ["architecture-review", "engineering-guidance"],
+      "expectations": [
+        "The immutable base/head range and activity review are preserved.",
+        "Authorization is scoped to the brief as a review comment at the supplied test destination.",
+        "An available authorized publisher may be used; read-only target assessment does not forbid this authorized publication.",
+        "published-with-authorization requires observed publication success and destination evidence; unavailable publication yields returned-draft with its limitation.",
+        "No real destination is inferred, and there are no code edits, commits, branch changes, issue-state changes, or remediation actions."
+      ],
+      "covers": ["authorized-publication", "publication-evidence", "read-only-target", "guidance-activity"]
+    },
+    {
+      "id": "complete-existing-architecture-brief",
+      "name": "complete existing architecture review brief",
+      "prompt": "Review architecture at fictional immutable revision 5555555555555555555555555555555555555555. Scope: a job scheduler module and two direct consumers. Requirements say a job may run once at a time and cancellation must prevent queued execution. Source evidence shows consumers call reserve, enqueue, and release in different orders; the scheduler stores no explicit lifecycle state; tests only cover each method independently. Return a complete architecture-review brief without changing files.",
+      "expected_output": "A complete read-only brief models current consumers and lifecycle, evaluates every quality claim, runs all mandatory lenses, reports the scattered invariant and behavioral-proof gaps, and names a concrete remediation owner without designing or implementing the fix.",
+      "files": [],
+      "required_skill_loads": ["architecture-review", "engineering-guidance"],
+      "expectations": [
+        "The brief is bound to the exact immutable revision and bounded scheduler scope.",
+        "Current architecture includes consumer ordering, lifecycle ownership, cancellation behavior, interfaces, and existing proof.",
+        "Every affected module and the target as a whole have all six quality-claim entries with supporting and contrary evidence.",
+        "All four mandatory independent lenses return valid evidence-bearing results for the same target.",
+        "Every source finding has one reported, disproved, out-of-scope, or needs-decision disposition without optional deferral.",
+        "The brief remains read-only and routes a concrete next action to a remediation owner."
+      ],
+      "covers": [
+        "complete-brief",
+        "state-and-invariants",
+        "consumer-behavior",
+        "finding-accounting"
+      ]
+    },
+    {
+      "id": "verify-staged-seams-and-boundary-bypasses",
+      "name": "verify staged seams and boundary bypasses",
+      "prompt": "Review a fictional pre-merge change range for a cache feature. The broad feature spec says the first deployed MVP intentionally publishes a cache contract before its named consumer lands in the next ticket. Local code has no current consumer of that contract. A changed capability imports an underlying cache file even though the package entry point already exports the needed operation. A test override interprets one string as a file path when it exists and as inline configuration otherwise. Return a complete architecture-review brief without changing files.",
+      "expected_output": "The decision ladder records the broad staged-MVP choice before local usage, and the falsification pass verifies each candidate across wider decision and consumer locations. The review classifies the cache contract as intentional staging with any remaining cost or proof gap. Absent explicit controlling authority, it reports the changed entry-point bypass as merge-blocking. It treats ambient string interpretation as architecture-relevant deterministic-interface debt even when its runtime blast radius is limited.",
+      "files": [],
+      "required_skill_loads": ["architecture-review", "engineering-guidance"],
+      "expectations": [
+        "The decision ladder starts with general feature intent and records the intentional staged consumer.",
+        "The falsification pass searches wider decision and consumer locations before final dispositions.",
+        "The controlling MVP decision classifies the locally unused contract as intentional staging with any remaining cost or proof gap.",
+        "The changed consumer's bypass of an existing official entry point is reported as a merge-blocking boundary violation.",
+        "The ambient string interpretation remains deterministic-interface and AI-navigability debt even in a test-only path.",
+        "The brief records which initial candidate conclusions changed after falsification."
+      ],
+      "covers": [
+        "decision-ladder",
+        "falsification-pass",
+        "public-entry-point-boundary",
+        "deterministic-interface"
+      ]
+    }
+  ]
+}

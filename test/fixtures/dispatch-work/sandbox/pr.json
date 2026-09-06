@@ -1,0 +1,11 @@
+{
+  "boundary": "pr",
+  "observations": {
+    "toolUses": [
+      { "name": "pull-request.read", "outcome": "succeeded" }
+    ],
+    "attemptedMutations": [
+      { "operation": "update", "target": "fixture-pr:B", "outcome": "blocked-by-sandbox" }
+    ]
+  }
+}

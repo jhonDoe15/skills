@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "scope": "architecture-review-package-closure",
+  "owner": "architecture-review",
+  "cases": [
+    {
+      "id": "missing-engineering-guidance",
+      "consumer": "architecture-review",
+      "missing_dependency": "engineering-guidance",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"engineering-guidance\"",
+        "missingSkill": "engineering-guidance"
+      },
+      "covered_clauses": ["ar-missing-engineering-guidance"]
+    }
+  ]
+}
