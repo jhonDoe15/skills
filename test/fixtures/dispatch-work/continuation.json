@@ -1,0 +1,7 @@
+{
+  "schema": "fixture-continuation/v1",
+  "owner": "take-it-offline",
+  "dispatch_reference": "fixture://dispatch/completed",
+  "state_reference": "fixture://continuation/state/completed",
+  "summary": "Resume the completed retained dispatch from its authoritative artifact."
+}

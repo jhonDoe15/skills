@@ -1,8 +1,0 @@
-{
-  "_comment": "Shared fallback config for carve and dispatch-work. Lean is model-invoked and does not read this file. Copy it to ~/.config/lean/lean.config.json or <project>/.config/lean/lean.config.json and edit it. The bundled copy is a read-only default replaced on plugin updates.",
-  "subagent": {
-    "_comment": "The single model used by carve and dispatch-work. A repository model policy may override it. If model is Anthropic/Claude, effort must be high or lower.",
-    "model": "gpt-5-6-luna-max",
-    "effort": "max"
-  }
-}

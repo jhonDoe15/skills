@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to produce the operational design and TDD plan for THUMB-31 from the attached repository evidence. Do not change code.",
+  "labels": [
+    "operations",
+    "background-job",
+    "filesystem-cleanup",
+    "at-least-once-queue",
+    "failure-precedence"
+  ],
+  "expected_status": "design-settled",
+  "expected_output": "A plan with private per-delivery workspaces, failure-safe cleanup, bounded startup repair, preserved primary errors, post-write success despite cleanup failure, and bounded telemetry.",
+  "expectations": [
+    "Attempt cleanup after success, retryable failure, and permanent failure.",
+    "Preserve the processing error when processing and cleanup both fail.",
+    "Map only UnsupportedImageError to permanent failure.",
+    "Test object-write success plus cleanup failure, duplicate delivery, startup sweep isolation, and root-scan failure."
+  ],
+  "critical_forbidden_outcomes": [
+    "Cleaning only on success or masking a primary error.",
+    "Retrying after a completed object write solely because cleanup failed.",
+    "Deleting the temporary root, unrelated entries, or a current session.",
+    "Using job IDs or paths as metric labels.",
+    "Claiming ready without admitted commands and same-revision reviews."
+  ],
+  "input": "operations/thumbnail-workspace-cleanup/input.md"
+}

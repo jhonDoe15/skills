@@ -1,0 +1,95 @@
+{
+  "skill_name": "implementation-planning",
+  "version": 1,
+  "evaluation": {
+    "scope": "implementation-planning-outcome",
+    "layer": "outcome",
+    "skill": "implementation-planning",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "implementation-planning-outcome-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "Quote or reference specific blueprint evidence for every semantic score. A ready label, generic checklist, or reviewer success claim is not evidence.",
+    "dimensions": [
+      {
+        "id": "two_normative_plans",
+        "description": "The ticket contains a coherent technical design and TDD test plan tied by common requirements, seams, invariants, slices, and traceability."
+      },
+      {
+        "id": "preimplementation_risk_retirement",
+        "description": "The plan actively tests likely rabbit holes, alternatives, edge paths, compatibility, and specialist risks before code and preserves unresolved items as needs-decision."
+      },
+      {
+        "id": "baseline_and_finding_disposition",
+        "description": "Every baseline guideline receives an applicability disposition even when local authority is weak, the Uncle Bob/Clean Architecture and John Ousterhout/APOSD reviewers always run, and every credible in-scope finding is integrated regardless of size, severity, or pre-existing status."
+      },
+      {
+        "id": "cheap_executor_contract",
+        "description": "Every ready slice has chosen paths, decisions, commands, stop conditions, and evidence sufficient for the lowest capable implementation model."
+      },
+      {
+        "id": "durable_handoff",
+        "description": "One canonical ticket block records the immutable base, revision-specific review, both plans, freshness gate, first slice, and fresh-session instructions."
+      },
+      {
+        "id": "agent_navigability",
+        "description": "The blueprint plans dual-audience production artifacts that are bounded, cohesive, searchable, explicitly contracted where the language supports it, predictably located, contextually diagnosable, reproducibly set up, and backed by durable rationale without fixed size or coverage thresholds."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "complete-ready-blueprint",
+      "name": "complete implementation blueprint outcome",
+      "prompt": "Create the implementation blueprint for synthetic ticket CACHE-17 from the attached immutable repository snapshot. Resolve all design questions before code, ground quality in the mandatory engineering baseline, produce the technical design and TDD test plan, review the integrated artifact, and leave implementation to a fresh agent.",
+      "expected_output": "One ready blueprint keeps per-key refresh ownership inside MemoryCache, preserves its public API, introduces deterministic time and execution seams, specifies bounded stale lifecycle and failure behavior, and passes mandatory same-revision review.",
+      "files": [
+        "evals/fixtures/cache-refresh.md"
+      ],
+      "required_skill_loads": [
+        "implementation-planning",
+        "engineering-guidance"
+      ],
+      "expectations": [
+        "The outcome publishes exactly one current marked blueprint block and preserves unrelated ticket content.",
+        "The blueprint is agent-primary and human-inspectable, while planned production artifacts remain clear to both agents and human maintainers.",
+        "The technical plan keeps refresh acceptance and per-key in-flight ownership inside MemoryCache, preserves get(key, loader) and Promise<Value>, and avoids invented cross-process coordination.",
+        "The blueprint separates controlling authority, mechanical constraints, descriptive base-bound repository evidence, and quality defaults, and records an artifact-specific applicability disposition for every engineering-baseline guideline instead of treating repeated local patterns as sufficient authority.",
+        "Clock and refresh execution become deliberate deterministic seams, while freshness and stale-window policy has one authoritative owner without speculative framework abstraction.",
+        "Lifecycle scenarios, assumptions, search closure, public-name collisions, and durable rationale destinations are explicit before readiness; each rabbit hole is retired with falsifying evidence or proof or remains a readiness-blocking material-unresolved item.",
+        "Production changes are planned as bounded cohesive artifacts with distinctive searchable domain names, language-appropriate explicit contracts/types, predictable paths, contextual diagnostics, agent-runnable noninteractive idempotent setup, and source-backed durable rationale for both agents and humans, without fixed size, coverage, or grep-result thresholds.",
+        "The test plan covers exact fresh, stale-within-window, and too-old boundaries; same-key single-flight; different-key independence; successful replacement; failed background refresh with stale retention and logging; cleanup of in-flight state; and public-result compatibility without real sleeps.",
+        "Every focused, regression, and build command has verified command-admission evidence, including a noninteractive nonmutating smoke check and before/after worktree comparison, and each TDD slice preserves the red, smallest implementation, green, regression, evidence order.",
+        "Every credible in-scope finding is integrated regardless of size, severity, or pre-existing status. Every other finding is disproved with stronger evidence, source-backed out-of-scope, or readiness-blocking needs-decision; no deferred or nice-to-have disposition exists.",
+        "Every source finding retains identity and conclusion, compatible groups preserve all source IDs, disagreements remain separate, and PASS means zero findings on the reviewed revision with coverage IDs, evidence IDs, diagnostics, contrary evidence, and unresolved none.",
+        "The complete integrated artifact is reread before assigning its final revision identity and dispatching review; fresh independent lenses, including dynamic-behavior and static-structure Architecture concerns plus the mandatory Uncle Bob/Clean Architecture and John Ousterhout/APOSD reviewers, then pass that revision with reviewer identity, requested and resolved model or tier, fresh or resumed context, and immutable evidence base.",
+        "After publishing, the ticket is reread and the status, revision, both plans, review record, and implementation start instructions are verified before publication is claimed.",
+        "Any separately stored explanatory appendix is linked from the canonical block and carries no uniquely normative content.",
+        "A fresh implementation agent receives the immutable base, first slice, exact proof commands, and re-planning conditions."
+      ],
+      "covered_clauses": [
+        "ip-matched-control",
+        "ip-two-plan-outcome",
+        "ip-risk-retirement",
+        "ip-engineering-baseline",
+        "ip-mandatory-clean-architecture",
+        "ip-mandatory-ousterhout",
+        "ip-fix-or-block-findings",
+        "ip-ready-gate",
+        "ip-durable-ticket"
+      ]
+    }
+  ]
+}

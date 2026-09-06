@@ -1,0 +1,246 @@
+{
+  "schema": "dispatch-work-artifact/v1",
+  "authorization": {
+    "explicit": true,
+    "granted": true,
+    "source": "fixture://authorization/mixed-frontier"
+  },
+  "execution_context": {
+    "repositories": ["fixture://repository/dispatch"],
+    "trackers": ["fixture://tracker/dispatch"],
+    "canonical_dependencies": ["take-ticket", "take-it-offline"],
+    "immutable_base": "1111111111111111111111111111111111111111"
+  },
+  "resume": {
+    "requested": false,
+    "decision": "fresh",
+    "source_dag_fingerprint": {
+      "current": "sha256:0fdda6374a6fb9403d828bec1fe7b2bdb6861230e7a8cdaaa187e6420b9b3eb9",
+      "current_inputs": ["$.source_dag", "$.collision_constraints"]
+    },
+    "execution_fingerprint": {
+      "current": "sha256:05354a6118a3ca55a9f67f67ce3260512f7cff3d4e1572b234fa242d50ec9f9b",
+      "current_inputs": ["$.execution_context", "$.executor"]
+    }
+  },
+  "executor": {
+    "precedence": ["repository", "project", "user", "bundled-default"],
+    "candidates": {
+      "repository": {
+        "value": null,
+        "source": "fixture://config/repository"
+      },
+      "project": {
+        "value": null,
+        "source": "fixture://config/project"
+      },
+      "user": {
+        "value": null,
+        "source": "fixture://config/user"
+      },
+      "bundled-default": {
+        "value": 2,
+        "source": "fixture://config/bundled-default"
+      }
+    },
+    "selected": {
+      "scope": "bundled-default",
+      "value": 2,
+      "source": "fixture://config/bundled-default"
+    }
+  },
+  "collision_constraints": [],
+  "source_dag": {
+    "identity": "fixture://published-dag/mixed-frontier-v1",
+    "published": true,
+    "ready": true,
+    "tickets": [
+      { "id": "A", "dependencies": [], "initial_state": "open" },
+      { "id": "B", "dependencies": [], "initial_state": "open" },
+      { "id": "C", "dependencies": ["A"], "initial_state": "open" }
+    ],
+    "dependencies": [
+      { "ticket": "C", "depends_on": "A", "initial_state": "open" }
+    ]
+  },
+  "frontier_calculations": [
+    {
+      "id": "frontier-1",
+      "sequence": 1,
+      "eligible": ["A", "B"],
+      "active": [],
+      "selected": ["A", "B"],
+      "deferred": []
+    },
+    {
+      "id": "frontier-2",
+      "sequence": 6,
+      "eligible": ["C"],
+      "active": ["B"],
+      "selected": ["C"],
+      "deferred": []
+    },
+    {
+      "id": "frontier-3",
+      "sequence": 11,
+      "eligible": [],
+      "active": [],
+      "selected": [],
+      "deferred": []
+    }
+  ],
+  "ticket_lifecycles": [
+    {
+      "ticket": "A",
+      "state": "completed",
+      "frontier_calculation": "frontier-1",
+      "started_sequence": 3,
+      "completed_sequence": 4,
+      "result": {
+        "status": "complete",
+        "authority": "reviewed-ticket",
+        "implementation_handoff": "artifact://implement/A.json",
+        "review_brief": "artifact://review/A.json"
+      }
+    },
+    {
+      "ticket": "B",
+      "state": "held",
+      "frontier_calculation": "frontier-1",
+      "started_sequence": 4,
+      "terminal_sequence": 8,
+      "result": {
+        "status": "held",
+        "recovery_action": "Resolve ticket B's retained decision, then resume B."
+      }
+    },
+    {
+      "ticket": "C",
+      "state": "completed",
+      "frontier_calculation": "frontier-2",
+      "started_sequence": 8,
+      "completed_sequence": 9,
+      "result": {
+        "status": "complete",
+        "authority": "reviewed-ticket",
+        "implementation_handoff": "artifact://implement/C.json",
+        "review_brief": "artifact://review/C.json"
+      }
+    }
+  ],
+  "worktrees": [
+    {
+      "ticket": "A",
+      "owner": "dispatch-mixed:A",
+      "path": "fixture://worktree/mixed/A",
+      "base": "1111111111111111111111111111111111111111",
+      "created_sequence": 2,
+      "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/mixed/A"
+      },
+      "lifecycle_state": "removed",
+      "cleanup": {
+        "decision": "remove-after-completion",
+        "diagnostic_artifacts": []
+      }
+    },
+    {
+      "ticket": "B",
+      "owner": "dispatch-mixed:B",
+      "path": "fixture://worktree/mixed/B",
+      "base": "1111111111111111111111111111111111111111",
+      "created_sequence": 3,
+      "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/mixed/B"
+      },
+      "lifecycle_state": "retained-for-diagnosis",
+      "cleanup": {
+        "decision": "retain-for-human-decision",
+        "diagnostic_artifacts": ["artifact://diagnostics/B.json"]
+      }
+    },
+    {
+      "ticket": "C",
+      "owner": "dispatch-mixed:C",
+      "path": "fixture://worktree/mixed/C",
+      "base": "1111111111111111111111111111111111111111",
+      "created_sequence": 7,
+      "creation_result": "created",
+      "isolation_check": {
+        "status": "passed",
+        "evidence": "fixture://isolation/mixed/C"
+      },
+      "lifecycle_state": "removed",
+      "cleanup": {
+        "decision": "remove-after-completion",
+        "diagnostic_artifacts": []
+      }
+    }
+  ],
+  "pr_maintenance": [],
+  "completion_events": [
+    {
+      "sequence": 4,
+      "ticket": "A",
+      "result_status": "complete",
+      "authority": "reviewed-ticket"
+    },
+    {
+      "sequence": 9,
+      "ticket": "C",
+      "result_status": "complete",
+      "authority": "reviewed-ticket"
+    }
+  ],
+  "dependency_transitions": [
+    {
+      "sequence": 5,
+      "ticket": "C",
+      "dependency": "A",
+      "from": "open",
+      "to": "satisfied",
+      "completion_sequence": 4
+    }
+  ],
+  "synthesis": [
+    {
+      "frontier_id": "frontier-1",
+      "sequence": 5,
+      "tickets": ["A"],
+      "inputs": {
+        "implementation_handoffs": ["artifact://implement/A.json"],
+        "review_briefs": ["artifact://review/A.json"]
+      },
+      "concerns": [],
+      "recommendations": ["accept A"]
+    },
+    {
+      "frontier_id": "frontier-2",
+      "sequence": 10,
+      "tickets": ["C"],
+      "inputs": {
+        "implementation_handoffs": ["artifact://implement/C.json"],
+        "review_briefs": ["artifact://review/C.json"]
+      },
+      "concerns": [],
+      "recommendations": ["accept C"]
+    }
+  ],
+  "unresolved_systematic_concerns": [],
+  "final_state": {
+    "status": "held",
+    "open_tickets": [],
+    "active_tickets": [],
+    "completed_tickets": ["A", "C"],
+    "retryable_tickets": [],
+    "human_decision_tickets": [],
+    "held_tickets": ["B"],
+    "blocked_tickets": [],
+    "failed_tickets": [],
+    "first_recovery_action": "Resolve ticket B's retained decision, then resume B."
+  }
+}

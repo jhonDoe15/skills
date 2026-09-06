@@ -1,0 +1,35 @@
+{
+  "id": "claude-agent-writing-explicit",
+  "host": "claude-code",
+  "request": {
+    "requestId": "claude-agent-writing-explicit",
+    "skill": "agent-writing",
+    "prompt": "Create a short Markdown instruction artifact for a fresh agent. Tell it when to inspect deploy-status.json, what status to report, and when the task is complete."
+  },
+  "treatment": {
+    "skills": [
+      "agent-writing",
+      "writing-foundation"
+    ]
+  },
+  "control": {
+    "skills": []
+  },
+  "deterministicChecks": [
+    {
+      "name": "reachable activation",
+      "pattern": "^## Activation\\s*$",
+      "flags": "m"
+    },
+    {
+      "name": "observable behavior",
+      "pattern": "^## Action\\s*$",
+      "flags": "m"
+    },
+    {
+      "name": "clear completion",
+      "pattern": "^## Done when\\s*$",
+      "flags": "m"
+    }
+  ]
+}

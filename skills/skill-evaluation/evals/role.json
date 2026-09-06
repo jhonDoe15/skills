@@ -1,0 +1,74 @@
+{
+  "skill_name": "skill-evaluation",
+  "version": 1,
+  "evaluation": {
+    "scope": "skill-evaluation-role",
+    "layer": "role",
+    "skill": "skill-evaluation",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "skill-evaluation-role-v1"
+  },
+  "signals": {
+    "se-package-closure": ["package closure"],
+    "se-trigger-separation": ["trigger selection"],
+    "se-unverified": ["[Uu]nverified"]
+  },
+  "global_required_signals": [
+    "se-package-closure",
+    "se-trigger-separation",
+    "se-unverified"
+  ],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "evidence-proportionality",
+        "description": "Assess whether each behavioral claim receives the smallest valid role, component, outcome, or trigger evidence and unsupported claims remain explicitly unverified. Quote or reference output evidence."
+      },
+      {
+        "id": "evaluation-integrity",
+        "description": "Assess whether package closure precedes execution, controls remain matched, mechanical gates precede blind semantic judgment, and retained evidence supports offline replay. Quote or reference output evidence."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "plan-proportionate-skill-evidence",
+      "name": "proportionate Agent Skill evaluation",
+      "prompt": "Plan evidence for a new deployment-triage Skill that claims canonical routing, one incident-investigation dependency, exact preservation of a JSON work product, and clearer human-facing summaries. No paid or live-host run is authorized. Separate mechanics, trigger selection, dependency contribution, outcome quality, and unverified claims.",
+      "expected_output": "A claim-proportionate evaluation plan that checks package closure first, assigns role, component, outcome, and trigger evidence without duplication, uses deterministic checks only for mechanical facts, reserves semantic quality for blind judgment, and marks unauthorized behavioral runs unverified.",
+      "files": [],
+      "required_skill_loads": ["skill-evaluation"],
+      "expectations": [
+        "Package closure is a precondition and a missing dependency is not a control.",
+        "Trigger selection remains separate from output quality.",
+        "The component case ablates only incident-investigation through the test Adapter boundary.",
+        "JSON preservation receives a deterministic gate while summary quality receives blind judgment with output evidence.",
+        "Paid and live-host evidence remains unverified because it was not authorized.",
+        "Generated runs and reports remain ignored while reusable cases and validators remain versioned."
+      ],
+      "covered_clauses": [
+        "se-layer-selection",
+        "se-package-closure",
+        "se-matched-controls",
+        "se-test-adapter-boundary",
+        "se-deterministic-first",
+        "se-blind-judgment",
+        "se-retained-evidence",
+        "se-offline-replay",
+        "se-authorization",
+        "se-unverified-status"
+      ],
+      "required_signals": []
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "skill_name": "review-worker",
+  "version": 1,
+  "evaluation": {
+    "scope": "review-worker-components",
+    "layer": "component",
+    "skill": "review-worker",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment", "component-ablation"]
+  },
+  "config": {
+    "runs_per_configuration": 5,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "review-worker-components-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "Quote or reference complete and ablated output evidence. Package-closure failure is not a component control.",
+    "dimensions": [
+      {
+        "id": "dependency-contribution",
+        "description": "The complete worker uses dependency-owned behavior and the test-only ablation does not copy it."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "review-worker-to-engineering-guidance",
+      "name": "independent Engineering Guidance component",
+      "prompt": "Inspect one complete Ticket outcome through the assigned Review lens and resolve every Engineering Guidance concern independently.",
+      "expected_output": "The complete worker invokes Engineering Guidance in its fresh context. The ablated worker fails to produce complete coverage and does not copy guidance.",
+      "files": [],
+      "ablated_dependency": "engineering-guidance",
+      "expectations": [
+        "Matched arms differ only in the engineering-guidance invocation.",
+        "The complete worker resolves all nine concerns from its own evidence.",
+        "The test-only Adapter records success and ablation without entering production package or runtime paths.",
+        "The ablated arm does not inherit implementation coverage or use package failure as control."
+      ],
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "rw-engineering-guidance-edge"}
+      ]
+    },
+    {
+      "id": "review-worker-to-take-it-offline",
+      "name": "worker handoff component",
+      "prompt": "Return the worker candidate stream and separate concern coverage to a fresh coordinator context.",
+      "expected_output": "The complete worker uses Take It Offline for a verified temporary handoff. The ablated worker does not copy continuation behavior.",
+      "files": [],
+      "ablated_dependency": "take-it-offline",
+      "expectations": [
+        "Matched arms differ only in the take-it-offline invocation.",
+        "The complete arm returns inspectable worker artifact references.",
+        "The ablated arm does not emulate the dependency."
+      ],
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "rw-take-it-offline-edge"}
+      ]
+    }
+  ]
+}

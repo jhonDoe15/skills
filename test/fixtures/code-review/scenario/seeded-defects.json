@@ -1,0 +1,19 @@
+{
+  "schema": "code-review-seeded-defects/v1",
+  "defects": [
+    {
+      "id": "domain-nonmember-discount",
+      "lens": "Domain",
+      "location": "repository/src/discount.js:3",
+      "expected": "Non-members receive no discount.",
+      "seed": "calculateDiscount ignores isLoyaltyMember."
+    },
+    {
+      "id": "design-order-mutation",
+      "lens": "Engineering/Design",
+      "location": "repository/src/discount.js:7",
+      "expected": "Order quoting returns a new value.",
+      "seed": "quoteOrder mutates and returns its input."
+    }
+  ]
+}

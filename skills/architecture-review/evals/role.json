@@ -1,0 +1,94 @@
+{
+  "skill_name": "architecture-review",
+  "version": 1,
+  "evaluation": {
+    "scope": "architecture-review-role",
+    "layer": "role",
+    "skill": "architecture-review",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "architecture-review-role-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every dimension, quote output evidence tied to the supplied immutable target. Doctrine names, unsupported diagrams, and generic recommendations are not evidence.",
+    "dimensions": [
+      {
+        "id": "bounded_evidence",
+        "description": "The review identifies an immutable existing-code revision, a change-range base/head, or a named design revision with its immutable repository base. It follows affected consumers and paths to evidenced boundaries and keeps proposed versus observed evidence, authority classes, and context limits visible."
+      },
+      {
+        "id": "architecture_quality",
+        "description": "Every affected module and the target as a whole receive evidence-backed coverage of supported consumer contracts, effective behavioral coverage, coherent ownership and locality, earned depth, real seams and dependency direction, and proportional change."
+      },
+      {
+        "id": "independent_lenses",
+        "description": "Fresh dynamic-behavior, static-structure, Uncle Bob/Clean Architecture, and John Ousterhout/APOSD lenses examine the same immutable target and retain separate evidence-bearing results."
+      },
+      {
+        "id": "finding_accounting",
+        "description": "Every source finding keeps its identity and one supported disposition; all credible in-scope findings are reported regardless of severity or pre-existing status, while disagreements and unresolved correction choices remain visible."
+      },
+      {
+        "id": "review_boundary",
+        "description": "The result is a read-only architecture brief: it does not edit code, publish comments without authorization, claim remediation, or substitute for complete ticket Code Review."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "existing-code-deep-module-review",
+      "name": "existing cache architecture review",
+      "prompt": "Use architecture-review on fictional repository revision 1111111111111111111111111111111111111111. Scope: src/cache and its direct consumers. The cache exposes get, refresh, invalidate, and stats through four pass-through wrappers; callers coordinate stale-entry refresh and each reimplements key normalization. Tests cover cache storage methods but no consumer-visible single-flight or invalidation behavior. Repository authority requires one refresh per key and invalidation after role changes. Review the existing architecture without changing files.",
+      "expected_output": "A read-only architecture brief traces consumers and duplicated policy, applies all six quality claims, distinguishes shallow wrappers from an earned boundary, runs all four mandatory lenses, and reports every supported in-scope finding.",
+      "files": [],
+      "required_skill_loads": ["architecture-review", "engineering-guidance"],
+      "expectations": [
+        "The immutable revision and src/cache consumer boundary are explicit.",
+        "The review identifies caller-owned refresh coordination and repeated key normalization as leaked knowledge with direct prompt evidence.",
+        "Every affected module and the whole target receive all six quality-claim dispositions, including deletion-test and seam-reality evidence.",
+        "Dynamic behavior, static structure, Uncle Bob/Clean Architecture, and John Ousterhout/APOSD return separate evidence-bearing results.",
+        "Missing consumer-visible single-flight and invalidation proof is treated as an effective behavioral coverage gap rather than inferred from storage-method tests.",
+        "Credible in-scope findings remain reported regardless of severity, and the review performs no mutation or remediation."
+      ],
+      "covers": [
+        "existing-code",
+        "deep-modules",
+        "consumer-contracts",
+        "effective-behavioral-coverage"
+      ]
+    },
+    {
+      "id": "pr-architecture-range-review",
+      "name": "architecture-focused pull-request review",
+      "prompt": "Use architecture-review on fictional pull-request range 2222222222222222222222222222222222222222..3333333333333333333333333333333333333333. The change adds an EmailSender interface with one production adapter and a test fake, then routes an existing notification policy through three new pass-through services. Requirements preserve notification behavior; repository evidence shows no alternate provider or effect-control problem because the existing mail client is already injected at the policy boundary. Review architecture only and do not publish comments.",
+      "expected_output": "The review compares base and head, tests whether the new modules earn depth and establish real seams, keeps the fake from proving variation by itself, and returns a read-only brief rather than a full ticket review.",
+      "files": [],
+      "required_skill_loads": ["architecture-review", "engineering-guidance"],
+      "expectations": [
+        "The exact immutable base/head range and architecture-only intent are preserved.",
+        "The review applies the deletion test to all new pass-through services.",
+        "A manufactured test fake alone does not establish seam reality or justify the new interface.",
+        "The existing injected policy boundary is considered as contrary evidence to the new abstraction.",
+        "All four mandatory lenses examine the same range and source findings retain separate identities through reconciliation.",
+        "The outcome neither publishes comments nor claims complete ticket Code Review."
+      ],
+      "covers": [
+        "pull-request-range",
+        "proportional-change",
+        "seam-reality",
+        "read-only-boundary"
+      ]
+    }
+  ]
+}

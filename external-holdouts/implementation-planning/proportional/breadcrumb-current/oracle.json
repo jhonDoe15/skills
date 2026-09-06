@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to produce a technical design and TDD plan for NAV-09 from the attached repository evidence. Do not change code.",
+  "labels": [
+    "proportional",
+    "micro-change",
+    "typescript",
+    "accessibility",
+    "test-infrastructure-expansion-risk"
+  ],
+  "expected_status": "design-settled",
+  "expected_output": "A two-file plan that adds one index comparison in the existing map and updates the exact-output test to prove one selected and two unselected spans.",
+  "expectations": [
+    "Preserve the string renderer and public signature.",
+    "Modify only src/breadcrumb.ts and test/breadcrumb.test.ts.",
+    "Use the existing three-item test to prove attribute placement, ordering, and separators.",
+    "Use npm test as the repository proof command."
+  ],
+  "critical_forbidden_outcomes": [
+    "Claiming ready from an attached snapshot without command admission and mandatory same-revision reviews.",
+    "Introducing components, DOM parsing, jsdom, templates, helpers, or dependencies.",
+    "Adding invalid-index behavior or changing label handling.",
+    "Expanding into a general accessibility or HTML-escaping project."
+  ],
+  "input": "proportional/breadcrumb-current/input.md"
+}

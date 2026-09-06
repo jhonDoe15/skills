@@ -1,0 +1,78 @@
+{
+  "skill_name": "agents-file-writer",
+  "version": 1,
+  "evaluation": {
+    "scope": "agents-file-writer-role",
+    "layer": "role",
+    "skill": "agents-file-writer",
+    "hosts": [
+      "claude-code",
+      "cursor"
+    ],
+    "arms": [
+      "no-skill",
+      "treatment"
+    ]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "agents-file-writer-role-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [
+      0,
+      2
+    ],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every semantic score, quote or reference concrete guidance output evidence; lifecycle activation and output quality remain separate claims.",
+    "dimensions": [
+      {
+        "id": "scope-and-authority",
+        "description": "Assess whether the procedure classifies the requested Create, Improve, or Review work from local authority, resolves facts before asking, preserves user and repository ownership, and keeps exceptions explicit. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "safe-complete-guidance",
+        "description": "Assess whether the procedure covers the migration ledger, preflight, ordinary writes, authorization boundaries, verification, and final guidance graph without claiming that ordinary links auto-load or that unrelated worktree changes belong to the run. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "improve-project-guidance",
+      "name": "evidence-led AGENTS improvement",
+      "prompt": "Improve the supplied project's root AGENTS.md. The accepted scope is the root agent guidance and its linked references. The current AGENTS.md says 'Run npm test before shipping. Production data must never enter fixtures. See docs/build.md for build details.' docs/build.md is authoritative and says the supported verification command is npm run verify; the old npm test command was removed. CLAUDE.md contains only a pointer to AGENTS.md, and docs/architecture.md records a compatibility constraint: stored record IDs remain stable across upgrades. All target files are clean, tracked regular files; an unrelated src/ui.js edit belongs to the user. Incorporate the current verification command and make the upgrade constraint available when relevant. Return the resulting guidance, affected file map, and observed verification limits.",
+      "expected_output": "A complete agent-file workflow that discovers the real load chain, resolves authority, records every migration decision and write, protects collisions and unrelated state, verifies the effective guidance graph, and presents a reviewable result with explicit untested gaps.",
+      "files": [],
+      "required_skill_loads": [
+        "agents-file-writer"
+      ],
+      "expectations": [
+        "There are no deterministic output-text signals; workflow quality requires evidence-based semantic judging and observed actions.",
+        "The blind judge assesses discovery, authority resolution, complete migration accounting, and a mutation manifest that covers every planned path.",
+        "The blind judge verifies that existing collisions, symlinks, detached state, and destructive or scope-expanding operations receive an explicit disposition before mutation.",
+        "The blind judge verifies that ordinary in-scope writes preserve unrelated content and Git state, and that the result is reread and checked in effective load order.",
+        "The blind judge rejects claims that Markdown links automatically load references or that static checks prove model behavior.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness.",
+        "Failed critical mechanical gates are non-overridable."
+      ],
+      "covered_clauses": [
+        "afw-discovery",
+        "afw-authority",
+        "afw-migration-ledger",
+        "afw-preflight",
+        "afw-exception-authorization",
+        "afw-implementation",
+        "afw-verification",
+        "afw-presentation",
+        "afw-load-graph"
+      ],
+      "required_signals": []
+    }
+  ]
+}

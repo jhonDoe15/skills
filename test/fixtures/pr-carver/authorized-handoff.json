@@ -1,0 +1,35 @@
+{
+  "schema": "pr-carver-assessment/v1",
+  "status": "ready",
+  "subject": {
+    "kind": "branch",
+    "identity": "fixture/authorized-handoff",
+    "base": "fixture/main"
+  },
+  "units": [
+    {
+      "id": "api-errors",
+      "assessment": "fit",
+      "shape": "vertical",
+      "outcome": "API clients receive bounded account-time-zone errors.",
+      "validation": "Run the account API behavior tests.",
+      "migration": {
+        "strategy": "normal",
+        "phase": "normal"
+      },
+      "consumes": []
+    }
+  ],
+  "ordering_edges": [],
+  "collisions": [],
+  "structure": "one-pr",
+  "flags": [],
+  "authorization": {
+    "mode": "assessment-only",
+    "allowed_mutations": [],
+    "handoff": {
+      "operation": "create-branch",
+      "target": "feature/account-time-zone-api"
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "scope": "slice-plan-package-closure",
+  "owner": "slice-plan",
+  "cases": [
+    {
+      "id": "missing-ticket-scope",
+      "consumer": "slice-plan",
+      "missing_dependency": "ticket-scope",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"ticket-scope\"",
+        "missingSkill": "ticket-scope"
+      },
+      "covered_clauses": ["sp-missing-ticket-scope"]
+    },
+    {
+      "id": "missing-take-it-offline",
+      "consumer": "slice-plan",
+      "missing_dependency": "take-it-offline",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"take-it-offline\"",
+        "missingSkill": "take-it-offline"
+      },
+      "covered_clauses": ["sp-missing-take-it-offline"]
+    }
+  ]
+}

@@ -1,0 +1,200 @@
+{
+  "skill_name": "take-ticket",
+  "version": 1,
+  "hosts": ["claude-code", "cursor"],
+  "evaluation_policy": {
+    "fresh_sessions": true,
+    "matched_no_skill": true,
+    "trigger_separate": true,
+    "semantic_grade": "blind-model-with-output-evidence",
+    "human_review": "every-failure-and-predeclared-passing-sample",
+    "generated_artifacts": "uncommitted"
+  },
+  "config": {
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "take-ticket-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every assertion and dimension, quote or reference lifecycle, immutable range, handoff, Review, correction, re-review, or validation evidence.",
+    "dimensions": [
+      {
+        "id": "lifecycle_fidelity",
+        "description": "The result follows Implement, one fresh independent full Review, correction where needed, and targeted re-review."
+      },
+      {
+        "id": "review_authority",
+        "description": "Code Review resolves authority independently and receives the complete Ticket outcome."
+      },
+      {
+        "id": "failure_visibility",
+        "description": "Failed or incomplete phases remain visible and cannot become a reviewed result."
+      },
+      {
+        "id": "artifact_quality",
+        "description": "Retained artifacts expose transitions, immutable ranges, evidence, dispositions, and completeness for offline inspection."
+      },
+      {
+        "id": "boundary_integrity",
+        "description": "Production uses canonical dependencies while test Adapters and tracker, release, and dispatch work stay outside the outcome."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "reviewed-lifecycle-role",
+      "name": "complete reviewed-ticket lifecycle",
+      "layer": "role",
+      "prompt": "Carry one settled ticket in an isolated checkout through implementation, independent review, accepted-finding correction, and targeted re-review. Preserve every retained artifact and return the reviewed-ticket result.",
+      "expected_output": "The worker completes Implement, starts one fresh authoritative full Code Review over the complete Ticket outcome, corrects accepted findings, targets every corrected or materially affected region, and returns deterministic lifecycle evidence.",
+      "files": [],
+      "required_skill_loads": [
+        "take-ticket",
+        "implement",
+        "code-review",
+        "engineering-guidance",
+        "review-worker",
+        "review-coordinator",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "Implementation completes before review and contributes requirements, an immutable range, implement-handoff/v2, and validation evidence.",
+        "One fresh full Review resolves authority independently rather than inheriting implementation guidance.",
+        "A clean Review records correction and targeted re-review as not required.",
+        "Accepted findings receive correction evidence and targeted re-review across corrected and materially affected Review regions.",
+        "Every failed or incomplete phase stays non-reviewed with retained progress and a recovery action.",
+        "The final artifact is deterministic and supports offline inspection without tracker, release, or dispatch mutation."
+      ],
+      "covers": [
+        "tt-order",
+        "tt-ticket-outcome",
+        "tt-independent-authority",
+        "tt-single-full-review",
+        "tt-correction",
+        "tt-targeted-re-review",
+        "tt-failure-state",
+        "tt-retained-artifacts"
+      ]
+    },
+    {
+      "id": "implement-component",
+      "name": "canonical Implement component",
+      "layer": "component",
+      "prompt": "Run the reviewed-ticket lifecycle with canonical Implement, then compare it with a test-only arm where only that dependency is absent.",
+      "expected_output": "The complete arm obtains a correction-ready implementation handoff. The ablated arm remains non-reviewed and cannot substitute fixture behavior.",
+      "files": [],
+      "expectations": [
+        "The treatment loads canonical implement and passes its complete outcome to review.",
+        "The component control ablates only take-ticket to implement through the test boundary.",
+        "The test Implement Adapter records inputs and scripted outcomes without copying production behavior.",
+        "The ablated arm cannot report a reviewed-ticket result."
+      ],
+      "covers": ["tt-implement-edge", "tt-test-implement-adapter"],
+      "ablated_dependency": "implement"
+    },
+    {
+      "id": "code-review-component",
+      "name": "canonical Code Review component",
+      "layer": "component",
+      "prompt": "Run the reviewed-ticket lifecycle with canonical Code Review, then compare it with a test-only arm where only that dependency is absent.",
+      "expected_output": "The complete arm performs one independent full Review and targeted re-review when required. The ablated arm remains non-reviewed.",
+      "files": [],
+      "expectations": [
+        "The treatment loads canonical code-review and gives it the complete Ticket outcome.",
+        "The component control ablates only take-ticket to code-review through the test boundary.",
+        "The test Code Review Adapter records inputs and scripted outcomes without copying review behavior.",
+        "The ablated arm cannot report a reviewed-ticket result."
+      ],
+      "covers": ["tt-code-review-edge", "tt-test-review-adapter"],
+      "ablated_dependency": "code-review"
+    },
+    {
+      "id": "reviewed-ticket-outcome",
+      "name": "reviewed ticket with matched control",
+      "layer": "outcome",
+      "prompt": "Take issue 43 from its supplied immutable base to a reviewed-ticket result in a fresh isolated checkout. Retain implementation, full Review, correction, targeted re-review, and final completeness evidence.",
+      "expected_output": "The treatment yields a reviewed-ticket artifact only after every required phase succeeds. The matched No-Skill arm receives the same ticket, repository, host, model, tools, and budget without Take Ticket or its dependency closure.",
+      "files": [],
+      "required_skill_loads": [
+        "take-ticket",
+        "implement",
+        "code-review",
+        "engineering-guidance",
+        "review-worker",
+        "review-coordinator",
+        "take-it-offline",
+        "agent-writing",
+        "writing-foundation"
+      ],
+      "expectations": [
+        "Treatment and No-Skill runs use matched fresh sessions that differ only in Skill provisioning.",
+        "Mechanical checks establish exact dependency failures, artifact shape, lifecycle order, immutable ranges, complete region coverage, and final completeness.",
+        "Blind evidence-bearing judgment decides semantic requirement fidelity and review quality.",
+        "Generated runs, judge payloads, reports, and workspaces remain uncommitted."
+      ],
+      "covers": [
+        "tt-matched-control",
+        "tt-package-closure",
+        "tt-observable-result",
+        "tt-mechanical-semantic-separation"
+      ]
+    },
+    {
+      "id": "reviewed-ticket-trigger",
+      "name": "complete ticket request",
+      "layer": "trigger",
+      "prompt": "Take this settled ticket through implementation, full independent review, correction, targeted re-review, and a reviewed-ticket result.",
+      "expected_output": "Take Ticket owns the complete requested lifecycle.",
+      "files": [],
+      "expectations": [
+        "The exact take-ticket Skill load is observed independently from output quality."
+      ],
+      "covers": ["tt-positive-routing"],
+      "should_trigger": true
+    },
+    {
+      "id": "canonical-take-ticket-trigger",
+      "name": "canonical direct invocation",
+      "layer": "trigger",
+      "prompt": "/take-ticket\n\nCarry this settled issue to a reviewed-ticket result.",
+      "expected_output": "Canonical direct invocation selects Take Ticket.",
+      "files": [],
+      "expectations": [
+        "The canonical request and exact successful take-ticket load are observed."
+      ],
+      "covers": ["tt-canonical-routing"],
+      "should_trigger": true,
+      "canonical_invocation": true
+    },
+    {
+      "id": "implementation-only-exclusion",
+      "name": "implementation-only request exclusion",
+      "layer": "trigger",
+      "prompt": "Implement this settled bounded issue and return the implementation handoff without review.",
+      "expected_output": "Implement owns the patch-only outcome and Take Ticket remains inactive.",
+      "files": [],
+      "expectations": [
+        "Take Ticket does not replace an implementation-only request."
+      ],
+      "covers": ["tt-implement-boundary"],
+      "should_trigger": false
+    },
+    {
+      "id": "review-only-exclusion",
+      "name": "review-only request exclusion",
+      "layer": "trigger",
+      "prompt": "Review this immutable Ticket outcome without changing code.",
+      "expected_output": "Code Review owns the read-only request and Take Ticket remains inactive.",
+      "files": [],
+      "expectations": [
+        "Take Ticket does not replace a review-only request."
+      ],
+      "covers": ["tt-review-boundary"],
+      "should_trigger": false
+    }
+  ]
+}

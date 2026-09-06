@@ -1,0 +1,55 @@
+{
+  "skill_name": "skill-mechanics",
+  "version": 1,
+  "evaluation": {
+    "scope": "skill-mechanics-trigger",
+    "layer": "trigger",
+    "skill": "skill-mechanics",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 5,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 1,
+    "randomization_seed": "skill-mechanics-trigger-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "routing",
+        "description": "Observes canonical private dependency reach and rejects Skill Mechanics as a direct user-goal route."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "skill-mechanics-canonical",
+      "name": "canonical-consumer-invocation",
+      "prompt": "/skill-mechanics\n\nRepresent the already-decided contract supplied by Skill Writing.",
+      "expected_output": "The named private dependency can be loaded by its consumer using the canonical name.",
+      "files": [],
+      "expectations": [
+        "The host records Skill Mechanics activation by its exact canonical name."
+      ],
+      "covered_clauses": ["sm-routing-consumer"],
+      "should_trigger": true,
+      "required_skill_loads": [],
+      "canonical_invocation": true
+    },
+    {
+      "id": "skill-mechanics-private-false-activation",
+      "name": "private-user-goal-false-activation",
+      "prompt": "Help me decide whether our recurring deployment task should become a new Skill.",
+      "expected_output": "Skill Mechanics stays inactive because it is not advertised as a user goal and does not decide whether a Skill should exist.",
+      "files": [],
+      "expectations": [
+        "The host does not record a direct Skill Mechanics selection or load."
+      ],
+      "covered_clauses": ["sm-private-routing-exclusion"],
+      "should_trigger": false
+    }
+  ]
+}

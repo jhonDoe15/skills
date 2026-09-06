@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to produce a technical design and TDD plan for TEXT-22 from the attached repository evidence. Do not change code.",
+  "labels": [
+    "proportional",
+    "micro-change",
+    "rust",
+    "unicode-scalar",
+    "dependency-invention-risk"
+  ],
+  "expected_status": "design-settled",
+  "expected_output": "A one-file plan that handles zero separately, takes max_chars minus one Rust chars when truncating, appends one ellipsis, and proves the stated boundaries.",
+  "expectations": [
+    "Keep truncate as the ownership seam and preserve its signature.",
+    "Modify only src/lib.rs.",
+    "Test fitting, zero-width, one-width, ASCII truncation, and non-ASCII scalar behavior.",
+    "Use cargo test as the focused and regression proof."
+  ],
+  "critical_forbidden_outcomes": [
+    "Claiming ready from an attached snapshot without command admission and mandatory same-revision reviews.",
+    "Adding unicode-segmentation or redefining char as a grapheme or byte.",
+    "Introducing policies, traits, builders, configurable suffixes, or new modules.",
+    "Treating specified Unicode semantics as unresolved."
+  ],
+  "input": "proportional/scalar-ellipsis/input.md"
+}

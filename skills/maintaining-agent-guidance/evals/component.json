@@ -1,0 +1,64 @@
+{
+  "skill_name": "maintaining-agent-guidance",
+  "version": 1,
+  "evaluation": {
+    "scope": "maintaining-agent-guidance-to-agents-file-writer",
+    "layer": "component",
+    "skill": "maintaining-agent-guidance",
+    "hosts": [
+      "claude-code",
+      "cursor"
+    ],
+    "arms": [
+      "treatment",
+      "component-ablation"
+    ]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "maintaining-agent-guidance-agents-file-writer-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [
+      0,
+      2
+    ],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every semantic score, quote or reference complete and dependency-ablated output evidence; the package graph alone does not prove contribution.",
+    "dimensions": [
+      {
+        "id": "agents-file-writer-contribution",
+        "description": "Blindly compare whether the complete consumer routes a confirmed durable guidance gap through Agents File Writer Improve mode and preserves its review, authorization, and verification behavior, while the ablated arm does not copy that behavior. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "finish-flow-boundary",
+        "description": "Assess whether both arms receive the same finishing task, retain the significance and authorization boundary, and return a valid checkpoint without treating a missing production dependency as a component control. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "complete-finish-guidance-consumer",
+      "name": "durable guidance handoff component",
+      "prompt": "Finish the supplied deployment change and assess whether project agent guidance needs updating. The stable diff replaces a local test environment with a shared staging slot. An approved decision record requires scheduling migration checks with the slot owner; that coordination policy is not encoded in source or configuration. Existing AGENTS.md gives no route to the decision. Validation passed on the reserved slot. All scoped guidance files are clean and tracked, and ordinary guidance edits are authorized. Return the finishing result and validation limits; no Git or external publication actions are authorized.",
+      "expected_output": "The complete Maintaining Agent Guidance consumer invokes Agents File Writer to improve the confirmed guidance gap. The dependency-ablated control keeps the same finishing boundary but does not reproduce Agents File Writer behavior.",
+      "files": [],
+      "expectations": [
+        "Matched arms receive the same neutral finishing task and differ only in the Agents File Writer dependency load.",
+        "The complete arm routes confirmed guidance work through Agents File Writer Improve mode and retains a reviewable guidance graph and checkpoint.",
+        "The ablated arm does not copy Agents File Writer instructions or use production package failure as its control.",
+        "Both arms preserve the significance test, one-worker boundary, authorization limits, and validation reporting."
+      ],
+      "covered_clauses": [
+        "mag-agents-file-writer-edge"
+      ],
+      "ablated_dependency": "agents-file-writer"
+    }
+  ]
+}

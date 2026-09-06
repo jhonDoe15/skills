@@ -1,0 +1,66 @@
+{
+  "schema": "pr-carver-assessment/v1",
+  "status": "ready",
+  "subject": {
+    "kind": "pull-request",
+    "identity": "fixture/pr-prefactor",
+    "base": "fixture/main"
+  },
+  "units": [
+    {
+      "id": "prefactor-seam",
+      "assessment": "fit",
+      "shape": "layered",
+      "outcome": "Existing account-time-zone behavior uses one verified access seam.",
+      "validation": "Run unchanged account API behavior tests.",
+      "migration": {
+        "strategy": "prefactor",
+        "phase": "prefactor"
+      },
+      "consumes": []
+    },
+    {
+      "id": "api-behavior",
+      "assessment": "fit",
+      "shape": "vertical",
+      "outcome": "Clients can update account time zones through the API.",
+      "validation": "Run account-time-zone update behavior tests.",
+      "migration": {
+        "strategy": "prefactor",
+        "phase": "transition"
+      },
+      "consumes": [
+        {
+          "unit": "prefactor-seam",
+          "output": "verified account-time-zone access seam"
+        }
+      ]
+    },
+    {
+      "id": "operator-docs",
+      "assessment": "fit",
+      "shape": "vertical",
+      "outcome": "Operators can diagnose rejected time-zone updates.",
+      "validation": "Run documentation links and example checks.",
+      "migration": {
+        "strategy": "normal",
+        "phase": "normal"
+      },
+      "consumes": []
+    }
+  ],
+  "ordering_edges": [
+    {
+      "prerequisite": "prefactor-seam",
+      "consumer": "api-behavior",
+      "output": "verified account-time-zone access seam"
+    }
+  ],
+  "collisions": [],
+  "structure": "mixed",
+  "flags": [],
+  "authorization": {
+    "mode": "assessment-only",
+    "allowed_mutations": []
+  }
+}

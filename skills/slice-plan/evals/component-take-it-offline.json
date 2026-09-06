@@ -1,0 +1,52 @@
+{
+  "skill_name": "slice-plan",
+  "version": 1,
+  "evaluation": {
+    "scope": "slice-plan-to-take-it-offline",
+    "layer": "component",
+    "skill": "slice-plan",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment", "component-ablation"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "slice-plan-take-it-offline-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "continuation-fidelity",
+        "description": "Blindly compare whether a forced fresh-context continuation preserves verified requirements, candidate status, unresolved checks, artifact references, and the exact next planning action without inventing state. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "final-plan-boundary",
+        "description": "Assess whether temporary continuation state remains distinct from the final validated plan and grants no publication authority. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "fresh-context-planning-continuation",
+      "name": "planning-context-boundary-component",
+      "prompt": "Continue a large settled Slice Plan across a required fresh context. Preserve the verified source requirements, current candidate judgments, remaining coverage and graph checks, generated artifact references, and exact next action. The final plan is not yet ready and publication is not authorized.",
+      "expected_output": "The complete consumer uses Take It Offline to carry verified planning state safely across the context boundary, then resumes Slice Plan without treating the continuation as the final plan.",
+      "files": [],
+      "expectations": [
+        "Both arms receive the same neutral continuation task; only the Take It Offline dependency load differs.",
+        "The continuation preserves verified state and unresolved work without becoming a ready plan.",
+        "No tracker write or later workflow is authorized.",
+        "Semantic scoring quotes or references concrete output evidence; sampled human review checks continuation fidelity."
+      ],
+      "covered_clauses": ["sp-take-it-offline-edge"],
+      "ablated_dependency": "take-it-offline"
+    }
+  ]
+}

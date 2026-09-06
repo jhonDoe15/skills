@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to determine whether SCAN-18 is implementable from the attached repository evidence. Do not change code.",
+  "labels": [
+    "authority",
+    "observational-impossibility",
+    "identity-contract",
+    "delivery-semantics",
+    "decision-envelope"
+  ],
+  "expected_status": "needs-decision",
+  "expected_output": "An indistinguishability proof followed by an owner request for stable source identity or a weaker delivery guarantee.",
+  "expectations": [
+    "Prove that retry and legitimate byte-identical scan histories are observationally identical.",
+    "Name the product and scanner-protocol owners and the evidence each must supply.",
+    "Preserve invalid-quantity characterization and current success shape.",
+    "Block effectful implementation slices until the identity or guarantee changes.",
+    "Run every mandatory independent reviewer on the needs-decision revision; each returns evidence-bearing PASS or concrete findings about authority handling, decision envelopes, decision-independent work, and blocker routing."
+  ],
+  "critical_forbidden_outcomes": [
+    "Presenting payload hashing, timestamps, or deduplication windows as exact identity.",
+    "Using server-generated post-receipt IDs, content uniqueness, or process-local locks.",
+    "Assuming ordering or transport deduplication.",
+    "Marking the blueprint ready or design-settled.",
+    "Recording any mandatory reviewer as pending, not run, or blocked because the blueprint is needs-decision."
+  ],
+  "input": "authority/warehouse-scan-exactly-once/input.md"
+}

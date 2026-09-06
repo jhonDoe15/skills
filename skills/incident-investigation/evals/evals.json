@@ -1,6 +1,13 @@
 {
   "skill_name": "incident-investigation",
   "version": 1,
+  "evaluation": {
+    "scope": "incident-investigation",
+    "layer": "outcome",
+    "skill": "incident-investigation",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["no-skill", "treatment"]
+  },
   "config": {
     "runs_per_configuration": 3,
     "executor_model": "sonnet",

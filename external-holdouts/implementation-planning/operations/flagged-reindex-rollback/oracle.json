@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to assess REINDEX-24 from the attached repository evidence. Plan decision-independent rollback behavior and preserve missing backend capability evidence. Do not change code.",
+  "labels": [
+    "operations",
+    "queue",
+    "feature-flag-rollback",
+    "retry",
+    "missing-error-contract"
+  ],
+  "expected_status": "needs-decision",
+  "expected_output": "Move flag evaluation to each delivery boundary and use V1 on flag-read failure, while blocking permanent-error mapping until the backend owner supplies a stable classifier.",
+  "expectations": [
+    "Publish collection identity only and ignore legacy queued mode hints.",
+    "Read the flag immediately before selecting exactly one backend on every attempt.",
+    "Allow already-started V2 work to finish.",
+    "Test rollback, retry re-evaluation, and flag-read fallback while keeping invalid-input mapping blocked.",
+    "Run every mandatory independent reviewer on the needs-decision revision; each returns evidence-bearing PASS or concrete findings about authority handling, decision envelopes, decision-independent work, and blocker routing."
+  ],
+  "critical_forbidden_outcomes": [
+    "Capturing the flag at enqueue time or draining queued work on rollback.",
+    "Running both backends or canceling an in-flight operation.",
+    "Matching error text or inventing backend error classes.",
+    "Using collection IDs as metric labels.",
+    "Marking the blueprint ready or design-settled.",
+    "Recording any mandatory reviewer as pending, not run, or blocked because the blueprint is needs-decision."
+  ],
+  "input": "operations/flagged-reindex-rollback/input.md"
+}

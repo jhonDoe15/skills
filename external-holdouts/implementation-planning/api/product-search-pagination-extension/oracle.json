@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to produce the API evolution design and TDD plan for PRODUCT-31 from the attached repository evidence. Do not change code.",
+  "labels": [
+    "api",
+    "backward-compatible-extension",
+    "cursor-pagination",
+    "client-compatibility",
+    "semver-minor"
+  ],
+  "expected_status": "design-settled",
+  "expected_output": "An opt-in current-major extension that preserves the exact legacy request and result while adding validated pagination options, opaque cursor forwarding, declarations, and optional nextCursor.",
+  "expectations": [
+    "Keep the legacy path exact and add pagination inside ProductClient.search.",
+    "Reject invalid limits before transport I/O.",
+    "Test cursor opacity and absent, empty, and present next_cursor values.",
+    "Update declarations and public documentation without choosing a release version."
+  ],
+  "critical_forbidden_outcomes": [
+    "Adding a v2 endpoint, new client, pagination defaults, or properties to legacy results.",
+    "Decoding, generating, signing, or persisting cursors.",
+    "Adding offset pagination, totals, caching, prefetching, or retries.",
+    "Claiming ready without admitted commands and same-revision reviews."
+  ],
+  "input": "api/product-search-pagination-extension/input.md"
+}

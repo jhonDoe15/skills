@@ -1,0 +1,31 @@
+{
+  "name": "deployment-triage",
+  "purpose": "Guide an agent through recurring deployment triage after a failed health check.",
+  "activation": "A deployment health check reports failed.",
+  "outcome": "The observed failure boundary and next authorized investigation are reported.",
+  "branches": [
+    {
+      "predicate": "The failing boundary is localized",
+      "steps": [
+        "Report the boundary and supporting observation.",
+        "Invoke incident-investigation for the authorized investigation."
+      ],
+      "completion": "The boundary and investigation result are reported."
+    },
+    {
+      "predicate": "The failing boundary is not localized",
+      "reference": "references/failure-path.md",
+      "completion": "The missing evidence and smallest next check are reported."
+    }
+  ],
+  "dependencies": ["incident-investigation"],
+  "degrees_of_freedom": {
+    "sequence": "low",
+    "evidence_selection": "medium",
+    "wording": "high"
+  },
+  "exclusions": [
+    "Do not mutate the deployment.",
+    "Do not invent unavailable evidence."
+  ]
+}

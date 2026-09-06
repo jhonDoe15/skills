@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "kind": "implementation-planning-external-holdouts",
+  "cases": [
+    {
+      "id": "compact-celsius",
+      "domain": "proportional",
+      "input": "proportional/compact-celsius/input.md",
+      "oracle": "proportional/compact-celsius/oracle.json"
+    },
+    {
+      "id": "scalar-ellipsis",
+      "domain": "proportional",
+      "input": "proportional/scalar-ellipsis/input.md",
+      "oracle": "proportional/scalar-ellipsis/oracle.json"
+    },
+    {
+      "id": "breadcrumb-current",
+      "domain": "proportional",
+      "input": "proportional/breadcrumb-current/input.md",
+      "oracle": "proportional/breadcrumb-current/oracle.json"
+    },
+    {
+      "id": "lease-support-boundary",
+      "domain": "proportional",
+      "input": "proportional/lease-support-boundary/input.md",
+      "oracle": "proportional/lease-support-boundary/oracle.json"
+    },
+    {
+      "id": "video-lease-fencing",
+      "domain": "concurrency",
+      "input": "concurrency/video-lease-fencing/input.md",
+      "oracle": "concurrency/video-lease-fencing/oracle.json"
+    },
+    {
+      "id": "invoice-outbox-recovery",
+      "domain": "concurrency",
+      "input": "concurrency/invoice-outbox-recovery/input.md",
+      "oracle": "concurrency/invoice-outbox-recovery/oracle.json"
+    },
+    {
+      "id": "greenhouse-leader-revocation",
+      "domain": "concurrency",
+      "input": "concurrency/greenhouse-leader-revocation/input.md",
+      "oracle": "concurrency/greenhouse-leader-revocation/oracle.json"
+    },
+    {
+      "id": "release-origin-kind",
+      "domain": "migration",
+      "input": "migration/release-origin-kind/input.md",
+      "oracle": "migration/release-origin-kind/oracle.json"
+    },
+    {
+      "id": "weather-observation-repartition",
+      "domain": "migration",
+      "input": "migration/weather-observation-repartition/input.md",
+      "oracle": "migration/weather-observation-repartition/oracle.json"
+    },
+    {
+      "id": "trail-distance-units",
+      "domain": "migration",
+      "input": "migration/trail-distance-units/input.md",
+      "oracle": "migration/trail-distance-units/oracle.json"
+    },
+    {
+      "id": "job-pause-policy",
+      "domain": "authority",
+      "input": "authority/job-pause-policy/input.md",
+      "oracle": "authority/job-pause-policy/oracle.json"
+    },
+    {
+      "id": "warehouse-scan-exactly-once",
+      "domain": "authority",
+      "input": "authority/warehouse-scan-exactly-once/input.md",
+      "oracle": "authority/warehouse-scan-exactly-once/oracle.json"
+    },
+    {
+      "id": "seat-reservation-atomicity",
+      "domain": "authority",
+      "input": "authority/seat-reservation-atomicity/input.md",
+      "oracle": "authority/seat-reservation-atomicity/oracle.json"
+    },
+    {
+      "id": "least-privilege-download",
+      "domain": "security",
+      "input": "security/least-privilege-download/input.md",
+      "oracle": "security/least-privilege-download/oracle.json"
+    },
+    {
+      "id": "tenant-cache-isolation",
+      "domain": "security",
+      "input": "security/tenant-cache-isolation/input.md",
+      "oracle": "security/tenant-cache-isolation/oracle.json"
+    },
+    {
+      "id": "callback-auth-contract-gap",
+      "domain": "security",
+      "input": "security/callback-auth-contract-gap/input.md",
+      "oracle": "security/callback-auth-contract-gap/oracle.json"
+    },
+    {
+      "id": "product-search-pagination-extension",
+      "domain": "api",
+      "input": "api/product-search-pagination-extension/input.md",
+      "oracle": "api/product-search-pagination-extension/oracle.json"
+    },
+    {
+      "id": "session-expiry-v2-mixed-clients",
+      "domain": "api",
+      "input": "api/session-expiry-v2-mixed-clients/input.md",
+      "oracle": "api/session-expiry-v2-mixed-clients/oracle.json"
+    },
+    {
+      "id": "quote-expiry-provider-capability-gap",
+      "domain": "api",
+      "input": "api/quote-expiry-provider-capability-gap/input.md",
+      "oracle": "api/quote-expiry-provider-capability-gap/oracle.json"
+    },
+    {
+      "id": "thumbnail-workspace-cleanup",
+      "domain": "operations",
+      "input": "operations/thumbnail-workspace-cleanup/input.md",
+      "oracle": "operations/thumbnail-workspace-cleanup/oracle.json"
+    },
+    {
+      "id": "flagged-reindex-rollback",
+      "domain": "operations",
+      "input": "operations/flagged-reindex-rollback/input.md",
+      "oracle": "operations/flagged-reindex-rollback/oracle.json"
+    },
+    {
+      "id": "scratch-janitor-policy-conflict",
+      "domain": "operations",
+      "input": "operations/scratch-janitor-policy-conflict/input.md",
+      "oracle": "operations/scratch-janitor-policy-conflict/oracle.json"
+    }
+  ]
+}

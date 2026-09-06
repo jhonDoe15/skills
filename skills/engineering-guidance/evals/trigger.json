@@ -1,0 +1,178 @@
+{
+  "skill_name": "engineering-guidance",
+  "version": 1,
+  "evaluation": {
+    "scope": "engineering-guidance-routing",
+    "layer": "trigger",
+    "skill": "engineering-guidance",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 5,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0,
+    "randomization_seed": "engineering-guidance-routing-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every routing assertion, quote or reference exact Skill lifecycle evidence. Contract fixtures prove only observable activation boundaries, not semantic routing effectiveness.",
+    "dimensions": [
+      {
+        "id": "direct_selection",
+        "description": "Checks lifecycle evidence that direct assessment requests and canonical invocation select Engineering Guidance."
+      },
+      {
+        "id": "caller_ownership",
+        "description": "Checks lifecycle evidence that implementation and Code Review remain owning outcomes and load Engineering Guidance only as a declared dependency."
+      },
+      {
+        "id": "exclusions",
+        "description": "Checks lifecycle evidence that generic writing, product planning, ticket decomposition, and generic non-code requests do not select Engineering Guidance."
+      },
+      {
+        "id": "audience_independence",
+        "description": "Checks lifecycle evidence that To Humans may be independently selected without becoming an Engineering Guidance dependency."
+      }
+    ]
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "evals": [
+    {
+      "id": "canonical-direct",
+      "name": "canonical direct invocation",
+      "prompt": "/engineering-guidance\n\nAssess this bounded implementation approach against repository authority.",
+      "expected_output": "The canonical public outcome is selected directly.",
+      "files": [],
+      "expectations": [
+        "engineering-guidance loads successfully.",
+        "No suite-owned dependency is required."
+      ],
+      "should_trigger": true,
+      "canonical_invocation": true,
+      "required_skill_loads": [],
+      "covers": ["direct-routing", "dependency-free-routing"]
+    },
+    {
+      "id": "ambient-assessment",
+      "name": "ambient engineering approach assessment",
+      "prompt": "Assess whether this repository's proposed cache invalidation approach is maintainable and follows the applicable standards.",
+      "expected_output": "Engineering Guidance is selected for the direct assessment.",
+      "files": [],
+      "expectations": [
+        "engineering-guidance loads for the direct assessment.",
+        "The request remains guidance rather than implementation or Code Review."
+      ],
+      "should_trigger": true,
+      "required_skill_loads": [],
+      "covers": ["direct-routing"]
+    },
+    {
+      "id": "human-facing-assessment",
+      "name": "human-facing guidance with independent Audience outcome",
+      "prompt": "Assess this retry approach and explain the guidance clearly to me.",
+      "expected_output": "Engineering Guidance owns the assessment while To Humans is independently selected for expression.",
+      "files": [],
+      "expectations": [
+        "engineering-guidance loads as the Primary outcome.",
+        "to-humans and writing-foundation may load independently for the human-facing response.",
+        "No invocation edge exists between engineering-guidance and to-humans."
+      ],
+      "should_trigger": true,
+      "required_skill_loads": ["writing-foundation", "to-humans"],
+      "covers": ["audience-independence"]
+    },
+    {
+      "id": "technical-non-code-assessment",
+      "name": "technical non-code artifact assessment",
+      "prompt": "Assess this CI workflow change against repository authority and failure-handling concerns. Do not edit it.",
+      "expected_output": "Engineering Guidance is selected for the technical assessment even though the artifact is YAML.",
+      "files": [],
+      "expectations": [
+        "engineering-guidance loads for a technical non-code artifact.",
+        "The artifact remains unchanged."
+      ],
+      "should_trigger": true,
+      "required_skill_loads": [],
+      "covers": ["non-code-change"]
+    },
+    {
+      "id": "implementation-owner",
+      "name": "implementation remains owning outcome",
+      "prompt": "Implement ticket 812 in the isolated worktree and return its implementation handoff.",
+      "expected_output": "Implement owns the request and invokes Engineering Guidance inside its workflow rather than routing the user request directly to Engineering Guidance.",
+      "files": [],
+      "expectations": [
+        "The direct user outcome is implement.",
+        "Engineering Guidance is not independently selected as another user deliverable."
+      ],
+      "should_trigger": false,
+      "covers": ["caller-owned-implementation"]
+    },
+    {
+      "id": "review-owner",
+      "name": "Code Review remains owning outcome",
+      "prompt": "Review immutable range base..head and return evidence-backed findings.",
+      "expected_output": "Code Review owns the request and its Review worker may invoke Engineering Guidance as a declared dependency.",
+      "files": [],
+      "expectations": [
+        "The direct user outcome is code-review.",
+        "Engineering Guidance is not selected as the findings owner."
+      ],
+      "should_trigger": false,
+      "covers": ["caller-owned-review"]
+    },
+    {
+      "id": "generic-writing",
+      "name": "generic writing exclusion",
+      "prompt": "Rewrite this project update so it is easier for the leadership team to scan.",
+      "expected_output": "A writing outcome handles the request without Engineering Guidance.",
+      "files": [],
+      "expectations": [
+        "engineering-guidance is not selected."
+      ],
+      "should_trigger": false,
+      "covers": ["generic-writing-exclusion"]
+    },
+    {
+      "id": "product-planning",
+      "name": "product planning exclusion",
+      "prompt": "Prioritize these product ideas for the next quarter and explain the customer value.",
+      "expected_output": "Product planning remains outside Engineering Guidance.",
+      "files": [],
+      "expectations": [
+        "engineering-guidance is not selected."
+      ],
+      "should_trigger": false,
+      "covers": ["product-planning-exclusion"]
+    },
+    {
+      "id": "ticket-decomposition",
+      "name": "ticket decomposition exclusion",
+      "prompt": "Split this settled requirement into a dependency-aware ticket plan.",
+      "expected_output": "The planning outcome owns ticket decomposition.",
+      "files": [],
+      "expectations": [
+        "engineering-guidance is not selected as the planning owner."
+      ],
+      "should_trigger": false,
+      "covers": ["ticket-decomposition-exclusion"]
+    },
+    {
+      "id": "generic-non-code",
+      "name": "generic non-code work exclusion",
+      "prompt": "Summarize these meeting notes and list the attendees.",
+      "expected_output": "Generic non-code work does not select Engineering Guidance.",
+      "files": [],
+      "expectations": [
+        "engineering-guidance is not selected."
+      ],
+      "should_trigger": false,
+      "covers": ["generic-non-code-exclusion"]
+    }
+  ]
+}

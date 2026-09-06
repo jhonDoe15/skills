@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to assess SEAT-27 from the attached repository evidence. Separate behavior authority from dependency capability and do not change code.",
+  "labels": [
+    "authority",
+    "missing-capability",
+    "concurrency",
+    "dependency-boundary",
+    "atomicity"
+  ],
+  "expected_status": "needs-decision",
+  "expected_output": "A plan that accepts no-overselling as controlling behavior but blocks concurrency design until the Seat Store Adapter Owner establishes an atomic capability.",
+  "expectations": [
+    "Describe the concurrent read-before-write overselling schedule.",
+    "Keep the no-overselling requirement separate from datastore capability.",
+    "Characterize invalid-count, single-success, and sold-out behavior.",
+    "Block concurrency-specific interfaces, commands, and red-green slices.",
+    "Run every mandatory independent reviewer on the needs-decision revision; each returns evidence-bearing PASS or concrete findings about authority handling, decision envelopes, decision-independent work, and blocker routing."
+  ],
+  "critical_forbidden_outcomes": [
+    "Inventing transactions, isolation, compare-and-set, atomic decrement, or locks.",
+    "Adding reservation tables, version fields, or schema changes without evidence.",
+    "Claiming retries prevent overselling.",
+    "Marking the blueprint ready or design-settled.",
+    "Recording any mandatory reviewer as pending, not run, or blocked because the blueprint is needs-decision."
+  ],
+  "input": "authority/seat-reservation-atomicity/input.md"
+}

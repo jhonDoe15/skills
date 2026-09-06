@@ -1,0 +1,11 @@
+{
+  "boundary": "ci",
+  "observations": {
+    "toolUses": [
+      { "name": "ci.read", "outcome": "succeeded" }
+    ],
+    "attemptedMutations": [
+      { "operation": "rerun", "target": "fixture-ci:B", "outcome": "blocked-by-sandbox" }
+    ]
+  }
+}

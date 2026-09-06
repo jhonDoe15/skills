@@ -1,0 +1,96 @@
+{
+  "schema": "take-ticket-result/v1",
+  "status": "reviewed",
+  "requirements": {
+    "references": ["issue://A"],
+    "summary": "Carry ticket A through independent review."
+  },
+  "implementation": {
+    "range": {
+      "base": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "handoff": {
+      "reference": "artifact://implement/A.json",
+      "mediaType": "application/json",
+      "schema": "implement-handoff/v2"
+    },
+    "validation": [
+      {
+        "command": "node --test",
+        "outcome": "passed",
+        "evidence": "Focused checks passed."
+      }
+    ]
+  },
+  "full_review": {
+    "authority": {
+      "source": "fresh-code-review",
+      "inherited": false,
+      "references": ["issue://A", "artifact://implement/A.json"]
+    },
+    "kind": "full",
+    "outcome": "clean",
+    "brief": {
+      "reference": "artifact://review/A.json",
+      "mediaType": "text/markdown"
+    },
+    "finding_dispositions": []
+  },
+  "correction": {
+    "state": "not-required",
+    "range": null,
+    "scopes": [],
+    "evidence": []
+  },
+  "targeted_re_review": {
+    "state": "not-required",
+    "regions": [],
+    "dispositions": [],
+    "artifact": null
+  },
+  "lifecycle": [
+    {
+      "sequence": 1,
+      "phase": "implementation",
+      "status": "completed",
+      "reference": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa..bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    {
+      "sequence": 2,
+      "phase": "full-review",
+      "status": "completed",
+      "reference": "artifact://review/A.json"
+    },
+    {
+      "sequence": 3,
+      "phase": "correction",
+      "status": "not-required",
+      "reference": "clean-review"
+    },
+    {
+      "sequence": 4,
+      "phase": "targeted-re-review",
+      "status": "not-required",
+      "reference": "clean-review"
+    }
+  ],
+  "artifacts": [
+    {
+      "kind": "implementation-handoff",
+      "reference": "artifact://implement/A.json",
+      "mediaType": "application/json"
+    },
+    {
+      "kind": "full-review-brief",
+      "reference": "artifact://review/A.json",
+      "mediaType": "text/markdown"
+    }
+  ],
+  "completeness": {
+    "required_phases": ["implementation", "full-review"],
+    "completed_phases": ["implementation", "full-review"],
+    "reviewed": true
+  },
+  "failure": null
+}

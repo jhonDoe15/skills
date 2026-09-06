@@ -1,0 +1,54 @@
+{
+  "skill_name": "architecture-review",
+  "version": 1,
+  "evaluation": {
+    "scope": "architecture-review-to-engineering-guidance",
+    "layer": "component",
+    "skill": "architecture-review",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment", "component-ablation"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "architecture-review-guidance-component-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "Quote lifecycle and output evidence that canonical Engineering Guidance supplied authority-aware concern coverage to Architecture Review.",
+    "dimensions": [
+      {
+        "id": "guidance_contribution",
+        "description": "Architecture Review receives all nine artifact-specific Engineering Guidance concern dispositions for activity review rather than copying generic advice."
+      },
+      {
+        "id": "review_ownership",
+        "description": "Engineering Guidance remains advisory while Architecture Review owns architecture evidence, independent lenses, findings, and the read-only brief."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "architecture-review-guidance-ablation",
+      "name": "canonical guidance in architecture review",
+      "prompt": "Use architecture-review on immutable fictional revision 4444444444444444444444444444444444444444 for src/queue. Requirements, repository authority, source, tests, and history are available. Invoke canonical Engineering Guidance with activity review, then return the architecture brief without changing code.",
+      "expected_output": "The complete consumer invokes Engineering Guidance for source-cited concern coverage; the ablated arm fails closed instead of copying the dependency.",
+      "files": [],
+      "expectations": [
+        "Treatment lifecycle records architecture-review and engineering-guidance loads with activity review.",
+        "All nine Engineering Guidance concerns have artifact-specific dispositions for the immutable target.",
+        "Architecture Review retains ownership of lenses, findings, and the brief.",
+        "Component ablation removes only engineering-guidance and fails before architecture analysis."
+      ],
+      "covered_clauses": ["ar-engineering-guidance-edge"],
+      "ablated_dependency": "engineering-guidance",
+      "required_signals": []
+    }
+  ]
+}

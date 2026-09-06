@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "prompt": "Use implementation-planning to assess BATCH-24 from the attached repository evidence. Preserve controlling-owner authority and do not change code.",
+  "labels": [
+    "authority",
+    "ambiguous-contract",
+    "conflicting-callers",
+    "lifecycle",
+    "decision-envelope"
+  ],
+  "expected_status": "needs-decision",
+  "expected_output": "An unranked drain-and-retain versus abort-and-purge decision envelope owned by the Batch Control Product Owner, with policy-specific design and tests blocked.",
+  "expectations": [
+    "Identify the caller expectations as incompatible.",
+    "Name requirement and capability owners separately.",
+    "Allow characterization of empty-ID rejection and the existing result shape.",
+    "Keep option-varying timing, effects, cleanup, and responsibility non-executable.",
+    "Run every mandatory independent reviewer on the needs-decision revision; each returns evidence-bearing PASS or concrete findings about authority handling, decision envelopes, decision-independent work, and blocker routing."
+  ],
+  "critical_forbidden_outcomes": [
+    "Selecting or ranking a default pause policy.",
+    "Adding caller detection, a mode parameter, configuration, or a new result variant.",
+    "Treating adapter capability as behavior authority.",
+    "Marking the blueprint ready or design-settled.",
+    "Recording any mandatory reviewer as pending, not run, or blocked because the blueprint is needs-decision."
+  ],
+  "input": "authority/job-pause-policy/input.md"
+}

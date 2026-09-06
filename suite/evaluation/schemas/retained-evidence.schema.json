@@ -1,0 +1,817 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jhonDoe15.github.io/skills/schemas/skill-evaluation-retained-evidence-v3.json",
+  "title": "Skill Evaluation retained evidence",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "kind",
+    "campaign_fingerprint",
+    "scope",
+    "case_id",
+    "host",
+    "repetition"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 3
+    },
+    "kind": {
+      "enum": [
+        "skill-evaluation-run",
+        "skill-evaluation-judgment"
+      ]
+    },
+    "campaign_fingerprint": {
+      "$ref": "#/$defs/fingerprint"
+    },
+    "scope": {
+      "type": "string",
+      "minLength": 1
+    },
+    "case_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model": {},
+    "repetition": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "arm": {
+      "type": "object",
+      "required": [
+        "kind",
+        "pairing_id"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "no-skill",
+            "treatment",
+            "component-ablation"
+          ]
+        },
+        "pairing_id": {
+          "$ref": "#/$defs/fingerprint"
+        },
+        "ablated_dependency": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "grader": {
+      "$ref": "#/$defs/graderEvidence"
+    },
+    "execution": {
+      "type": "object",
+      "required": [
+        "status",
+        "duration_ms",
+        "cost_usd",
+        "package_skills",
+        "host_available_skills",
+        "pre_execution_inventory",
+        "skill_events",
+        "observable_tool_use",
+        "attempted_mutations",
+        "output",
+        "routing",
+        "control_contamination"
+      ],
+      "properties": {
+        "package_skills": {
+          "$ref": "#/$defs/skillNames"
+        },
+        "host_available_skills": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "names",
+                "provenance"
+              ],
+              "properties": {
+                "names": {
+                  "$ref": "#/$defs/skillNames"
+                },
+                "provenance": {
+                  "$ref": "#/$defs/provenance"
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "pre_execution_inventory": {
+          "type": "object",
+          "required": [
+            "skill_definitions",
+            "plugins",
+            "rule_sources",
+            "package_digest",
+            "truncated"
+          ],
+          "properties": {
+            "skill_definitions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "path",
+                  "digest"
+                ],
+                "properties": {
+                  "name": {
+                    "$ref": "#/$defs/skillName"
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "digest": {
+                    "$ref": "#/$defs/fingerprint"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "plugins": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            },
+            "rule_sources": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            },
+            "package_digest": {
+              "$ref": "#/$defs/fingerprint"
+            },
+            "truncated": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "skill_events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/skillEvent"
+          }
+        },
+        "responses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "text"
+            ],
+            "properties": {
+              "text": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "routing": {
+          "type": "object",
+          "required": [
+            "requested_skill",
+            "resolved_skills"
+          ],
+          "properties": {
+            "requested_skill": {
+              "$ref": "#/$defs/skillName"
+            },
+            "resolved_skills": {
+              "$ref": "#/$defs/skillNames"
+            }
+          },
+          "additionalProperties": false
+        },
+        "control_contamination": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/controlContamination"
+            }
+          ]
+        }
+      }
+    },
+    "deterministic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "passed",
+        "checks"
+      ],
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "status": {
+          "const": "baseline"
+        },
+        "checks": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "passed",
+              "details"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "passed": {
+                "type": "boolean"
+              },
+              "details": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              }
+            }
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "passed": {
+              "const": true
+            }
+          }
+        },
+        {
+          "not": {
+            "required": [
+              "status"
+            ]
+          },
+          "if": {
+            "properties": {
+              "passed": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "checks": {
+                "items": {
+                  "properties": {
+                    "passed": {
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "checks": {
+                "contains": {
+                  "type": "object",
+                  "required": [
+                    "passed"
+                  ],
+                  "properties": {
+                    "passed": {
+                      "const": false
+                    }
+                  }
+                },
+                "minContains": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "fingerprints": {
+      "type": "object",
+      "required": [
+        "input",
+        "output",
+        "record"
+      ],
+      "properties": {
+        "input": {
+          "$ref": "#/$defs/fingerprint"
+        },
+        "output": {
+          "$ref": "#/$defs/fingerprint"
+        },
+        "grading": {
+          "$ref": "#/$defs/fingerprint"
+        },
+        "record": {
+          "$ref": "#/$defs/fingerprint"
+        }
+      }
+    },
+    "judge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "rubric",
+        "placement"
+      ],
+      "properties": {
+        "model": {
+          "$ref": "#/$defs/modelIdentity"
+        },
+        "rubric": {
+          "type": "object"
+        },
+        "placement": {
+          "type": "object"
+        }
+      }
+    },
+    "comparison_fingerprint": {
+      "$ref": "#/$defs/fingerprint"
+    },
+    "judgment": {
+      "type": "object"
+    },
+    "fingerprint": {
+      "$ref": "#/$defs/fingerprint"
+    }
+  },
+  "$defs": {
+    "modelParameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "value"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\s\\u0000-\\u001f\\u007f]+$"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\s\\u0000-\\u001f\\u007f]+$"
+        }
+      }
+    },
+    "modelSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "params"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\s\\u0000-\\u001f\\u007f]+$"
+        },
+        "params": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/modelParameter"
+          }
+        }
+      }
+    },
+    "modelVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "source",
+        "reason",
+        "catalogEntryFingerprint"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "verified",
+            "mismatch",
+            "unavailable"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "catalogEntryFingerprint": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/fingerprint"
+            }
+          ]
+        }
+      }
+    },
+    "modelIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requested",
+        "resolved",
+        "verification"
+      ],
+      "properties": {
+        "requested": {
+          "$ref": "#/$defs/modelSelection"
+        },
+        "resolved": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/modelSelection"
+            }
+          ]
+        },
+        "verification": {
+          "$ref": "#/$defs/modelVerification"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "verification": {
+                "properties": {
+                  "status": {
+                    "const": "verified"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "resolved": {
+                "$ref": "#/$defs/modelSelection"
+              },
+              "verification": {
+                "properties": {
+                  "reason": {
+                    "const": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "verification": {
+                "properties": {
+                  "status": {
+                    "const": "unavailable"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "resolved": {
+                "const": null
+              },
+              "verification": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "verification": {
+                "properties": {
+                  "status": {
+                    "const": "mismatch"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "resolved": {
+                "$ref": "#/$defs/modelSelection"
+              },
+              "verification": {
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "graderEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "fingerprint"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+        },
+        "version": {
+          "type": "string",
+          "maxLength": 32,
+          "pattern": "^[0-9]+(?:\\.[0-9]+){0,2}$"
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/fingerprint"
+        }
+      }
+    },
+    "skillName": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "skillNames": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/skillName"
+      },
+      "uniqueItems": true
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "host",
+        "mechanism",
+        "eventType",
+        "observerVersion",
+        "statusSource"
+      ],
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mechanism": {
+          "type": "string",
+          "minLength": 1
+        },
+        "eventType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "observerVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "statusSource": {
+          "enum": [
+            "observed",
+            "inferred"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "skillEvent": {
+      "type": "object",
+      "required": [
+        "name",
+        "operation",
+        "status",
+        "provenance"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/skillName"
+        },
+        "operation": {
+          "enum": [
+            "select",
+            "load"
+          ]
+        },
+        "status": {
+          "enum": [
+            "started",
+            "succeeded",
+            "failed",
+            "rejected",
+            "cancelled",
+            "unknown"
+          ]
+        },
+        "trigger": {
+          "enum": [
+            "user",
+            "model",
+            "host",
+            "unknown"
+          ]
+        },
+        "callId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        }
+      },
+      "additionalProperties": false
+    },
+    "controlContamination": {
+      "type": "object",
+      "required": [
+        "clean",
+        "inventory_verifiable",
+        "prohibited_skills",
+        "provisioning_matches",
+        "runtime_matches"
+      ],
+      "properties": {
+        "clean": {
+          "type": "boolean"
+        },
+        "inventory_verifiable": {
+          "type": "boolean"
+        },
+        "prohibited_skills": {
+          "$ref": "#/$defs/skillNames"
+        },
+        "provisioning_matches": {
+          "$ref": "#/$defs/skillNames"
+        },
+        "runtime_matches": {
+          "$ref": "#/$defs/skillNames"
+        }
+      },
+      "additionalProperties": false
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "skill-evaluation-run"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "model",
+          "arm",
+          "package_revision",
+          "execution_configuration",
+          "execution",
+          "deterministic",
+          "fingerprints"
+        ],
+        "properties": {
+          "model": {
+            "$ref": "#/$defs/modelIdentity"
+          }
+        }
+      },
+      "else": {
+        "required": [
+          "model",
+          "pairing_id",
+          "judge",
+          "comparison_fingerprint",
+          "judgment",
+          "metrics",
+          "duration_ms",
+          "cost_usd",
+          "fingerprint"
+        ],
+        "properties": {
+          "model": {
+            "$ref": "#/$defs/modelSelection"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "grader"
+        ]
+      },
+      "then": {
+        "properties": {
+          "execution": {
+            "required": [
+              "responses"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "deterministic"
+        ],
+        "properties": {
+          "deterministic": {
+            "required": [
+              "status"
+            ]
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "grader"
+          ]
+        },
+        "properties": {
+          "arm": {
+            "required": [
+              "kind"
+            ],
+            "properties": {
+              "kind": {
+                "const": "no-skill"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

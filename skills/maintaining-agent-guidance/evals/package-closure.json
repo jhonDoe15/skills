@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "scope": "maintaining-agent-guidance-package-closure",
+  "owner": "maintaining-agent-guidance",
+  "cases": [
+    {
+      "id": "missing-agents-file-writer",
+      "consumer": "maintaining-agent-guidance",
+      "missing_dependency": "agents-file-writer",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"agents-file-writer\"",
+        "missingSkill": "agents-file-writer"
+      },
+      "covered_clauses": ["mag-agents-file-writer-closure"]
+    }
+  ]
+}

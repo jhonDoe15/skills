@@ -1,0 +1,113 @@
+{
+  "schema": "pr-carver-assessment/v1",
+  "status": "ready",
+  "subject": {
+    "kind": "pull-request",
+    "identity": "fixture/pr-expand-contract",
+    "base": "fixture/main"
+  },
+  "units": [
+    {
+      "id": "schema-expansion",
+      "assessment": "fit",
+      "shape": "layered",
+      "outcome": "The account store accepts nullable time-zone data compatibly.",
+      "validation": "Run forward and backward schema compatibility checks.",
+      "migration": {
+        "strategy": "expand-contract",
+        "phase": "expand"
+      },
+      "consumes": []
+    },
+    {
+      "id": "api-consumer",
+      "assessment": "fit",
+      "shape": "vertical",
+      "outcome": "The account API reads and writes time-zone data.",
+      "validation": "Run account API compatibility and behavior tests.",
+      "migration": {
+        "strategy": "expand-contract",
+        "phase": "transition"
+      },
+      "consumes": [
+        {
+          "unit": "schema-expansion",
+          "output": "compatible nullable time-zone schema"
+        }
+      ]
+    },
+    {
+      "id": "data-backfill",
+      "assessment": "fit",
+      "shape": "layered",
+      "outcome": "Existing accounts receive verified default time-zone data.",
+      "validation": "Run idempotent backfill verification.",
+      "migration": {
+        "strategy": "expand-contract",
+        "phase": "transition"
+      },
+      "consumes": [
+        {
+          "unit": "schema-expansion",
+          "output": "compatible nullable time-zone schema"
+        }
+      ]
+    },
+    {
+      "id": "schema-contraction",
+      "assessment": "fit",
+      "shape": "layered",
+      "outcome": "The time-zone schema enforces the final non-null contract.",
+      "validation": "Verify API compatibility and complete backfill before contraction.",
+      "migration": {
+        "strategy": "expand-contract",
+        "phase": "contract"
+      },
+      "consumes": [
+        {
+          "unit": "api-consumer",
+          "output": "compatible account API time-zone consumer"
+        },
+        {
+          "unit": "data-backfill",
+          "output": "complete verified account time-zone backfill"
+        }
+      ]
+    }
+  ],
+  "ordering_edges": [
+    {
+      "prerequisite": "schema-expansion",
+      "consumer": "api-consumer",
+      "output": "compatible nullable time-zone schema"
+    },
+    {
+      "prerequisite": "schema-expansion",
+      "consumer": "data-backfill",
+      "output": "compatible nullable time-zone schema"
+    },
+    {
+      "prerequisite": "api-consumer",
+      "consumer": "schema-contraction",
+      "output": "compatible account API time-zone consumer"
+    },
+    {
+      "prerequisite": "data-backfill",
+      "consumer": "schema-contraction",
+      "output": "complete verified account time-zone backfill"
+    }
+  ],
+  "collisions": [
+    {
+      "units": ["api-consumer", "data-backfill"],
+      "resource": "shared generated manifest",
+      "serialization": "Regenerate the manifest from one unit at a time."
+    }
+  ],
+  "structure": "stacked",
+  "flags": [],
+  "authorization": {
+    "mode": "assessment-only",
+    "allowed_mutations": []
+  }
+}

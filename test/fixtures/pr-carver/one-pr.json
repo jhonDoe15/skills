@@ -1,0 +1,31 @@
+{
+  "schema": "pr-carver-assessment/v1",
+  "status": "ready",
+  "subject": {
+    "kind": "pull-request",
+    "identity": "fixture/pr-cohesive-one-unit",
+    "base": "fixture/main"
+  },
+  "units": [
+    {
+      "id": "bounded-api-fix",
+      "assessment": "fit",
+      "shape": "vertical",
+      "outcome": "Clients receive the corrected account-time-zone response.",
+      "validation": "Run the account-time-zone regression test.",
+      "migration": {
+        "strategy": "normal",
+        "phase": "normal"
+      },
+      "consumes": []
+    }
+  ],
+  "ordering_edges": [],
+  "collisions": [],
+  "structure": "one-pr",
+  "flags": [],
+  "authorization": {
+    "mode": "assessment-only",
+    "allowed_mutations": []
+  }
+}

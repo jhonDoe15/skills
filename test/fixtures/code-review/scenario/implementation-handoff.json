@@ -1,0 +1,92 @@
+{
+  "schema": "implement-handoff/v2",
+  "status": "completed",
+  "requirements": {
+    "references": ["fixture://issue-42-loyalty-discount"],
+    "blueprint_reference": "fixture://issue-42-loyalty-discount#implementation-blueprint-blueprint-r1",
+    "blueprint_revision": "blueprint-r1",
+    "blueprint_proof_ids": ["C1", "T1", "P1", "CMD1", "CMD2"],
+    "summary": "Add loyalty discount calculation and order quoting."
+  },
+  "implementation_range": {
+    "base": "1111111111111111111111111111111111111111",
+    "head": "2222222222222222222222222222222222222222"
+  },
+  "guidance_coverage": {
+    "dependency": "engineering-guidance",
+    "authorities": [{
+      "source": "fixture://repository/AGENTS.md",
+      "references": ["fixture://issue-42-loyalty-discount"]
+    }],
+    "concerns": [
+      {"id": "intent-and-scope", "disposition": "applicable-now", "sources": ["fixture://issue-42-loyalty-discount"], "notes": "Bounded loyalty-discount behavior."},
+      {"id": "responsibilities-and-seams", "disposition": "applicable-now", "sources": ["fixture://issue-42-loyalty-discount"], "notes": "Discount and quote seams are explicit."},
+      {"id": "dependencies-and-contracts", "disposition": "applicable-now", "sources": ["fixture://issue-42-loyalty-discount"], "notes": "Order quoting consumes the discount contract."},
+      {"id": "state-and-invariants", "disposition": "applicable-now", "sources": ["fixture://issue-42-loyalty-discount"], "notes": "Discount invariants remain owned by the calculator."},
+      {"id": "failure-and-boundaries", "disposition": "applicable-now", "sources": ["fixture://issue-42-loyalty-discount"], "notes": "Boundary behavior is covered by the fixture tests."},
+      {"id": "simplicity-and-reuse", "disposition": "applicable-now", "sources": ["fixture://issue-42-loyalty-discount"], "notes": "One calculator owns the rule."},
+      {"id": "compatibility-and-change", "disposition": "applicable-now", "sources": ["fixture://issue-42-loyalty-discount"], "notes": "Existing quote behavior remains characterized."},
+      {"id": "maintainer-legibility", "disposition": "applicable-now", "sources": ["fixture://issue-42-loyalty-discount"], "notes": "Domain names remain explicit."},
+      {"id": "evidence-and-validation", "disposition": "applicable-now", "sources": ["fixture://issue-42-loyalty-discount"], "notes": "Focused and regression evidence is retained."}
+    ],
+    "unresolved_gaps": []
+  },
+  "lifecycle": [
+    {"sequence": 1, "kind": "guidance", "status": "completed", "reference": "engineering-guidance"},
+    {"sequence": 2, "kind": "test", "status": "red", "reference": "[\"loyalty-discount\",\"node --test repository/test/discount.test.js\"]"},
+    {"sequence": 3, "kind": "mutation", "status": "succeeded", "reference": "write:repository/src/discount.js"},
+    {"sequence": 4, "kind": "mutation", "status": "succeeded", "reference": "write:repository/test/discount.test.js"},
+    {"sequence": 5, "kind": "test", "status": "green", "reference": "[\"loyalty-discount\",\"node --test repository/test/discount.test.js\"]"},
+    {"sequence": 6, "kind": "validation", "status": "completed", "reference": "[\"node --test repository/test/discount.test.js\",\"passed\"]"},
+    {"sequence": 7, "kind": "validation", "status": "completed", "reference": "[\"node --test repository/test\",\"passed\"]"},
+    {"sequence": 8, "kind": "range", "status": "pinned", "reference": "1111111111111111111111111111111111111111..2222222222222222222222222222222222222222"}
+  ],
+  "changed_behavior": [
+    "Eligible orders receive the loyalty discount through the quoted total."
+  ],
+  "changed_files": [
+    "repository/src/discount.js",
+    "repository/test/discount.test.js"
+  ],
+  "tests": [
+    {
+      "behavior": "loyalty-discount",
+      "phase": "red",
+      "command": "node --test repository/test/discount.test.js",
+      "outcome": "failed-as-expected",
+      "evidence": "The missing loyalty rule produced the expected assertion failure."
+    },
+    {
+      "behavior": "loyalty-discount",
+      "phase": "green",
+      "command": "node --test repository/test/discount.test.js",
+      "outcome": "passed",
+      "evidence": "The focused loyalty-discount tests passed."
+    }
+  ],
+  "validation": [
+    {
+      "command": "node --test repository/test/discount.test.js",
+      "outcome": "passed",
+      "evidence": "Focused compatibility and behavior tests passed."
+    },
+    {
+      "command": "node --test repository/test",
+      "outcome": "passed",
+      "evidence": "The complete fixture regression suite passed."
+    }
+  ],
+  "proof_coverage": [
+    {"id": "C1", "command": "node --test repository/test/discount.test.js", "outcome": "passed", "evidence": "Existing quote behavior remained green.", "evidence_source": "validation[0]"},
+    {"id": "T1", "command": "node --test repository/test/discount.test.js", "outcome": "passed", "evidence": "The vertical loyalty-discount slice completed.", "evidence_source": "tests[1]"},
+    {"id": "P1", "command": "node --test repository/test", "outcome": "passed", "evidence": "Order quote integration passed.", "evidence_source": "validation[1]"},
+    {"id": "CMD1", "command": "node --test repository/test/discount.test.js", "outcome": "passed", "evidence": "The focused gate passed.", "evidence_source": "validation[0]"},
+    {"id": "CMD2", "command": "node --test repository/test", "outcome": "passed", "evidence": "The regression gate passed.", "evidence_source": "validation[1]"}
+  ],
+  "unresolved_risks": [],
+  "correction": {
+    "state": "ready",
+    "next_action": "Review the immutable implementation range."
+  },
+  "failure": null
+}

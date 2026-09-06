@@ -1,0 +1,66 @@
+{
+  "schema": "pr-carver-assessment/v1",
+  "status": "ready",
+  "subject": {
+    "kind": "branch",
+    "identity": "fixture/migration-order-only",
+    "base": "fixture/main"
+  },
+  "units": [
+    {
+      "id": "schema-expansion",
+      "assessment": "fit",
+      "shape": "layered",
+      "outcome": "The schema accepts the transition state compatibly.",
+      "validation": "Run forward and backward compatibility checks.",
+      "migration": {
+        "strategy": "expand-contract",
+        "phase": "expand"
+      },
+      "consumes": []
+    },
+    {
+      "id": "data-transition",
+      "assessment": "fit",
+      "shape": "layered",
+      "outcome": "Existing records move to the expanded representation.",
+      "validation": "Run idempotent transition verification.",
+      "migration": {
+        "strategy": "expand-contract",
+        "phase": "transition"
+      },
+      "consumes": []
+    },
+    {
+      "id": "schema-contraction",
+      "assessment": "fit",
+      "shape": "layered",
+      "outcome": "The schema enforces the final representation.",
+      "validation": "Verify the transition is complete before contraction.",
+      "migration": {
+        "strategy": "expand-contract",
+        "phase": "contract"
+      },
+      "consumes": []
+    }
+  ],
+  "ordering_edges": [
+    {
+      "prerequisite": "schema-expansion",
+      "consumer": "data-transition",
+      "migration_order": "expand before transition"
+    },
+    {
+      "prerequisite": "data-transition",
+      "consumer": "schema-contraction",
+      "migration_order": "transition before contract"
+    }
+  ],
+  "collisions": [],
+  "structure": "stacked",
+  "flags": [],
+  "authorization": {
+    "mode": "assessment-only",
+    "allowed_mutations": []
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "skill_name": "agents-file-writer",
+  "version": 1,
+  "evaluation": {
+    "scope": "agents-file-writer-trigger",
+    "layer": "trigger",
+    "skill": "agents-file-writer",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment"]
+  },
+  "config": {
+    "runs_per_configuration": 5,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0,
+    "randomization_seed": "agents-file-writer-trigger-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every routing assertion, quote or reference exact Skill lifecycle evidence; the description and output prose do not prove activation.",
+    "dimensions": [
+      {
+        "id": "guidance-request-routing",
+        "description": "Selects Agents File Writer for creating, improving, reviewing, scoping, or splitting agent-facing guidance files."
+      },
+      {
+        "id": "specialized-exclusions",
+        "description": "Leaves human-facing prose, Agent Skill authoring, and unrelated project documentation to their owning outcomes."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "agents-file-writer-create",
+      "name": "create project agent guidance",
+      "prompt": "Create a project AGENTS.md that tells future agents how to change this repository.",
+      "expected_output": "Agents File Writer activates for creating project-scoped agent guidance.",
+      "files": [],
+      "expectations": [
+        "The host records Agents File Writer activation by its canonical name."
+      ],
+      "covered_clauses": ["afw-routing-create"],
+      "should_trigger": true,
+      "case_category": "positive",
+      "required_skill_loads": ["agents-file-writer"]
+    },
+    {
+      "id": "agents-file-writer-refine",
+      "name": "refine AGENTS guidance",
+      "prompt": "Review and refine the existing AGENTS.md and its directly referenced agent guidance so the rules match current repository behavior.",
+      "expected_output": "Agents File Writer activates for refining existing agent guidance.",
+      "files": [],
+      "expectations": [
+        "The host records Agents File Writer activation for the guidance refinement request."
+      ],
+      "covered_clauses": ["afw-routing-improve"],
+      "should_trigger": true,
+      "case_category": "positive",
+      "required_skill_loads": ["agents-file-writer"]
+    },
+    {
+      "id": "agents-file-writer-canonical",
+      "name": "canonical direct invocation",
+      "prompt": "/agents-file-writer\n\nReview the applicable AGENTS.md files and return the guidance migration ledger.",
+      "expected_output": "Direct canonical invocation selects Agents File Writer.",
+      "files": [],
+      "expectations": [
+        "The host records invocation of Agents File Writer by its exact canonical name."
+      ],
+      "covered_clauses": ["afw-routing-canonical"],
+      "should_trigger": true,
+      "canonical_invocation": true,
+      "required_skill_loads": ["agents-file-writer"]
+    },
+    {
+      "id": "agents-file-writer-human-exclusion",
+      "name": "human-facing prose exclusion",
+      "prompt": "Rewrite this release announcement for customers so it leads with the answer and uses less jargon.",
+      "expected_output": "Agents File Writer stays inactive because To Humans owns human-facing expression.",
+      "files": [],
+      "expectations": [
+        "The host does not record Agents File Writer activation for a human-facing prose request."
+      ],
+      "covered_clauses": ["afw-routing-human-exclusion"],
+      "should_trigger": false,
+      "case_category": "negative"
+    },
+    {
+      "id": "agents-file-writer-skill-exclusion",
+      "name": "Agent Skill package exclusion",
+      "prompt": "Create a new Agent Skill package with SKILL.md, frontmatter, and evaluation cases.",
+      "expected_output": "Agents File Writer stays inactive because Skill Writing owns Agent Skill authoring.",
+      "files": [],
+      "expectations": [
+        "The host does not record Agents File Writer activation for an Agent Skill package request."
+      ],
+      "covered_clauses": ["afw-routing-skill-exclusion"],
+      "should_trigger": false,
+      "case_category": "negative"
+    },
+    {
+      "id": "agents-file-writer-ambient-negative",
+      "name": "ambient guidance mention is not activation",
+      "prompt": "What does an AGENTS.md file generally contain?",
+      "expected_output": "Agents File Writer stays inactive because the user asked for an explanation rather than guidance work.",
+      "files": [],
+      "expectations": [
+        "The host does not record Agents File Writer activation for a general explanatory question."
+      ],
+      "covered_clauses": ["afw-routing-ambient-exclusion"],
+      "should_trigger": false,
+      "case_category": "ambiguous"
+    }
+  ]
+}

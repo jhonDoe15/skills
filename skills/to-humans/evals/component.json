@@ -1,0 +1,53 @@
+{
+  "skill_name": "to-humans",
+  "version": 1,
+  "evaluation": {
+    "scope": "to-humans-to-writing-foundation",
+    "layer": "component",
+    "skill": "to-humans",
+    "hosts": ["claude-code", "cursor"],
+    "arms": ["treatment", "component-ablation"]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "to-humans-foundation-v1"
+  },
+  "judge": {
+    "score_range": [0, 2],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every assertion and dimension, the blind judge must quote or reference specific output or lifecycle evidence.",
+    "dimensions": [
+      {
+        "id": "shared_behavior",
+        "description": "The complete consumer exhibits the shared writing behavior owned by Writing Foundation."
+      },
+      {
+        "id": "audience_behavior",
+        "description": "To Humans retains ownership of reader-specific organization, tone, and routing."
+      },
+      {
+        "id": "dependency_boundary",
+        "description": "The result invokes the canonical dependency without copied fallback behavior."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "foundation-ablation",
+      "name": "complete To Humans compared with Foundation ablation",
+      "prompt": "Write a concise project decision for a person. Preserve the supplied facts, uncertainty, and requested action while adapting the expression to the reader.",
+      "expected_output": "The complete consumer applies both the To Humans audience contract and the shared Writing Foundation contract. The ablated arm removes only the Foundation invocation.",
+      "files": [],
+      "expectations": [
+        "The treatment invokes writing-foundation by canonical Skill name.",
+        "The component control ablates only the to-humans to writing-foundation edge.",
+        "The treatment contains no local substitute for missing Foundation behavior.",
+        "The audience-specific behavior remains owned by to-humans."
+      ],
+      "covers": ["writing-foundation-edge"],
+      "ablated_dependency": "writing-foundation"
+    }
+  ]
+}

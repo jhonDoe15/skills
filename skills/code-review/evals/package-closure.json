@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "scope": "code-review-package-closure",
+  "owner": "code-review",
+  "cases": [
+    {
+      "id": "missing-review-worker",
+      "consumer": "code-review",
+      "missing_dependency": "review-worker",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"review-worker\"",
+        "missingSkill": "review-worker"
+      },
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-review-worker-closure"}
+      ]
+    },
+    {
+      "id": "missing-review-coordinator",
+      "consumer": "code-review",
+      "missing_dependency": "review-coordinator",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"review-coordinator\"",
+        "missingSkill": "review-coordinator"
+      },
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-review-coordinator-closure"}
+      ]
+    },
+    {
+      "id": "missing-take-it-offline",
+      "consumer": "code-review",
+      "missing_dependency": "take-it-offline",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"take-it-offline\"",
+        "missingSkill": "take-it-offline"
+      },
+      "covered_clauses": [
+        {"scope": "issue-42-code-review", "id": "cr-take-it-offline-closure"}
+      ]
+    }
+  ]
+}

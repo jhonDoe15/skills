@@ -1,0 +1,7 @@
+{
+  "ticket": 17,
+  "branch": "issue/17-take-it-offline",
+  "base": "db26f9d7410b982995a8f7b5a50ef045238a4fd4",
+  "state": "implementation in progress",
+  "nextAction": "run the focused continuation contract tests"
+}

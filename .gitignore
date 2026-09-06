@@ -1,9 +1,15 @@
 __pycache__/
 *.pyc
 .venv/
+node_modules/
 data/
 *.db
 probe_*.json
 dashboard.html
-.claude/.lean/
-skills/incident-investigation/.eval-results/
+.artifacts/
+**/.eval-results/
+**/.eval-workspaces/
+**/.model-runs/
+**/.package-checks/
+**/.review-runs/
+**/.transcripts/

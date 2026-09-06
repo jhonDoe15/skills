@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "scope": "dispatch-work-package-closure",
+  "owner": "dispatch-work",
+  "cases": [
+    {
+      "id": "missing-take-it-offline",
+      "consumer": "dispatch-work",
+      "missing_dependency": "take-it-offline",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"take-it-offline\"",
+        "missingSkill": "take-it-offline"
+      },
+      "covered_clauses": ["dw-missing-take-it-offline"]
+    },
+    {
+      "id": "missing-take-ticket",
+      "consumer": "dispatch-work",
+      "missing_dependency": "take-ticket",
+      "expected_failure": {
+        "stage": "dependency-resolution",
+        "code": "missing-internal-dependency",
+        "message": "Missing internal dependency \"take-ticket\"",
+        "missingSkill": "take-ticket"
+      },
+      "covered_clauses": ["dw-missing-take-ticket"]
+    }
+  ]
+}
