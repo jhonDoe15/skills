@@ -69,6 +69,12 @@ Decide these items before production prose:
    bounded judgment, and high where wording or approach may vary safely.
 7. **Evidence needs:** the claims being made and the smallest evidence that
    could support or falsify each claim.
+8. **Representation seam:** keep activation, authorization, choices, branch
+   predicates, failure policy, and completion in `SKILL.md`. Extract mechanics
+   into `scripts/` when they are deterministic, fixed-order, error-prone to
+   transcribe, and independently testable with explicit inputs, outputs, and
+   failures. Keep short examples and judgment-heavy steps inline, and invoke
+   an existing dependency instead of scripting behavior it already owns.
 
 List unresolved contract decisions and the smallest user decision or evidence
 needed. Do not hide an undecided behavior behind polished instructions.
@@ -98,6 +104,11 @@ Write production instructions only after justification and contract decisions
 are complete. Keep one owner for each behavior, place branch-only resources
 behind direct conditional pointers, and preserve the decided degrees of
 freedom.
+
+When the contract extracts a script, keep its invocation and governing
+decisions on the execution path. Ask `skill-mechanics` to validate the direct
+pointer and interface, and use deterministic execution evidence for the
+script's declared input, output, and failure behavior.
 
 Ask `skill-mechanics` to validate representation. Ask `skill-evaluation` for
 evidence proportionate to the claims:
@@ -144,7 +155,7 @@ Complete only when:
 - the Skill is justified against existing Skills, recurrence, and cheap
   environment lookup;
 - an observable behavior contract covers triggers, branches, completion,
-  dependencies, degrees of freedom, and evidence needs;
+  dependencies, degrees of freedom, representation seams, and evidence needs;
 - `agent-writing`, `skill-mechanics`, and `skill-evaluation` were invoked by
   canonical name;
 - the created or revised Skill preserves the decided contract;

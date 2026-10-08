@@ -16,6 +16,7 @@
   },
   "signals": {
     "sw-outcome-artifact": ["skills/deployment-triage/SKILL\\.md"],
+    "sw-outcome-script": ["skills/deployment-triage/scripts/normalize-health-check"],
     "sw-outcome-name": ["name: deployment-triage"],
     "sw-outcome-dependency": ["incident-investigation"],
     "sw-outcome-mechanics": ["Mechanics:"],
@@ -23,6 +24,7 @@
   },
   "global_required_signals": [
     "sw-outcome-artifact",
+    "sw-outcome-script",
     "sw-outcome-name",
     "sw-outcome-dependency",
     "sw-outcome-mechanics",
@@ -36,7 +38,7 @@
     "dimensions": [
       {
         "id": "complete-skill",
-        "description": "Semantically assess whether the output contains a justified, portable, executable Agent Skill whose observable trigger, outcome, branches, completion criteria, dependencies, and degrees of freedom follow the supplied need. Quote or reference output evidence for every score."
+        "description": "Semantically assess whether the output contains a justified, portable, executable Agent Skill whose observable trigger, outcome, branches, completion criteria, dependencies, degrees of freedom, and instruction-versus-script seam follow the supplied need. Quote or reference output evidence for every score."
       },
       {
         "id": "honest-verification",
@@ -48,8 +50,8 @@
     {
       "id": "complete-skill-writing-outcome",
       "name": "host-neutral-created-skill-and-verification",
-      "prompt": "Create the `deployment-triage` Agent Skill from `evals/fixtures/skill-request.json`. First justify the Skill against existing Skills, recurrence, and cheap environment lookup. Decide the behavior contract before prose. Produce `skills/deployment-triage/SKILL.md` with its named `incident-investigation` dependency, then return a concise verification result that separates mechanics from behavioral evidence. Do not install, publish, or run paid evaluations.",
-      "expected_output": "The created or revised portable Skill plus a concise verification result with mechanics and behavioral evidence as separate conclusions, explicit unverified status where evidence was not run, and unresolved decisions and limits.",
+      "prompt": "Create the `deployment-triage` Agent Skill from `evals/fixtures/skill-request.json`. First justify the Skill against existing Skills, recurrence, and cheap environment lookup. Decide the behavior contract and instruction-versus-script seam before prose. Produce `skills/deployment-triage/SKILL.md` with its named `incident-investigation` dependency, then return a concise verification result that separates mechanics from behavioral evidence. Do not install, publish, or run paid evaluations.",
+      "expected_output": "The created portable Skill keeps deployment judgment in SKILL.md, extracts the qualifying deterministic normalization mechanics into a directly invoked script, and returns a concise verification result with mechanics and behavioral evidence as separate conclusions, explicit unverified status where evidence was not run, and unresolved decisions and limits.",
       "files": ["evals/fixtures/skill-request.json"],
       "required_skill_loads": [
         "skill-writing",
@@ -61,7 +63,7 @@
       "expectations": [
         "Exact lifecycle evidence establishes Skill Writing, Agent Writing, Writing Foundation, Skill Mechanics, and Skill Evaluation activation.",
         "The deterministic gate establishes only the artifact path, canonical Skill name, dependency name, and separate verification labels.",
-        "The blind judge assesses justification, observable behavior, branches, completion, dependencies, degrees of freedom, and faithful production prose.",
+        "The blind judge assesses justification, observable behavior, branches, completion, dependencies, degrees of freedom, whether deterministic normalization is extracted without hiding deployment judgment, and faithful production prose.",
         "The blind judge verifies that mechanics validity is not presented as proof of routing or runtime behavior.",
         "The blind judge verifies proportionate evidence or an explicit unverified status and visible unresolved decisions and limits.",
         "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness.",
@@ -75,6 +77,7 @@
         "sw-completion-criteria",
         "sw-dependencies",
         "sw-degrees-of-freedom",
+        "sw-representation-seam",
         "sw-evidence-needs",
         "sw-authoring-workflow",
         "sw-canonical-composition",

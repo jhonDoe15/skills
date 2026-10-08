@@ -143,6 +143,15 @@
       ]
     },
     {
+      "id": "sw-representation-seam",
+      "owner": "skill-writing",
+      "kind": "behavior",
+      "cases": [
+        { "scope": "skill-writing-role", "id": "skill-writing-owned-contract" },
+        { "scope": "skill-writing-outcome", "id": "complete-skill-writing-outcome" }
+      ]
+    },
+    {
       "id": "sw-evidence-needs",
       "owner": "skill-writing",
       "kind": "behavior",
