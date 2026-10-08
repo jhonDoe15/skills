@@ -317,24 +317,24 @@ test('plan validates HEAD, computes a ceiling, and creates no spend clients', (t
     resolveWorktreeStatus: cleanWorktree,
   });
 
-  assert.equal(prepared.plan.manifests.length, 300);
+  assert.equal(prepared.plan.manifests.length, 316);
   assert.deepEqual(prepared.plan.execution_estimate, {
     initial_calls: {
-      host_executions: 4980,
-      judge_calls: 1540,
-      total: 6520,
+      host_executions: 5224,
+      judge_calls: 1612,
+      total: 6836,
     },
     maximum_calls: {
-      host_executions: 6980,
-      judge_calls: 2540,
-      total: 9520,
+      host_executions: 7320,
+      judge_calls: 2660,
+      total: 9980,
     },
     maximum_attempts: {
-      host_executions: 13960,
-      judge_calls: 5080,
-      total: 19040,
+      host_executions: 14640,
+      judge_calls: 5320,
+      total: 19960,
     },
-    maximum_configured_cost_ceiling_usd: 19040,
+    maximum_configured_cost_ceiling_usd: 19960,
   });
   assert.deepEqual(
     fs.readdirSync(artifacts).sort(),

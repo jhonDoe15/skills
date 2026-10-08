@@ -1,0 +1,64 @@
+{
+  "skill_name": "model-routing",
+  "version": 1,
+  "evaluation": {
+    "scope": "model-routing-to-take-it-offline",
+    "layer": "component",
+    "skill": "model-routing",
+    "hosts": [
+      "claude-code",
+      "cursor"
+    ],
+    "arms": [
+      "treatment",
+      "component-ablation"
+    ]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "model-routing-take-it-offline-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [
+      0,
+      2
+    ],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every semantic score, quote or reference complete and dependency-ablated output evidence; the package graph alone does not prove contribution.",
+    "dimensions": [
+      {
+        "id": "continuation-fidelity",
+        "description": "Blindly compare whether the handoff for a fresh session preserves the outcome, done boundary, current state, unresolved checks, and recommended slot without inventing state. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "routing-boundary",
+        "description": "Assess whether both arms keep the same routing decision, wait for the user to open the fresh session, and make no dispatch in the same turn. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "fresh-session-handoff",
+      "name": "fresh-session routing handoff component",
+      "prompt": "We finished diagnosis and the next phase is an independent second opinion on the proposed fix, which should not see my reasoning. Route that phase and prepare what is needed. `pi-dispatch` is installed; do not start any session.",
+      "expected_output": "The complete consumer loads Take It Offline to create the continuation handoff, recommends an Anthropic slot for the second opinion, and waits for the user to open the session. The dependency-ablated control keeps the same routing task without reproducing Take It Offline behavior.",
+      "files": [],
+      "expectations": [
+        "Matched arms receive the same neutral routing task and differ only in the Take It Offline dependency load.",
+        "The complete arm creates a continuation handoff through Take It Offline that preserves verified state and unresolved checks.",
+        "A slot is recommended and the user is asked to open the fresh session; no session or dispatch is started.",
+        "The ablated arm does not copy Take It Offline instructions or use production package failure as its control."
+      ],
+      "covered_clauses": [
+        "mr-take-it-offline-edge"
+      ],
+      "ablated_dependency": "take-it-offline"
+    }
+  ]
+}

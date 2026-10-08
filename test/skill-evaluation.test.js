@@ -4410,5 +4410,5 @@ test('report-only aggregation includes provenance and no suite release claim', a
   for (const judgment of campaign.judgments) {
     assert.match(report, new RegExp(judgment.fingerprint));
   }
-  assert.match(report, /does not make the 23-Skill suite release decision/);
+  assert.match(report, /does not make the 24-Skill suite release decision/);
 });

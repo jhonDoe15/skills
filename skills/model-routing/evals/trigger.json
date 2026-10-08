@@ -1,0 +1,116 @@
+{
+  "skill_name": "model-routing",
+  "version": 1,
+  "evaluation": {
+    "scope": "model-routing-trigger",
+    "layer": "trigger",
+    "skill": "model-routing",
+    "hosts": [
+      "claude-code",
+      "cursor"
+    ],
+    "arms": [
+      "treatment"
+    ]
+  },
+  "config": {
+    "runs_per_configuration": 5,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 1,
+    "randomization_seed": "model-routing-trigger-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [
+      0,
+      2
+    ],
+    "minimum_dimension_score": 1,
+    "dimensions": [
+      {
+        "id": "routing",
+        "description": "Selects Model Routing for multi-step work that needs an owner and slot decision or for pi-dispatch delegation, including exact canonical invocation, and stays inactive for single-step or directly answerable requests."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "multi-step-work",
+      "name": "automatic routing for multi-step work",
+      "prompt": "Migrate our retry logic to the new client library: find every call site, update them, adjust the tests, and run the suite. Some call sites may need judgment about timeouts.",
+      "expected_output": "The host records Model Routing selection before the first search or edit.",
+      "files": [],
+      "expectations": [
+        "Model Routing activates for work needing more than two steps."
+      ],
+      "covered_clauses": [
+        "mr-automatic-activation"
+      ],
+      "should_trigger": true,
+      "required_skill_loads": []
+    },
+    {
+      "id": "explicit-delegation",
+      "name": "delegation through pi-dispatch",
+      "prompt": "Hand the contract comparison to a cheaper worker with pi-dispatch and tell me which slot you chose.",
+      "expected_output": "The host records Model Routing selection for slot choice and dispatch.",
+      "files": [],
+      "expectations": [
+        "Model Routing activates when work may be handed to another model through pi-dispatch."
+      ],
+      "covered_clauses": [
+        "mr-dispatch-activation"
+      ],
+      "should_trigger": true,
+      "required_skill_loads": []
+    },
+    {
+      "id": "canonical-model-routing",
+      "name": "canonical Model Routing request",
+      "prompt": "/model-routing\n\nRoute the remaining work in this branch.",
+      "expected_output": "The host records exact canonical Model Routing selection.",
+      "files": [],
+      "expectations": [
+        "Model Routing activates through exact canonical invocation."
+      ],
+      "covered_clauses": [
+        "mr-canonical-activation"
+      ],
+      "should_trigger": true,
+      "canonical_invocation": true,
+      "required_skill_loads": []
+    },
+    {
+      "id": "ambiguous-size",
+      "name": "ambiguous two-step request",
+      "prompt": "Fix the typo in the README and push it.",
+      "expected_output": "The request is at the two-step boundary; either no selection or a brief main-session route is acceptable and neither creates a dispatch.",
+      "files": [],
+      "expectations": [
+        "No dispatch is made for work at the two-step boundary."
+      ],
+      "covered_clauses": [
+        "mr-ambiguous-boundary"
+      ],
+      "should_trigger": false,
+      "case_category": "ambiguous"
+    },
+    {
+      "id": "single-step-question",
+      "name": "single-step directly answerable request",
+      "prompt": "What does the --list flag do in pi-dispatch?",
+      "expected_output": "Model Routing remains inactive because no work is being routed or dispatched.",
+      "files": [],
+      "expectations": [
+        "No Model Routing selection or load is attempted."
+      ],
+      "covered_clauses": [
+        "mr-negative-activation"
+      ],
+      "should_trigger": false
+    }
+  ]
+}

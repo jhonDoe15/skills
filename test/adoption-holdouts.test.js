@@ -792,7 +792,7 @@ test('canonical campaign planning remains the unchanged default', () => {
     configuration: configuration(),
   });
   assert.equal(plan.kind, 'adoption-campaign-plan');
-  assert.equal(plan.manifests.length, 300);
+  assert.equal(plan.manifests.length, 316);
   assert.equal(Object.hasOwn(plan, 'holdout_catalog'), false);
   assert.equal(Object.hasOwn(plan, 'selection'), false);
 });

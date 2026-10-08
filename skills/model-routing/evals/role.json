@@ -1,0 +1,137 @@
+{
+  "skill_name": "model-routing",
+  "version": 1,
+  "evaluation": {
+    "scope": "model-routing-role",
+    "layer": "role",
+    "skill": "model-routing",
+    "hosts": [
+      "claude-code",
+      "cursor"
+    ],
+    "arms": [
+      "no-skill",
+      "treatment"
+    ]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "model-routing-role-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [
+      0,
+      2
+    ],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every semantic score, quote or reference concrete route, slot, or brief output evidence; labels such as 'route' or a slot name alone do not prove the decision.",
+    "dimensions": [
+      {
+        "id": "route-statement",
+        "description": "Assess whether a route is stated before the first search or edit and names the outcome, done boundary, overreach boundary, the judgment versus mechanical split, and one owner per unit. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "slot-choice",
+        "description": "Assess whether each dispatched unit's family follows the shape of the evidence (closed-world to OpenAI, open-world to Anthropic) and its tier starts at small and is promoted only on stated evidence. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "bounded-brief",
+        "description": "Assess whether each dispatch brief has one outcome, allowed scope, constraints, and checkable completion criteria, without copying the prompting profiles the command attaches. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "mixed-closed-and-open-work",
+      "name": "route a refactor and an unknown-cause failure",
+      "prompt": "Plan how to finish this work. Part one is renaming a settled config key across 14 files; a static analyzer and the existing test suite verify the result exactly. Part two is a flaky integration test whose cause is unknown; it fails only when two services restart close together. Decide who does each part and on which model slot, then draft the dispatch brief for each part. `pi-dispatch` is installed and no command should be run yet.",
+      "expected_output": "A stated route that keeps or delegates each unit deliberately. The rename routes to openai-small with exact checks. The flaky failure routes to an Anthropic slot at mid tier with a causal-hypothesis brief. Each brief carries one outcome, scope, and checkable completion criteria.",
+      "files": [],
+      "required_skill_loads": [
+        "model-routing"
+      ],
+      "expectations": [
+        "The route is stated before any search or edit and names outcome, done boundary, and overreach boundary.",
+        "Judgment and mechanical execution are separated, and each unit has exactly one owner.",
+        "The rename is assigned to `openai-small` because the contract and checks are explicit.",
+        "The flaky failure is assigned to an Anthropic slot, starting at `anthropic-mid`, because the cause is unknown and spans state and time.",
+        "Neither unit is promoted to a `top` slot without evidence that mid-tier reasoning is insufficient.",
+        "Each brief has one outcome, allowed scope, and checkable completion criteria, and does not restate the attached prompting profiles.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness."
+      ],
+      "covers": [
+        "mr-route-statement",
+        "mr-owner-choice",
+        "mr-family-by-evidence",
+        "mr-tier-promotion",
+        "mr-bounded-brief"
+      ]
+    },
+    {
+      "id": "keep-small-work-in-main-session",
+      "name": "keep bounded work when handoff overhead exceeds the work",
+      "prompt": "I need three things: rename one local variable in the file we just discussed, check that the module still compiles, and tell me the result. Everything needed is already in this conversation. `pi-dispatch` is installed.",
+      "expected_output": "The work is kept in the main session as an explicit route, because handoff overhead would exceed the bounded work, and no dispatch is made.",
+      "files": [],
+      "required_skill_loads": [
+        "model-routing"
+      ],
+      "expectations": [
+        "The route explicitly keeps the work in the main session and names the reason.",
+        "No `pi-dispatch` command is run and no dispatch brief is drafted.",
+        "The reply does not skip the route decision just because the work is small."
+      ],
+      "covers": [
+        "mr-main-session-route"
+      ]
+    },
+    {
+      "id": "dispatch-unavailable-or-model-unavailable",
+      "name": "degrade when dispatch or a slot model is unavailable",
+      "prompt": "Route this work: audit 30 API handlers against a written rubric. First assume `command -v pi-dispatch` prints nothing. Then separately assume it exists, but the model behind the chosen slot is reported unavailable before any inference. Show what you do in each case.",
+      "expected_output": "With no command, every unit goes to the main session or a fresh session and the unavailability is reported. With an unavailable model, an availability failure is recorded and the unit is rerouted at the equivalent tier by task shape, not treated as a quality result.",
+      "files": [],
+      "required_skill_loads": [
+        "model-routing"
+      ],
+      "expectations": [
+        "Without `pi-dispatch`, no dispatch is attempted and the unavailability is reported.",
+        "An unavailable model is recorded as an availability failure, not as a quality result or a reason to promote the tier.",
+        "The reroute keeps the equivalent tier and chooses the family by task shape.",
+        "The rubric-driven audit starts from `openai-mid` before any unavailability handling."
+      ],
+      "covers": [
+        "mr-dispatch-unavailable",
+        "mr-model-unavailable"
+      ]
+    },
+    {
+      "id": "recursion-limits",
+      "name": "opt into recursion only from the main session within limits",
+      "prompt": "A large audit has five independent areas with shared background. A dispatched worker suggests it should itself pass `--recursive` to fan the work out. As the main session, decide how recursion is used and what the parent may do.",
+      "expected_output": "Only the main session opts a root dispatch into recursion, the bounded parent is limited to one child level and three children, children get one outcome and exclusive file ownership, and child handoffs are verified before consolidation.",
+      "files": [],
+      "required_skill_loads": [
+        "model-routing",
+        "take-it-offline"
+      ],
+      "expectations": [
+        "The decision states that only the main session passes `--recursive` and a dispatched agent cannot.",
+        "The plan stays within one child level and three children, so five areas are not given five children.",
+        "One shared handoff carries common context and each child's brief varies only by angle.",
+        "Each child has one outcome, a checkable stop condition, and exclusive ownership of files it writes.",
+        "Child handoffs are read and verified before the parent consolidates."
+      ],
+      "covers": [
+        "mr-recursion-boundary",
+        "mr-shared-handoff"
+      ]
+    }
+  ]
+}
