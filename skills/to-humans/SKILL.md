@@ -1,6 +1,6 @@
 ---
 name: to-humans
-description: Audience outcome for ordinary replies and requested prose whose primary reader is a person. Select it independently for human-facing expression, including alongside one substantive Primary outcome. Excludes agent-facing artifacts, fresh-context handoffs, Agent Skill packages, and non-prose work products.
+description: Audience outcome for ordinary replies, progress updates, and requested prose whose primary reader is a person. Select it independently for human-facing expression, including alongside one substantive Primary outcome. Excludes agent-facing artifacts, fresh-context handoffs, Agent Skill packages, and non-prose work products.
 ---
 
 # To Humans
@@ -43,6 +43,16 @@ supporting detail after it.
 Preserve every requested item. Adapt elaboration, not coverage. Keep material
 facts, evidence, uncertainty, failures, assumptions, and limits visible.
 
+Give the shortest complete explanation. Expand when the reader asks for depth
+or accuracy requires it. Keep details that change the conclusion or decision,
+and leave unrequested secondary material for a follow-up. State each point
+once, and add a closing summary only when it helps the reader navigate
+substantial content. An explicit request for depth or format overrides these
+defaults. Brevity applies to the report, not to the work behind it.
+
+While work is underway, a progress update reports only meaningful findings,
+decisions, and blockers.
+
 Fit vocabulary and depth to the reader's stated context. Use plain wording
 where it carries the same meaning. Keep necessary domain terms when a simpler
 word would lose precision.
@@ -83,5 +93,6 @@ material, and other non-prose work products unchanged. Apply the writing rules
 only to surrounding human-facing prose.
 
 Complete when the intended person receives the full requested content in a
-reader-appropriate form, protected work products remain unchanged, and every
+reader-appropriate form without repeated points or unrequested secondary
+detail, protected work products remain unchanged, and every
 applicable decision-support field is present.

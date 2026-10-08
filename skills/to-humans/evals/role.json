@@ -36,6 +36,10 @@
         "description": "Checks a distinct recommendation, basis, material uncertainty, and change condition with source-correct polarity and direction."
       },
       {
+        "id": "density",
+        "description": "Checks the shortest complete explanation: the answer leads, each point appears once, unrequested secondary detail is left for follow-up, no closing summary restates a short answer, and failures, assumptions, and limits remain visible."
+      },
+      {
         "id": "clarity",
         "description": "Checks that prose is clear, meaningful, and non-hollow rather than token stuffing, repetition, or field labels without substance."
       },
@@ -174,6 +178,31 @@
         }
       ],
       "no_em_dash": true
+    },
+    {
+      "id": "short-complete-answer",
+      "name": "short complete answer without padding",
+      "prompt": "Tell me whether the nightly export job is safe to re-run. Facts: the job is idempotent and keyed by batch id; the last run failed at 02:14 on a timeout while writing batch 5 of 8; batches 1 to 4 were committed; nothing has verified that batch 5 left no partial rows. You also have unrelated notes available about the job's history, the vendor change log, and a possible future rewrite; I did not ask about them.",
+      "expected_output": "The answer states whether re-running is safe first, keeps the unverified partial-row condition visible, gives the basis once, and leaves the unrelated notes out or offers them as follow-up, with no restating summary.",
+      "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
+      "expectations": [
+        "The opening line states the re-run recommendation before supporting detail.",
+        "The idempotency and batch-id basis and the committed batches 1 to 4 are stated, each once.",
+        "The unverified partial-row condition for batch 5 stays visible as material uncertainty.",
+        "The unrelated job history, vendor change log, and future rewrite are not elaborated, and may appear at most as a one-line follow-up offer.",
+        "The answer does not end with a summary that restates earlier points.",
+        "The prose contains no em dash."
+      ],
+      "covers": [
+        "answer-first",
+        "shortest-complete-depth",
+        "secondary-detail-follow-up",
+        "state-once",
+        "no-em-dash"
+      ],
+      "forbidden_patterns": ["—"]
     }
+
   ]
 }
