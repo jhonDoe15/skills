@@ -23,7 +23,7 @@ const {
 
 const repositoryRoot = path.resolve(__dirname, '..');
 
-test('release package is the dependency-complete 23-Skill candidate', () => {
+test('release package is the dependency-complete 24-Skill candidate', () => {
   const release = validateReleasePackage(repositoryRoot);
 
   assert.deepEqual(release.identity, {
@@ -31,12 +31,12 @@ test('release package is the dependency-complete 23-Skill candidate', () => {
     version: '1.0.0',
     stage: 'release-candidate',
   });
-  assert.equal(release.skills.length, 23);
+  assert.equal(release.skills.length, 24);
   assert.deepEqual(
     release.skills,
     loadCanonicalSuite(repositoryRoot).inventory.map(({ name }) => name),
   );
-  assert.equal(release.runtimeEdges.length, 25);
+  assert.equal(release.runtimeEdges.length, 26);
   assert.deepEqual(release.componentEdges, release.runtimeEdges);
   assert.equal(release.skills.includes('lean'), false);
   assert.equal(release.skills.includes('skill-evaluation'), true);

@@ -16,6 +16,7 @@
   },
   "signals": {
     "sw-artifact": ["skills/deployment-triage/SKILL\\.md"],
+    "sw-script": ["skills/deployment-triage/scripts/normalize-health-check"],
     "sw-agent-writing": ["agent-writing"],
     "sw-skill-mechanics": ["skill-mechanics"],
     "sw-skill-evaluation": ["skill-evaluation"],
@@ -24,6 +25,7 @@
   },
   "global_required_signals": [
     "sw-artifact",
+    "sw-script",
     "sw-agent-writing",
     "sw-skill-mechanics",
     "sw-skill-evaluation",
@@ -38,7 +40,7 @@
     "dimensions": [
       {
         "id": "skill-justification-and-contract",
-        "description": "Semantically assess whether the Skill is justified against existing Skills, recurrence, and cheap environment lookup before trigger boundaries, branches, completion, dependencies, degrees of freedom, and evidence needs are decided. Quote or reference output evidence for every score."
+        "description": "Semantically assess whether the Skill is justified against existing Skills, recurrence, and cheap environment lookup before trigger boundaries, branches, completion, dependencies, degrees of freedom, representation seams, and evidence needs are decided. Quote or reference output evidence for every score."
       },
       {
         "id": "authoring-and-verification",
@@ -51,7 +53,7 @@
       "id": "skill-writing-owned-contract",
       "name": "justified-contract-before-production-prose",
       "prompt": "Use the supplied `evals/fixtures/skill-request.json` to create or revise the `deployment-triage` Agent Skill. Check whether an existing Skill or cheap environment lookup already owns the need, decide an observable contract and evidence plan before production prose, invoke named dependencies, and return the artifact plus a concise verification result. Do not install or publish it.",
-      "expected_output": "A justified Skill-writing workflow that decides behavior before prose, composes the three canonical dependencies, produces skills/deployment-triage/SKILL.md, and reports mechanics and behavioral evidence as separate conclusions.",
+      "expected_output": "A justified Skill-writing workflow that keeps deployment judgment in skills/deployment-triage/SKILL.md, extracts the qualifying deterministic normalization mechanics into a directly invoked script, composes the three canonical dependencies, and reports mechanics and behavioral evidence as separate conclusions.",
       "files": ["evals/fixtures/skill-request.json"],
       "required_skill_loads": [
         "skill-writing",
@@ -62,7 +64,7 @@
       ],
       "expectations": [
         "The deterministic gate establishes only the artifact path, exact canonical dependency names, and separate verification labels.",
-        "The blind judge assesses justification, trigger boundaries, branches, completion criteria, dependencies, degrees of freedom, evidence needs, and authoring order.",
+        "The blind judge assesses justification, trigger boundaries, branches, completion criteria, dependencies, degrees of freedom, evidence needs, and whether deterministic normalization is extracted without hiding deployment judgment.",
         "The blind judge verifies that dependency behavior is invoked rather than copied and that absent behavioral evidence is reported as unverified.",
         "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness.",
         "Failed critical mechanical gates are non-overridable."
@@ -75,6 +77,7 @@
         "sw-completion-criteria",
         "sw-dependencies",
         "sw-degrees-of-freedom",
+        "sw-representation-seam",
         "sw-evidence-needs",
         "sw-authoring-workflow",
         "sw-canonical-composition",

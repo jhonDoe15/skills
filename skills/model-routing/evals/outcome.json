@@ -1,0 +1,75 @@
+{
+  "skill_name": "model-routing",
+  "version": 1,
+  "evaluation": {
+    "scope": "model-routing-outcome",
+    "layer": "outcome",
+    "skill": "model-routing",
+    "hosts": [
+      "claude-code",
+      "cursor"
+    ],
+    "arms": [
+      "no-skill",
+      "treatment"
+    ]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "model-routing-outcome-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [
+      0,
+      2
+    ],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every assertion and dimension, the blind judge must quote or reference specific output evidence. Labels or unsupported conclusions are not evidence.",
+    "dimensions": [
+      {
+        "id": "route-quality",
+        "description": "Checks that the route names the outcome and boundaries, separates judgment from mechanical work, and assigns every unit an owner with a reason."
+      },
+      {
+        "id": "slot-fit",
+        "description": "Checks family by evidence shape, tier by promotion evidence, and the dispatch command form against pi-dispatch --list."
+      },
+      {
+        "id": "acceptance-discipline",
+        "description": "Checks that returned handoffs are read and the critical path verified before acceptance, and that re-routing and misroutes are reported."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "complete-routed-delegation",
+      "name": "route, dispatch, and accept a bounded unit",
+      "prompt": "Delegate a bounded contract check to a worker and take the result. The task: compare a new OpenAPI file against the 12 documented response rules in docs/api-rules.md and list every violation. Use pi-dispatch; run `pi-dispatch --list` first to confirm slots, and describe the exact dispatch command you would run without executing it. Then describe what you do when the handoff comes back.",
+      "expected_output": "A route before action, an openai-mid slot chosen by evidence shape with the slot confirmed from `pi-dispatch --list`, a one-outcome brief with checkable completion criteria, and an acceptance step that reads the handoff and verifies the critical path.",
+      "files": [],
+      "required_skill_loads": [
+        "model-routing"
+      ],
+      "expectations": [
+        "A route is stated first with outcome, done boundary, and overreach boundary.",
+        "The slot is `openai-mid` because the rubric is explicit and coverage can be enumerated, and the command form matches `pi-dispatch <slot> <slug> \"<brief>\"`.",
+        "The brief has exactly one outcome and checkable completion criteria.",
+        "On return the handoff is read and a violation or the critical path is independently verified before acceptance.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness."
+      ],
+      "covers": [
+        "matched-no-skill-control",
+        "mr-route-statement",
+        "mr-family-by-evidence",
+        "mr-bounded-brief",
+        "mr-acceptance"
+      ]
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 {
   "name": "skills",
   "version": "1.0.0",
-  "description": "Atomic 23-Skill suite for human and agent writing, ticket planning, implementation planning, implementation, architecture and code review, dispatch, durable agent guidance, and explicit read-only incident-investigation.",
+  "description": "Atomic 24-Skill suite for human and agent writing, model routing, ticket planning, implementation planning, implementation, architecture and code review, dispatch, durable agent guidance, and explicit read-only incident-investigation.",
   "skills": "./skills",
   "keywords": [
     "agent-skills",

@@ -31,6 +31,16 @@
       "sequence": "low",
       "evidence_selection": "medium",
       "wording": "high"
+    },
+    "representation_candidate": {
+      "mechanics": "Normalize a health-check JSON file, validate its required fields, and emit one stable boundary summary.",
+      "properties": [
+        "deterministic",
+        "fixed-order",
+        "error-prone when transcribed as separate shell commands",
+        "independently testable with explicit input, output, and failure cases"
+      ],
+      "required_agent_judgment": "The agent still decides whether the boundary is localized and whether incident-investigation is authorized."
     }
   },
   "evidence_request": {

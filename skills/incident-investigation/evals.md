@@ -112,6 +112,6 @@ use the same run-evidence schema.
 
 Offline replay rejects missing, stale, partial, mismatched, or tampered
 evidence. Its verdict and Adoption report cover Incident Investigation and the
-shared machinery only. They do not claim complete 23-Skill Contract coverage or
+shared machinery only. They do not claim complete 24-Skill Contract coverage or
 make the suite release decision. Keep fixtures sanitized; credentials, private
 keys, raw customer data, and unnecessary identifiers do not belong in the JSON.

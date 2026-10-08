@@ -1,6 +1,6 @@
 # skills
 
-Version 1.0.0 release candidate for one atomic 23-Skill suite. Install the
+Version 1.0.0 release candidate for one atomic 24-Skill suite. Install the
 package as a unit. Partial or domain-only subsets are not release candidates.
 
 The suite covers project agent guidance, human and agent writing, ticket
@@ -9,6 +9,10 @@ review, DAG dispatch, and explicit read-only incident investigation.
 `to-humans` is an Audience outcome
 selected independently from substantive Primary outcomes. Artifact flow does
 not create an invocation dependency.
+
+`model-routing` chooses the owner and model slot for multi-step work. It
+dispatches through the host's `pi-dispatch` command, which is not bundled. Without
+the command it routes everything to the main session or a fresh session.
 
 `carve` turns authoritative requirements into either a validated ready ticket
 DAG or a needs-decision plan. It publishes only after separate authorization.
@@ -27,6 +31,7 @@ Public Primary outcomes:
 - `implement`
 - `implementation-planning`
 - `incident-investigation`
+- `model-routing`
 - `pr-carver`
 - `skill-writing`
 - `take-it-offline`
@@ -112,7 +117,7 @@ The JSON file is an array of `{ "name": "...", "source": "..." }` records from
 the target host's configured project and user discovery roots. The check
 reports every conflicting owner and predecessor, then exits nonzero.
 
-It verifies the 1.0.0 identity, exact 23-Skill inventory, package-wide
+It verifies the 1.0.0 identity, exact 24-Skill inventory, package-wide
 dependency closure, and component coverage for every declared runtime edge.
 Missing suite-owned dependencies fail with the exact canonical name. Collision
 checks use explicit installation inventories supplied by the caller.
@@ -124,7 +129,7 @@ events, responses, artifacts, tool use, attempted mutations, model identity,
 duration, cost, and failure state. Component ablation remains available only
 through the test Adapter boundary.
 
-The release candidate is ready for the separate 23-Skill adoption campaign.
+The release candidate is ready for the separate 24-Skill adoption campaign.
 Static package validation does not claim that the paid cross-host campaign or
 human adoption decision has run.
 
