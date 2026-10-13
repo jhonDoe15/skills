@@ -191,5 +191,13 @@ Reusable evaluation cases, schemas, test Adapters, validators, rubrics, and
 source fixtures stay versioned. Generated package checks, reviews, transcripts,
 model runs, temporary workspaces, evaluation output, and reports stay ignored.
 
+Design decisions live next to the Skill they shape, in `skills/<name>/SOURCES.md`.
+Each file keeps a source register and one entry per decision with its status
+(Adopted, Rejected, or Proposed), evidence, eval coverage, and the result that
+would reopen it. Read it before changing a Skill, and record rejected ideas
+instead of deleting them. `skills/to-humans/SOURCES.md` shows the full format.
+These files are maintainer records and are not part of any Skill's execution
+path.
+
 See `THIRD_PARTY_NOTICES.md` for pinned sources, licenses, and affected suite
 Modules. The package is MIT licensed. See `LICENSE`.
