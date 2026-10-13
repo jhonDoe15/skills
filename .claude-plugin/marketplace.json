@@ -8,7 +8,7 @@
     {
       "name": "skills",
       "source": ".",
-      "description": "Atomic 25-Skill suite for project README and other writing, ticket planning, implementation planning, implementation, architecture and code review, dispatch, durable agent guidance, and explicit read-only incident-investigation."
+      "description": "Atomic 25-Skill suite for project READMEs, human and agent writing, ticket planning, implementation planning, implementation, architecture and code review, dispatch, durable agent guidance, and explicit read-only incident-investigation."
     }
   ]
 }

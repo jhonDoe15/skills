@@ -4,18 +4,18 @@ Version 1.0.0 release candidate for one atomic 25-Skill suite. Install the
 package as a unit. Partial or domain-only subsets are not release candidates.
 
 The suite covers project agent guidance, project READMEs, human and agent
-writing, ticket planning, implementation planning, implementation, architecture and code
-review, DAG dispatch, and explicit read-only incident investigation.
+writing, ticket planning, implementation planning, implementation, architecture
+and code review, DAG dispatch, and explicit read-only incident investigation.
 `to-humans` is an Audience outcome
 selected independently from substantive Primary outcomes. Artifact flow does
 not create an invocation dependency.
 
 `model-routing` chooses the owner and model slot for multi-step work. It
-dispatches through the host's `pi-dispatch` command, which is not bundled. Without
-the command it routes everything to the main session or a fresh session.
+dispatches through the host's `pi-dispatch` command, which is not bundled.
+Without the command it routes everything to the main session or a fresh session.
 
-`readme-writing` writes, restructures, or reviews a project's README. It is
-selected independently alongside `to-humans` and does not invoke it.
+`readme-writing` writes, restructures, corrects, or reviews a project's README.
+It is selected independently alongside `to-humans` and does not invoke it.
 
 `carve` turns authoritative requirements into either a validated ready ticket
 DAG or a needs-decision plan. It publishes only after separate authorization.

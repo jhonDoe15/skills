@@ -34,7 +34,7 @@
     "dimensions": [
       {
         "id": "stranger-ready-readme",
-        "description": "Assess whether the delivered README lets a stranger decide and then start: purpose-first identity line, a short problem and stance paragraph, a proof example from a real run, three to six highlights, getting started with requirements and one to three commands, documentation links with a few words each, and status for a pre-1.0 project. Quote or reference output evidence for every score."
+        "description": "Assess whether the delivered README lets a stranger decide and then start: purpose-first identity line, a short problem paragraph that states the trade the purpose names, a proof example from a real run, a short list of highlights that each add something the identity line and proof do not show, getting started with requirements and the fewest commands that get a first result, documentation links with a few words each, and status for a pre-1.0 project. Quote or reference output evidence for every score."
       },
       {
         "id": "verified-and-recorded",
@@ -46,25 +46,39 @@
     {
       "id": "complete-verified-readme-outcome",
       "name": "complete verified project README",
-      "prompt": "Write the README for the supplied project: a Node library that converts Markdown to HTML and ships a CLI and a browser bundle. package.json says version 0.9.2, license MIT, Node 20 or later. docs/design.md states the purpose: render untrusted Markdown safely by default, at the cost of dropping raw HTML unless explicitly enabled. The browser bundle does not support the footnotes extension; the Node build does. Running `node examples/run.js` prints the rendered HTML for examples/input.md. There is no existing README. Deliver the README, any docs files it links to, and a report of the work and its verification.",
+      "prompt": "Write the README for the project in evals/fixtures/tamemark/: a Node library that converts Markdown to HTML and ships a CLI and a browser bundle. package.json says version 0.9.2, license MIT, Node 20 or later. docs/design.md states the purpose: render untrusted Markdown safely by default, at the cost of dropping raw HTML unless explicitly enabled. The browser bundle, dist/tamemark.browser.js, does not support footnotes; the Node build does. From evals/fixtures/tamemark/, `node examples/run.js` prints the rendered HTML for examples/input.md. There is no existing README. Deliver the README, any docs files it links to, and a report of the work and its verification.",
       "expected_output": "A reviewable README grounded in comparable projects' READMEs and the maintainers' purpose, with a real example, variant-scoped claims, linked docs for specifics, verification of every claim and link, two independent adversarial reviews with their findings handled, and a report of references read and anything unverified.",
-      "files": [],
+      "files": [
+        "evals/fixtures/tamemark/bin/tamemark.js",
+        "evals/fixtures/tamemark/dist/tamemark.browser.js",
+        "evals/fixtures/tamemark/docs/design.md",
+        "evals/fixtures/tamemark/examples/input.md",
+        "evals/fixtures/tamemark/examples/run.js",
+        "evals/fixtures/tamemark/package.json",
+        "evals/fixtures/tamemark/scripts/build-browser.js",
+        "evals/fixtures/tamemark/src/core.js",
+        "evals/fixtures/tamemark/src/footnotes.js",
+        "evals/fixtures/tamemark/src/index.js"
+      ],
       "required_skill_loads": [
         "readme-writing"
       ],
       "expectations": [
         "The treatment produces a project README rather than agent guidance, reference documentation, or a changelog.",
-        "The README opens with an identity line derived from the safe-by-default purpose and states the bargain of dropping raw HTML unless enabled.",
-        "The example output comes from running examples/run.js against the supplied code, with the input it depends on shown.",
-        "The footnotes limitation is scoped to the Node build in the README or moved to the browser bundle's doc.",
-        "The result reports the reference READMEs read, the commands run and links resolved, the two adversarial reviews and their handled findings, and any unverified item.",
+        "The README opens with an identity line derived from the safe-by-default purpose in docs/design.md and states the trade of dropping raw HTML unless `allowHtml: true` or `--allow-html` enables it.",
+        "The example output comes from running examples/run.js against the fixture, shows the input it depends on, and matches a real run: the `<script>` block in examples/input.md is absent from the output and the footnote renders as a numbered reference and a footnotes section.",
+        "The footnotes limitation is scoped to the Node build in the README or moved to the browser bundle's doc; no sentence claims footnotes work in dist/tamemark.browser.js.",
+        "The README states the pre-1.0 status of version 0.9.2 and what to pin.",
+        "The result reports the reference READMEs read, the commands run and links resolved, the two adversarial reviews and their handled findings, and any unverified item such as the npm install command for an unpublished package.",
         "The matched No-Skill control receives the same task without the package."
       ],
       "covered_clauses": [
         "rw-readme-outcome",
         "rw-purpose-first",
+        "rw-stated-trade",
         "rw-real-example",
         "rw-variant-scoped-claims",
+        "rw-status-conditional",
         "rw-adversarial-review",
         "rw-verification-report"
       ],
