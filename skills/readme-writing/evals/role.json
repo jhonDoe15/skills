@@ -1,0 +1,196 @@
+{
+  "skill_name": "readme-writing",
+  "version": 1,
+  "evaluation": {
+    "scope": "readme-writing-role",
+    "layer": "role",
+    "skill": "readme-writing",
+    "hosts": [
+      "claude-code",
+      "cursor"
+    ],
+    "arms": [
+      "no-skill",
+      "treatment"
+    ]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "readme-writing-role-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [
+      0,
+      2
+    ],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every semantic score, quote or reference concrete README or report evidence; lifecycle activation and output quality remain separate claims.",
+    "dimensions": [
+      {
+        "id": "branch-and-scope",
+        "description": "Assess whether the response takes the branch the request selects and stays inside it: a create or restructure request gets a new README; a targeted correction changes only the named content and leaves the rest of the README as it was; a review changes no file and returns findings ranked by impact on a stranger, each quoting the README location and citing the source file or run that shows the problem; and a project with no maintainer statement of purpose gets a purpose proposed from the code, marked as proposed, with a request to confirm it before any README is written. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "purpose-first-structure",
+        "description": "When the branch writes or assesses README structure, assess whether the README opens with one identity line that names a familiar category plus what sets the project apart, derived from the maintainers' stated purpose rather than the old README, followed by the problem (with the trade when the purpose names one), a proof example, a short list of highlights, getting started, documentation links, and status in the recorded default order, with each departure justified. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "real-evidence-and-example",
+        "description": "Assess whether every output the response shows or compares against, including a README's proof and a review's check of the README's example, comes from a real run of the current code and is shown with the path or setup it depends on, rather than being invented or reworded, and whether the report names the reference READMEs actually read when the branch reads them. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "verified-claims-per-variant",
+        "description": "Assess whether every claim the response writes or approves holds for each language or platform variant it covers, scoping or flagging variant-specific claims such as a Python-only check, whether commands were run and links resolved or reported as unverified, and whether commands that would change the machine, such as a global install, were reported as unverified instead of run. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "specifics-moved-to-docs",
+        "description": "When the branch restructures a README, assess whether command-line flags, exit codes, configuration keys, internal paths, and history leave the README for linked docs without loss, and whether repeated copies such as the package description were updated in the same change. For a correction or a review, assess instead that no such material was moved or edited. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "purpose-led-readme-rewrite",
+      "name": "purpose-led README rewrite with variant scoping",
+      "prompt": "Rewrite the README of the project in evals/fixtures/snag/, a command-line checker that flags debugger calls and copy-pasted code before a commit. The current README opens with a feature list, documents every command-line flag and exit code inline, lists internal file paths, and says 'Supports Python and TypeScript'. The maintainers' docs/philosophy.md states the purpose. The checks live in src/checks/, and src/index.js runs the duplicate-block check on Python files only. From evals/fixtures/snag/, `node bin/snag.js check examples/sample` prints three findings, the first being `src/app.py:12 duplicate-block`. package.json says version 0.4.0 and license MIT. Produce the new README, the docs files that now hold the moved specifics, and a report of what you read and verified.",
+      "expected_output": "A README that leads with the maintainers' purpose, states the no-configuration trade, proves it with output from a real run, scopes the Python-only check, moves flag and exit-code detail into linked docs, and a report listing references read, verification performed, and anything unverified.",
+      "files": [
+        "evals/fixtures/snag/README.md",
+        "evals/fixtures/snag/bin/snag.js",
+        "evals/fixtures/snag/docs/philosophy.md",
+        "evals/fixtures/snag/examples/sample/src/app.py",
+        "evals/fixtures/snag/examples/sample/src/web.ts",
+        "evals/fixtures/snag/package.json",
+        "evals/fixtures/snag/src/checks/debug-call.js",
+        "evals/fixtures/snag/src/checks/duplicate-block.js",
+        "evals/fixtures/snag/src/index.js"
+      ],
+      "required_skill_loads": [
+        "readme-writing"
+      ],
+      "expectations": [
+        "There are no deterministic output-text signals; README quality requires evidence-based semantic judging and observed actions.",
+        "The blind judge checks that the identity line comes from docs/philosophy.md and names a familiar category plus the distinguishing stance, and that the old feature-first opening is not preserved.",
+        "The blind judge checks that the README states the trade docs/philosophy.md names (no configuration file, every check always on, `snag: ignore` for a single line) and answers what to do when a check seems wrong in the project's own terms.",
+        "The blind judge checks that the example output was captured from a real run of the fixture, including the first finding `src/app.py:12 duplicate-block` and the summary line `3 findings`, that the old README's stale `src/app.py:14` output is not reused, and that nothing was edited beyond trimming whole lines.",
+        "The blind judge checks that the 'Supports Python and TypeScript' claim is scoped or corrected for the Python-only duplicate-block check, which does not flag the repeated loop in examples/sample/src/web.ts.",
+        "The blind judge checks that the install command names the package in package.json (`snagcheck`), not the old README's `snag`, or is reported as unverified.",
+        "The blind judge checks that flags, exit codes, and internal paths moved to linked docs with no lost fact, and that the references read, the commands run, the links resolved, and the unverified items are reported.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness.",
+        "The matched No-Skill control receives the same task without the package."
+      ],
+      "covered_clauses": [
+        "rw-purpose-first",
+        "rw-stated-trade",
+        "rw-reference-grounding",
+        "rw-real-example",
+        "rw-variant-scoped-claims",
+        "rw-specifics-to-docs",
+        "rw-verification-report"
+      ],
+      "required_signals": []
+    },
+    {
+      "id": "targeted-install-correction",
+      "name": "targeted correction of one wrong install command",
+      "prompt": "The install command in the README of the project in evals/fixtures/snag/ is wrong. Fix it. Do not restructure the README.",
+      "expected_output": "Only the install command changes, to one that matches package.json, with the claim verified against the package metadata and the global install itself reported as not run.",
+      "files": [
+        "evals/fixtures/snag/README.md",
+        "evals/fixtures/snag/bin/snag.js",
+        "evals/fixtures/snag/docs/philosophy.md",
+        "evals/fixtures/snag/examples/sample/src/app.py",
+        "evals/fixtures/snag/examples/sample/src/web.ts",
+        "evals/fixtures/snag/package.json",
+        "evals/fixtures/snag/src/checks/debug-call.js",
+        "evals/fixtures/snag/src/checks/duplicate-block.js",
+        "evals/fixtures/snag/src/index.js"
+      ],
+      "required_skill_loads": [
+        "readme-writing"
+      ],
+      "expectations": [
+        "There are no deterministic output-text signals; scope discipline and verification require evidence-based semantic judging and observed actions.",
+        "The blind judge checks that the README's install command now names the package in package.json, `snagcheck` (for example `npm install -g snagcheck`), and that the installed command name `snag` from the bin field still matches the usage shown.",
+        "The blind judge checks that no other README content changed: the feature list, the stale example output, the 'Supports Python and TypeScript' line, the flag and exit-code tables, and the layout list stay as they were, although the report may mention them as separate findings.",
+        "The blind judge checks that the corrected command was verified against package.json (and optionally an offline check such as `npm pack --dry-run`), and that the global install was not run and is reported as unverified because it would change the machine.",
+        "The blind judge checks that no other file in the fixture was modified.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness.",
+        "The matched No-Skill control receives the same task without the package."
+      ],
+      "covered_clauses": [
+        "rw-branch-targeted-correction",
+        "rw-command-safety",
+        "rw-verification-report"
+      ],
+      "required_signals": []
+    },
+    {
+      "id": "read-only-readme-review",
+      "name": "read-only README review with ranked findings",
+      "prompt": "Review the README of the project in evals/fixtures/snag/ for someone who has never seen the project. Do not change any file. Tell me what is wrong or missing, most important first.",
+      "expected_output": "No file changes, and findings ranked by impact on a stranger, each quoting the README location and citing the source file or run that shows the problem.",
+      "files": [
+        "evals/fixtures/snag/README.md",
+        "evals/fixtures/snag/bin/snag.js",
+        "evals/fixtures/snag/docs/philosophy.md",
+        "evals/fixtures/snag/examples/sample/src/app.py",
+        "evals/fixtures/snag/examples/sample/src/web.ts",
+        "evals/fixtures/snag/package.json",
+        "evals/fixtures/snag/src/checks/debug-call.js",
+        "evals/fixtures/snag/src/checks/duplicate-block.js",
+        "evals/fixtures/snag/src/index.js"
+      ],
+      "required_skill_loads": [
+        "readme-writing"
+      ],
+      "expectations": [
+        "There are no deterministic output-text signals; review quality requires evidence-based semantic judging and observed actions.",
+        "The blind judge checks that no file in the fixture was created, modified, or deleted.",
+        "The blind judge checks that the findings are ranked by impact on a first-time reader and that each one quotes or names the README location and cites the source file, run, or reference that shows the problem.",
+        "The blind judge checks that the findings include the wrong install command (README `snag`, package.json `snagcheck`), the stale example (README shows `src/app.py:14` and two findings; a real run of `node bin/snag.js check examples/sample` prints `src/app.py:12` first and three findings), and the 'Supports Python and TypeScript' claim that the Python-only duplicate-block check contradicts.",
+        "The blind judge checks that the findings note the purpose in docs/philosophy.md is missing from the opening, and may also note the missing pre-1.0 status and the flag, exit-code, and internal-path detail that belongs in docs.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness.",
+        "The matched No-Skill control receives the same task without the package."
+      ],
+      "covered_clauses": [
+        "rw-branch-review",
+        "rw-real-example",
+        "rw-variant-scoped-claims"
+      ],
+      "required_signals": []
+    },
+    {
+      "id": "unstated-purpose-confirmation",
+      "name": "proposed purpose confirmed before writing",
+      "prompt": "Write a README for the project in evals/fixtures/colprune/.",
+      "expected_output": "A purpose sentence proposed from the code, marked as proposed, and a request to confirm it before any README is written.",
+      "files": [
+        "evals/fixtures/colprune/bin/colprune.js",
+        "evals/fixtures/colprune/examples/contacts.csv",
+        "evals/fixtures/colprune/package.json"
+      ],
+      "required_skill_loads": [
+        "readme-writing"
+      ],
+      "expectations": [
+        "There are no deterministic output-text signals; purpose handling requires evidence-based semantic judging and observed actions.",
+        "The blind judge checks that the response finds no maintainer statement of purpose (package.json has no description and the project has no docs or README) and says so.",
+        "The blind judge checks that the response proposes a one-sentence purpose drawn from bin/colprune.js (it removes CSV columns that are empty in every data row), marks it as proposed, and asks the user to confirm or correct it.",
+        "The blind judge checks that no README.md is written before the purpose is confirmed, and that the response names the smallest decision needed to continue.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness.",
+        "The matched No-Skill control receives the same task without the package."
+      ],
+      "covered_clauses": [
+        "rw-purpose-confirmation"
+      ],
+      "required_signals": []
+    }
+  ]
+}

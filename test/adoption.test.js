@@ -171,12 +171,12 @@ test('loads and validates every owner-local definition source', () => {
     ]),
   );
 
-  assert.equal(records.length, 79);
+  assert.equal(records.length, 82);
   assert.deepEqual(layerCounts, {
-    role: 24,
+    role: 25,
     component: 19,
-    outcome: 16,
-    trigger: 20,
+    outcome: 17,
+    trigger: 21,
   });
   assert.ok(records.some(({ source, origin }) => (
     source === 'skills/implement/evals/evals.json#role'
@@ -256,9 +256,9 @@ test('loads and validates every owner-local definition source', () => {
 test('proves complete role, edge, outcome, and trigger-category coverage', () => {
   const coverage = validateCampaignCoverage(repositoryRoot);
 
-  assert.equal(coverage.role_owners.length, 24);
+  assert.equal(coverage.role_owners.length, 25);
   assert.equal(coverage.component_edges.length, 26);
-  assert.equal(coverage.public_outcomes.length, 16);
+  assert.equal(coverage.public_outcomes.length, 17);
   for (const category of [
     'positive',
     'negative',
@@ -339,7 +339,7 @@ test('builds deterministic per-definition and per-cell manifests', () => {
   assert.equal(plan.fingerprint, repeated.fingerprint);
   assert.equal(plan.fingerprint, reordered.fingerprint);
   assert.notEqual(plan.fingerprint, changedEffort.fingerprint);
-  assert.equal(plan.manifests.length, 79 * 4);
+  assert.equal(plan.manifests.length, 82 * 4);
   assert.equal(
     new Set(plan.manifests.map(({ fingerprint }) => fingerprint)).size,
     plan.manifests.length,

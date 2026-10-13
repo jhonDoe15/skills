@@ -1,0 +1,252 @@
+{
+  "skill_name": "readme-writing",
+  "version": 1,
+  "evaluation": {
+    "scope": "readme-writing-trigger",
+    "layer": "trigger",
+    "skill": "readme-writing",
+    "hosts": [
+      "claude-code",
+      "cursor"
+    ],
+    "arms": [
+      "treatment"
+    ]
+  },
+  "config": {
+    "runs_per_configuration": 5,
+    "minimum_treatment_pass_rate": 1,
+    "minimum_treatment_win_rate": 0,
+    "randomization_seed": "readme-writing-trigger-v1"
+  },
+  "judge": {
+    "score_range": [
+      0,
+      2
+    ],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every routing assertion, quote or reference exact Skill lifecycle evidence; the description and output prose do not prove activation.",
+    "dimensions": [
+      {
+        "id": "readme-request-routing",
+        "description": "Selects Readme Writing for creating, rewriting, restructuring, reviewing, or correcting a project's README."
+      },
+      {
+        "id": "specialized-exclusions",
+        "description": "Leaves agent-facing guidance files, reference documentation pages, changelogs, release notes, casual questions that only mention a README, and ordinary human replies to their owning outcomes."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "readme-writing-create",
+      "name": "create a project README",
+      "prompt": "Write a README for this repository so a stranger can tell what it is for and get started.",
+      "expected_output": "Readme Writing activates for creating a project README.",
+      "files": [],
+      "expectations": [
+        "The host records Readme Writing activation by its canonical name."
+      ],
+      "covered_clauses": [
+        "rw-routing-create"
+      ],
+      "should_trigger": true,
+      "case_category": "positive",
+      "required_skill_loads": [
+        "readme-writing"
+      ]
+    },
+    {
+      "id": "readme-writing-restructure",
+      "name": "restructure an existing README",
+      "prompt": "Our README reads like a generic markdown document. Restructure it the way popular open source projects do, keeping the project's own purpose.",
+      "expected_output": "Readme Writing activates for rewriting or restructuring an existing README.",
+      "files": [],
+      "expectations": [
+        "The host records Readme Writing activation for the README restructuring request."
+      ],
+      "covered_clauses": [
+        "rw-routing-restructure"
+      ],
+      "should_trigger": true,
+      "case_category": "positive",
+      "required_skill_loads": [
+        "readme-writing"
+      ]
+    },
+    {
+      "id": "readme-writing-review",
+      "name": "review a README",
+      "prompt": "Review this project's README and tell me which claims are wrong or missing for a first-time reader. Do not change the file.",
+      "expected_output": "Readme Writing activates for a read-only README review.",
+      "files": [],
+      "expectations": [
+        "The host records Readme Writing activation for the README review request."
+      ],
+      "covered_clauses": [
+        "rw-routing-review"
+      ],
+      "should_trigger": true,
+      "case_category": "positive",
+      "required_skill_loads": [
+        "readme-writing"
+      ]
+    },
+    {
+      "id": "readme-writing-correct",
+      "name": "correct one claim in a README",
+      "prompt": "The install command in our README names the wrong package. Fix that line.",
+      "expected_output": "Readme Writing activates for a targeted README correction.",
+      "files": [],
+      "expectations": [
+        "The host records Readme Writing activation for the README correction request."
+      ],
+      "covered_clauses": [
+        "rw-routing-correct"
+      ],
+      "should_trigger": true,
+      "case_category": "positive",
+      "required_skill_loads": [
+        "readme-writing"
+      ]
+    },
+    {
+      "id": "readme-writing-canonical",
+      "name": "canonical direct invocation",
+      "prompt": "/readme-writing\n\nRewrite the README for this package.",
+      "expected_output": "Direct canonical invocation selects Readme Writing.",
+      "files": [],
+      "expectations": [
+        "The host records invocation of Readme Writing by its exact canonical name."
+      ],
+      "covered_clauses": [
+        "rw-routing-canonical"
+      ],
+      "should_trigger": true,
+      "canonical_invocation": true,
+      "required_skill_loads": [
+        "readme-writing"
+      ]
+    },
+    {
+      "id": "readme-writing-agents-file-exclusion",
+      "name": "agent guidance file exclusion",
+      "prompt": "Create an AGENTS.md that tells future coding agents how to change this repository and which commands to run.",
+      "expected_output": "Readme Writing stays inactive because Agents File Writer owns agent-facing guidance files.",
+      "files": [],
+      "expectations": [
+        "The host does not record Readme Writing activation for an AGENTS.md request."
+      ],
+      "covered_clauses": [
+        "rw-routing-agents-file-exclusion"
+      ],
+      "should_trigger": false,
+      "case_category": "negative"
+    },
+    {
+      "id": "readme-writing-reference-docs-exclusion",
+      "name": "reference documentation and changelog exclusion",
+      "prompt": "Write the API reference page for the configuration options and add a changelog entry for the 2.3.0 release.",
+      "expected_output": "Readme Writing stays inactive because reference pages, changelogs, and release notes are not the project front page.",
+      "files": [],
+      "expectations": [
+        "The host does not record Readme Writing activation for reference documentation or changelog work."
+      ],
+      "covered_clauses": [
+        "rw-routing-reference-docs-exclusion"
+      ],
+      "should_trigger": false,
+      "case_category": "negative"
+    },
+    {
+      "id": "readme-writing-agent-guidance-hard-negative",
+      "name": "agent guidance beside a README is not README work",
+      "prompt": "Our README already explains the project to people. Add a CLAUDE.md and an AGENTS.md that tell coding agents which test command to run and which directories they must not edit.",
+      "expected_output": "Readme Writing stays inactive because Agents File Writer owns agent-facing guidance files, even when the request mentions the README.",
+      "files": [],
+      "expectations": [
+        "The host does not record Readme Writing activation for a CLAUDE.md and AGENTS.md request that mentions the README."
+      ],
+      "covered_clauses": [
+        "rw-routing-agent-guidance-hard-negative"
+      ],
+      "should_trigger": false,
+      "case_category": "negative"
+    },
+    {
+      "id": "readme-writing-changelog-hard-negative",
+      "name": "changelog and release notes are not README work",
+      "prompt": "Write the CHANGELOG.md entry and the GitHub release notes for v0.5.0 from the merged pull requests. The README already covers installation, so leave it alone.",
+      "expected_output": "Readme Writing stays inactive because changelogs and release notes are not the project README.",
+      "files": [],
+      "expectations": [
+        "The host does not record Readme Writing activation for a changelog and release notes request that mentions the README."
+      ],
+      "covered_clauses": [
+        "rw-routing-changelog-hard-negative"
+      ],
+      "should_trigger": false,
+      "case_category": "negative"
+    },
+    {
+      "id": "readme-writing-usage-page-hard-negative",
+      "name": "a reference page the README links to is not README work",
+      "prompt": "The README links to docs/usage.md, which is still empty. Write docs/usage.md as the reference page for every command-line flag, exit code, and configuration key.",
+      "expected_output": "Readme Writing stays inactive because docs/usage.md is a reference documentation page, not the README.",
+      "files": [],
+      "expectations": [
+        "The host does not record Readme Writing activation for writing a reference page linked from the README."
+      ],
+      "covered_clauses": [
+        "rw-routing-reference-page-hard-negative"
+      ],
+      "should_trigger": false,
+      "case_category": "negative"
+    },
+    {
+      "id": "readme-writing-casual-mention-hard-negative",
+      "name": "a question that mentions the README is not README work",
+      "prompt": "The README says to run npm test before pushing. Does that also run the linter, or do I need to run it separately?",
+      "expected_output": "Readme Writing stays inactive because the user asks how the project behaves and wants no README written, changed, or reviewed.",
+      "files": [],
+      "expectations": [
+        "The host does not record Readme Writing activation for a question that only mentions the README."
+      ],
+      "covered_clauses": [
+        "rw-routing-casual-mention-exclusion"
+      ],
+      "should_trigger": false,
+      "case_category": "ambiguous"
+    },
+    {
+      "id": "readme-writing-human-reply-exclusion",
+      "name": "plain human reply exclusion",
+      "prompt": "Explain to my teammate in a short message why the deploy was delayed this morning.",
+      "expected_output": "Readme Writing stays inactive because To Humans owns ordinary human-facing replies.",
+      "files": [],
+      "expectations": [
+        "The host does not record Readme Writing activation for an ordinary human reply."
+      ],
+      "covered_clauses": [
+        "rw-routing-human-reply-exclusion"
+      ],
+      "should_trigger": false,
+      "case_category": "negative"
+    },
+    {
+      "id": "readme-writing-ambient-negative",
+      "name": "ambient README mention is not activation",
+      "prompt": "What does a README usually contain, in general terms?",
+      "expected_output": "Readme Writing stays inactive because the user asked for a general explanation rather than README work on a project.",
+      "files": [],
+      "expectations": [
+        "The host does not record Readme Writing activation for a general explanatory question."
+      ],
+      "covered_clauses": [
+        "rw-routing-ambient-exclusion"
+      ],
+      "should_trigger": false,
+      "case_category": "ambiguous"
+    }
+  ]
+}

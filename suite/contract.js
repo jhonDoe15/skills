@@ -29,6 +29,7 @@ const EXACT_RELEASE_TARGET = deepFreeze({
     { name: 'incident-investigation', classification: 'primary' },
     { name: 'model-routing', classification: 'primary' },
     { name: 'pr-carver', classification: 'primary' },
+    { name: 'readme-writing', classification: 'primary' },
     { name: 'skill-writing', classification: 'primary' },
     { name: 'take-it-offline', classification: 'primary' },
     { name: 'take-ticket', classification: 'primary' },

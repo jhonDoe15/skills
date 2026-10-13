@@ -1,0 +1,17 @@
+{
+  "name": "tamemark",
+  "version": "0.9.2",
+  "license": "MIT",
+  "main": "src/index.js",
+  "browser": "dist/tamemark.browser.js",
+  "bin": {
+    "tamemark": "bin/tamemark.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build-browser.js",
+    "example": "node examples/run.js"
+  }
+}
