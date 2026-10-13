@@ -202,7 +202,78 @@
         "no-em-dash"
       ],
       "forbidden_patterns": ["—"]
+    },
+    {
+      "id": "no-restated-ending",
+      "name": "explanation ends without recap, lesson, or sign-off",
+      "prompt": "Explain to a teammate why the CI build started failing yesterday. Facts: the base image moved from Node 20 to Node 22; the package legacy-pad calls an API that Node 22 removed; pinning the image to node:20.11 restores the build; upgrading legacy-pad is a separate task with no owner yet.",
+      "expected_output": "The cause comes first in literal terms, the fix and the open upgrade task follow, and the reply stops after its last substantive point without a recap, moral, or generic sign-off.",
+      "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
+      "expectations": [
+        "Answer first: the opening states that the Node 22 base image removed an API that legacy-pad calls.",
+        "The cause is stated literally rather than through metaphor or figurative framing.",
+        "Source-grounded meaning preserves the node:20.11 pin as the fix and the legacy-pad upgrade as separate and unowned.",
+        "The reply ends after its final substantive point: no closing summary that restates earlier points, no stated lesson or moral, and no generic sign-off or offer of further help.",
+        "The prose contains no em dash."
+      ],
+      "covers": [
+        "answer-first",
+        "no-restated-ending",
+        "plain-wording",
+        "state-once",
+        "no-em-dash"
+      ],
+      "forbidden_patterns": ["—"]
+    },
+    {
+      "id": "named-specifics",
+      "name": "supplied names replace vague categories",
+      "prompt": "Tell the on-call engineer what the expired certificate affects. Facts: the certificate for *.internal.example expired at 06:00 UTC; auth-gateway and billing-worker use it and now fail TLS handshakes; search-indexer uses a separate certificate and is unaffected; the platform team owns renewal.",
+      "expected_output": "The reply names each affected and unaffected service and the owning team instead of referring to them by category, and invents no other names.",
+      "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
+      "expectations": [
+        "Answer first: the opening names auth-gateway and billing-worker as failing TLS handshakes.",
+        "Concrete attribution: search-indexer is named as unaffected and the platform team is named as the renewal owner.",
+        "No vague quantifier such as some services, several components, or certain systems stands in for a supplied name.",
+        "Source-grounded meaning adds no service, team, or person that the facts did not supply.",
+        "The prose contains no em dash."
+      ],
+      "covers": [
+        "answer-first",
+        "concrete-attribution",
+        "named-specifics",
+        "no-em-dash"
+      ],
+      "forbidden_patterns": ["—"]
+    },
+    {
+      "id": "what-happened-recap",
+      "name": "incident recap leads with outcome and cause",
+      "prompt": "Write a short recap of yesterday's checkout outage for the engineering manager. My notes, in the order things happened: at 14:02 the checkout error rate rose to 30%; at 14:05 on-call restarted the payments pods, which had no effect; at 14:10 someone noticed the office Wi-Fi was also flaky, which turned out to be unrelated; at 14:20 the team rolled back the 13:55 deploy and errors returned to normal; at 16:40 the team found the root cause: the 13:55 deploy shortened the payment provider timeout from 10 s to 1 s. The payments team owns a fix that restores the 10 s timeout, scheduled for tomorrow.",
+      "expected_output": "The recap opens with the outcome and the root cause, credits the rollback with restoring service, compresses or drops the routine and unrelated steps, and keeps the fix owner and timing, without a closing lesson.",
+      "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
+      "expectations": [
+        "Answer first: the opening states the outcome and the root cause, the 13:55 deploy shortening the payment provider timeout from 10 s to 1 s, before walking through events.",
+        "Resolution attribution: the 14:20 rollback is credited with restoring service; the pod restart is not presented as a fix, and the team is not credited with resolving the impact by finding the cause.",
+        "Side-thread relevance: the unrelated office Wi-Fi issue is omitted or dismissed in at most one clause.",
+        "The routine pod restart takes at most one sentence.",
+        "Source-grounded meaning preserves the 30% error rate, the 14:20 rollback, and the payments team owning tomorrow's fix that restores the 10 s timeout.",
+        "The recap ends after its final substantive point, with no stated lesson or generic sign-off.",
+        "The prose contains no em dash."
+      ],
+      "covers": [
+        "answer-first",
+        "narrative-order",
+        "side-thread-relevance",
+        "resolution-attribution",
+        "no-restated-ending",
+        "concrete-attribution",
+        "no-em-dash"
+      ],
+      "forbidden_patterns": ["—"]
     }
-
   ]
 }
