@@ -1,0 +1,83 @@
+{
+  "skill_name": "readme-writing",
+  "version": 1,
+  "evaluation": {
+    "scope": "readme-writing-role",
+    "layer": "role",
+    "skill": "readme-writing",
+    "hosts": [
+      "claude-code",
+      "cursor"
+    ],
+    "arms": [
+      "no-skill",
+      "treatment"
+    ]
+  },
+  "config": {
+    "runs_per_configuration": 3,
+    "minimum_treatment_pass_rate": 0.9,
+    "minimum_treatment_win_rate": 0.6,
+    "randomization_seed": "readme-writing-role-v1"
+  },
+  "signals": {},
+  "global_required_signals": [],
+  "global_order": [],
+  "forbidden_patterns": [],
+  "judge": {
+    "score_range": [
+      0,
+      2
+    ],
+    "minimum_dimension_score": 1,
+    "evidence_requirement": "For every semantic score, quote or reference concrete README or report evidence; lifecycle activation and output quality remain separate claims.",
+    "dimensions": [
+      {
+        "id": "purpose-first-structure",
+        "description": "Assess whether the README opens with one identity line that names a familiar category plus what sets the project apart, derived from the maintainers' stated purpose rather than the old README, followed by the problem and stance, a proof example, a few highlights, getting started, documentation links, and status in the recorded default order, with each departure justified. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "real-evidence-and-example",
+        "description": "Assess whether the example output comes from a real run of the current code and is shown with the path or setup it depends on, rather than being invented or reworded, and whether the report names the reference READMEs actually read. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "verified-claims-per-variant",
+        "description": "Assess whether every claim holds for each language or platform variant it covers, scoping or moving variant-specific claims such as a Python-only check, and whether commands were run and links resolved or reported as unverified. Quote or reference output evidence for every score."
+      },
+      {
+        "id": "specifics-moved-to-docs",
+        "description": "Assess whether command-line flags, exit codes, configuration keys, internal paths, and history leave the README for linked docs without loss, and whether repeated copies such as the package description were updated in the same change. Quote or reference output evidence for every score."
+      }
+    ]
+  },
+  "evals": [
+    {
+      "id": "purpose-led-readme-rewrite",
+      "name": "purpose-led README rewrite with variant scoping",
+      "prompt": "Rewrite the README of the supplied project, a command-line tool that checks code written by coding agents against a quality gate. The current README opens with a feature list, documents every command-line flag and exit code inline, lists internal file paths, and says 'supports Python and TypeScript'. The maintainers' docs/philosophy.md states the purpose: agents write plausible code that fails review, so the gate rejects it before a human reads it. src/checks/ contains Python and TypeScript checkers, but the duplicate-code check is implemented for Python only. Running `tool check examples/sample` prints three findings, the first being 'src/app.py:12 duplicate-block'. The package is version 0.4 and the license is MIT. Produce the new README, the docs files that now hold the moved specifics, and a report of what you read and verified.",
+      "expected_output": "A README that leads with the maintainers' purpose, proves it with output from a real run, scopes the Python-only check, moves flag and exit-code detail into linked docs, and a report listing references read, verification performed, and anything unverified.",
+      "files": [],
+      "required_skill_loads": [
+        "readme-writing"
+      ],
+      "expectations": [
+        "There are no deterministic output-text signals; README quality requires evidence-based semantic judging and observed actions.",
+        "The blind judge checks that the identity line comes from the maintainers' purpose and names a familiar category plus the distinguishing stance, and that the old feature-first opening is not preserved.",
+        "The blind judge checks that the example output was captured from a real run of the supplied project, including the stated first finding and its line number, and was not invented or edited beyond trimming whole lines.",
+        "The blind judge checks that the 'supports Python and TypeScript' claim is scoped or corrected for the Python-only duplicate-code check.",
+        "The blind judge checks that flags, exit codes, and internal paths moved to linked docs with no lost fact, and that the references read, the commands run, the links resolved, and the unverified items are reported.",
+        "Every semantic PASS quotes or references concrete output evidence; sampled human review checks contextual appropriateness.",
+        "The matched No-Skill control receives the same task without the package."
+      ],
+      "covered_clauses": [
+        "rw-purpose-first",
+        "rw-reference-grounding",
+        "rw-real-example",
+        "rw-variant-scoped-claims",
+        "rw-specifics-to-docs",
+        "rw-verification-report"
+      ],
+      "required_signals": []
+    }
+  ]
+}

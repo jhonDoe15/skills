@@ -1,7 +1,7 @@
 {
   "name": "skills",
   "version": "1.0.0",
-  "description": "Atomic 24-Skill agent guidance, writing, ticketing, implementation, and review suite",
+  "description": "Atomic 25-Skill agent guidance, README and other writing, ticketing, implementation, and review suite",
   "private": true,
   "scripts": {
     "adoption": "node scripts/run-adoption-campaign.js",

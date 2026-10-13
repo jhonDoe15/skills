@@ -43,6 +43,7 @@ test('canonical suite contract declares the exact target inventory and runtime g
       ['incident-investigation', 'primary'],
       ['model-routing', 'primary'],
       ['pr-carver', 'primary'],
+      ['readme-writing', 'primary'],
       ['skill-writing', 'primary'],
       ['take-it-offline', 'primary'],
       ['take-ticket', 'primary'],
@@ -108,7 +109,7 @@ test('canonical manifest is checked against an independent release target', (t) 
         ({ name }) => name === 'incident-investigation',
       ).name = 'incident-response';
     }),
-    /inventory must contain the exact canonical 24-Skill target/,
+    /inventory must contain the exact canonical 25-Skill target/,
   );
 
   assert.throws(
@@ -343,7 +344,7 @@ test('canonical validators reject malformed target inventory and graph contracts
   );
   assert.throws(
     mutate((suite) => suite.inventory.pop()),
-    /exact canonical 24-Skill target/,
+    /exact canonical 25-Skill target/,
   );
   assert.throws(
     mutate((suite) => {
