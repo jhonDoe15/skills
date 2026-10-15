@@ -192,9 +192,10 @@ source fixtures stay versioned. Generated package checks, reviews, transcripts,
 model runs, temporary workspaces, evaluation output, and reports stay ignored.
 
 Design decisions live next to the Skill they shape, in `skills/<name>/SOURCES.md`.
-Each file keeps a source register and one entry per decision with its status
-(Adopted, Rejected, or Proposed), evidence, eval coverage, and the result that
-would reopen it. Read it before changing a Skill, and record rejected ideas
+Each file keeps a source register ranked by evidence type (peer-reviewed,
+preprint, industry research, convention) and one entry per decision under a
+descriptive heading, with its status (Adopted, Rejected, or Proposed),
+evidence, eval coverage, and the result that would reopen it. Read it before changing a Skill, and record rejected ideas
 instead of deleting them. `skills/to-humans/SOURCES.md` shows the full format.
 These files are maintainer records and are not part of any Skill's execution
 path.

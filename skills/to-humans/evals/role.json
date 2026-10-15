@@ -274,6 +274,138 @@
         "no-em-dash"
       ],
       "forbidden_patterns": ["—"]
+    },
+    {
+      "id": "no-coined-labels",
+      "name": "options compared by descriptive name without coined labels",
+      "prompt": "Compare three ways to cut nightly build time for the platform lead, then recommend one. Caching the dependency layer saves about 6 minutes and needs no pipeline change. Splitting the test suite across four runners saves about 11 minutes but doubles runner cost. Moving integration tests to a nightly job saves about 14 minutes but delays integration failures by up to a day. The platform lead cares most about catching integration failures before merge. Compare the three on time saved, cost, and risk.",
+      "expected_output": "The reply recommends an option consistent with catching integration failures before merge, and every repeated reference to an option uses a descriptive name rather than a letter, number, or code the writer invented.",
+      "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
+      "expectations": [
+        "Answer first: the opening states the recommendation.",
+        "The recommendation does not choose moving integration tests to a nightly job, and the basis cites the lead's priority of catching integration failures before merge.",
+        "Source-grounded meaning preserves about 6, 11, and 14 minutes saved, the doubled runner cost, and the up-to-a-day delay.",
+        "Every reference to an option uses a descriptive name such as the caching option; no option is referred to by an invented letter, number, or code, with or without a definition.",
+        "Bold, if present, marks at most one item.",
+        "The prose contains no em dash."
+      ],
+      "covers": [
+        "answer-first",
+        "decision-support",
+        "no-coined-labels",
+        "scan-structure",
+        "no-em-dash"
+      ],
+      "forbidden_patterns": [
+        "—",
+        "\\boption\\s+[a-c1-3]\\b",
+        "\\(\\s*[a-c1-3]\\s*\\)",
+        "\\b[a-z]\\d\\b"
+      ]
+    },
+    {
+      "id": "owned-uncertainty",
+      "name": "readiness report separates checked from unchecked work",
+      "prompt": "Tell the release lead whether the orders database migration is ready to run in production. Your own work so far: you ran the migration on staging and it completed in 4 minutes; you compared row counts on the orders table before and after, and they matched; you did not check the archive table, which is about 40 times larger than the orders table. Separately, the production database has not been backed up since Monday.",
+      "expected_output": "The reply gives a readiness verdict first, states what was verified, owns the unchecked archive table in the first person at that claim, and keeps the backup gap visible, without an impersonal hedge or a confident tone for unverified work.",
+      "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
+      "expectations": [
+        "Answer first: the opening gives a readiness verdict for production.",
+        "Verified work is stated as verified: the 4-minute staging run and the matching orders-table row counts.",
+        "Material uncertainty is owned in the first person at the claim it affects, stating that the archive table was not checked, and notes the archive table is about 40 times larger.",
+        "The missing production backup since Monday remains visible.",
+        "No unverified claim is presented with the same confidence as the verified ones, and the reply avoids impersonal hedges such as it is unclear whether.",
+        "The prose contains no em dash."
+      ],
+      "covers": [
+        "answer-first",
+        "owned-uncertainty",
+        "requested-breadth",
+        "no-em-dash"
+      ],
+      "forbidden_patterns": ["—"]
+    },
+    {
+      "id": "premise-correction",
+      "name": "wrong premise corrected first without a praise opener",
+      "prompt": "I want to speed up our API by turning off TLS between the load balancer and the services, since TLS handshakes are slowing us down. Reply to me about how to do it. Facts: load balancer connections use keep-alive, so handshakes happen about once per connection and account for under 1% of request latency in the traces; p95 latency is dominated by a 180 ms database query in the orders service; company policy requires encryption in transit inside the VPC.",
+      "expected_output": "The first sentence says that turning off TLS will not meaningfully speed up the API and why, then points to the 180 ms orders query and the encryption policy, with no praise or agreement opener.",
+      "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
+      "expectations": [
+        "Answer first: the first sentence corrects the premise, stating that TLS handshakes are not the bottleneck, with the under 1% basis.",
+        "The opening contains no praise or agreement, such as calling the idea or question great.",
+        "Source-grounded meaning preserves the 180 ms orders-service database query as the dominant p95 cost and the policy requiring encryption in transit inside the VPC.",
+        "The reply does not give steps for turning off TLS as its main content.",
+        "The prose contains no em dash."
+      ],
+      "covers": [
+        "answer-first",
+        "premise-correction",
+        "concrete-attribution",
+        "no-em-dash"
+      ],
+      "forbidden_patterns": [
+        "—",
+        "^\\W*(great|good|excellent) (question|idea|thinking)",
+        "^\\W*you'?re (absolutely )?right"
+      ]
+    },
+    {
+      "id": "machine-sentence-patterns",
+      "name": "revision removes machine-made sentence patterns",
+      "prompt": "Revise this paragraph for the engineering channel. Keep every fact and add none. Source paragraph: \"The migration was completed successfully on Tuesday, highlighting the robustness of our pipeline. This isn't just a speed improvement, it's a fundamental shift in how we deploy. The implementation of the new caching layer underscores our commitment to reliability, efficiency, and scalability, reducing deploy time from 18 to 7 minutes.\"",
+      "expected_output": "The revision keeps the Tuesday migration, the new caching layer, and the 18 to 7 minute deploy time, and drops the trailing commentary clause, the unprompted contrast, the nominalized phrasing, the importance verb, and the reflexive list of three.",
+      "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
+      "expectations": [
+        "Source-grounded meaning preserves the successful Tuesday migration, the new caching layer, and the deploy time drop from 18 to 7 minutes, and adds no new claim.",
+        "No trailing -ing clause adds commentary to a finished sentence.",
+        "No contrast frame sets up a claim nobody made, such as it is not X, it is Y.",
+        "Actions are expressed with verbs rather than nominalizations such as the implementation of.",
+        "No verb asserts importance in place of a fact, such as underscores or highlights, and the unsupported list of reliability, efficiency, and scalability is removed.",
+        "The prose contains no em dash."
+      ],
+      "covers": [
+        "machine-sentence-patterns",
+        "plain-wording",
+        "contextual-voice",
+        "no-em-dash"
+      ],
+      "forbidden_patterns": [
+        "—",
+        "\\bunderscores?\\b",
+        "\\bhighlighting\\b",
+        "\\bimplementation of\\b",
+        "\\bisn'?t just\\b"
+      ]
+    },
+    {
+      "id": "sent-as-user-message",
+      "name": "thank-you message the user sends is specific",
+      "prompt": "Draft a short Slack message I will send under my own name to thank Dana from the SRE team. Facts: on Tuesday night Dana stayed until 01:00 to finish the certificate rotation; on Wednesday her runbook let the on-call engineer recover auth-gateway in 6 minutes; I plan to mention this at the team retro.",
+      "expected_output": "A short first-person message from the user that names the certificate rotation, the runbook, the 6-minute auth-gateway recovery, and the retro, with no generic praise.",
+      "files": [],
+      "required_skill_loads": ["to-humans", "writing-foundation"],
+      "expectations": [
+        "The message is written in the user's first-person voice and addressed to Dana.",
+        "Every sentence ties to a specific supplied event: the Tuesday night certificate rotation, the runbook, the 6-minute auth-gateway recovery on Wednesday, or the retro mention.",
+        "The message contains no generic warmth that could fit any colleague, such as above and beyond or your hard work is appreciated.",
+        "The message is short enough for a Slack thank-you.",
+        "The prose contains no em dash."
+      ],
+      "covers": [
+        "sent-as-user",
+        "concrete-attribution",
+        "contextual-voice",
+        "no-em-dash"
+      ],
+      "forbidden_patterns": [
+        "—",
+        "above and beyond"
+      ]
     }
   ]
 }
