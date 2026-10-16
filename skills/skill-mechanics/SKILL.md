@@ -27,10 +27,12 @@ claim that valid structure proves routing or runtime effectiveness.
 
 1. Create one directory named for the canonical Skill with `SKILL.md` as its
    entrypoint.
-2. Put the exact canonical name and a trigger-first routing description in YAML
-   frontmatter. The description identifies the Skill, selection conditions,
-   consumers where relevant, and exclusions; it does not summarize the
-   workflow.
+2. Put the exact canonical name and a routing description in YAML frontmatter.
+   Hosts inject every description into every session, so the description is
+   only the shortest trigger that selects the Skill: the scenario that calls
+   for it, in one short sentence. Leave what the Skill does, its workflow, and
+   rationale to the body. Add an exclusion or consumer only when a
+   false activation is likely without it.
 3. Keep activation, ordered actions, branch predicates, and completion
    criteria on the execution path. Preserve the supplied order and degrees of
    freedom.
@@ -55,7 +57,8 @@ Run deterministic checks for:
 
 - parseable YAML frontmatter with exact `name` and non-empty `description`;
 - canonical directory, entrypoint, and dependency names;
-- routing-description identity, conditions or consumers, and exclusions;
+- routing description states a trigger scenario and carries no workflow,
+  capability summary, or rationale;
 - ordered steps and explicit terminal criteria;
 - direct conditional pointers whose targets resolve inside the Skill;
 - referenced scripts or resources existing at the named path;

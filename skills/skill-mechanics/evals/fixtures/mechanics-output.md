@@ -1,6 +1,6 @@
 ---
 name: deployment-triage
-description: Deployment triage for a failed health check; used after the failed result is observed and excluded from mutation or remediation requests.
+description: Use when a deployment health check has failed; not for remediation.
 ---
 
 # Deployment Triage
